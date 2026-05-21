@@ -1,0 +1,133 @@
+MemEvolve   ---> 元进化记忆系统，不只更新 memory content，还更新 memory architecture
+EvoRoute		---> 模型路由也成为可演化架构模块
+Tool-Augmented Evolution：工具系统从静态 API 变成可生成、可验证、可复用资产
+			1、Live-SWE-agent：运行时修改自己的软件工程 Agent scaffold	
+			2、ADAS [169] employs a meta-agent to iteratively write and reflect on system code, discovering novel	designs that outperform human baselines.
+			3、
+
+PACEvolve： 进化搜索（用LLM生成代码变体，然后选择表现好的继续进化）是个很火的方向，但实际跑起来经常失效。PACEvolve识别了三个主要原因：
+i) 搜索空间坍缩，所有变体越来越像，多样性消失。
+ii) 评估噪声，小数据集上的评估结果不稳定，
+iii) 选错了方向。进化停滞，找到一个局部最优就出不来了。			
+
+---- 不合适
+ASI-Evolve 是当前“AI 加速 AI 研发”方向里非常值得关注的一篇论文。
+它不是 scaffold 自修改路线，而是更工程可落地的“固定 evolution runtime + 可执行候选解搜索 + cognition 记忆沉淀 + evaluator 筛选”路线。
+它的启发在于：未来 AI Agent 的核心能力可能不只是完成任务，而是围绕真实实验环境持续形成研究经验，并把这种经验转化为下一轮更高质量的搜索。
+
+
+----
+
+项目：
+generic agent
+hermes agent
+
+openspace
+-----> 关注的都是从memory 到skill的进化
+
+
+MemEvolve   ---> 元进化记忆系统，不只更新 memory content，还更新 memory architecture
+EvoRoute		---> 模型路由也成为可演化架构模块
+
+进化搜索，
+Agent scaffold / agent architecture 自进化：
+DGM 追问"agent 能否进化自己的进化能力本身"；
+SICA：coding agent 直接修改自己的代码库，再用 benchmark 评估
+Live-SWE-agent：运行时修改自己的软件工程 Agent scaffold	
+ADAS [169] employs a meta-agent to iteratively write and reflect on system code, discovering novel	designs that outperform human baselines.
+GEA：
+
+算法 / 代码生成式进化搜索
+AlphaEvolve 追问"进化算法能否突破人类认知边界找到人类无法想到的解"。 \
+
+Prompt / workflow 参数进化：
+GEPA / Genetic-Pareto： 读取完整执行轨迹，用 LLM 反思失败原因，做 mutation 与 Pareto selection
+
+
+更高级的两个方向：
+PACEvolve： 进化搜索（用LLM生成代码变体，然后选择表现好的继续进化）是个很火的方向，但实际跑起来经常失效。PACEvolve识别了三个主要原因：
+i) 搜索空间坍缩，所有变体越来越像，多样性消失。
+ii) 评估噪声，小数据集上的评估结果不稳定，
+iii) 选错了方向。进化停滞，找到一个局部最优就出不来了。			
+
+hyperagent  ---> 元meta-agent进化agent
+
+
+
+第一，LLM 让“变异算子”从传统遗传算法里的随机 mutation，升级成了语义化代码生成：模型可以理解已有 agent 代码、失败日志、benchmark 结果，然后生成有意图的修改。DGM、SICA、AlphaEvolve、GEPA 都是这个逻辑。
+
+第二，Agent scaffold 本身正在变成可搜索空间：prompt、memory、tool use、planning、reflection、context management、workflow、multi-agent topology 都可以被编码成可修改模块。ADAS 和 AgentSquare 基本就是把“agent 设计”从人工工程问题转成搜索/优化问题。
+
+第三，大厂和开源社区都在跟进。AlphaEvolve 已经从论文/博客走向 Google Cloud private preview；OpenEvolve、DGM、SICA、HGM、GEPA 都有对应开源仓库。
+
+
+
+
+
+
+2、整理这些agent自进化的局限性，实事求是地列举这些agent自进化的真实能力和不足
+
+
+
+你是一个agent领域的架构规划专家，主要是手机端Agent产品的技术和架构规划，现在在研究Agent自进化方向，目标是确认下一年Agent领域可交付的技术点。技术点要求具备长期性，同时要求在2027年时可以落地到产品里。
+
+现在Agent领域内自演进或者说自进化是个相当热门的话题，包括但不限于如下项目或者期刊论文：
+项目：
+1、generic agent是一个 极简自进化通用 Agent 框架，希望让任意 LLM 通过一组很小的原子工具，获得对真实本地系统的操作能力，并在使用过程中把成功经验沉淀成可复用技能。
+2、hermes agent是一个常驻式、自学习的个人 Agent Runtime
+3、openspace给已有 Agent 接上一套“技能发现、技能复用、技能演化、技能共享”的能力层
+另外，学术界在这方面的研究更多，包括：
+1、MemEvolve:Meta-Evolution of Agent Memory Systems[https://arxiv.org/abs/2512.18746]  核心点是元进化记忆系统，不只更新 memory content，还更新 memory architecture
+2、EvoRoute: Experience-Driven Self-Routing LLM Agent Systems[https://arxiv.org/abs/2601.02695], 核心讨论的是根据每一步子任务的历史经验，动态选择最合适的 LLM backbone
+3、Darwin Godel Machine: Open-Ended Evolution of Self-Improving Agents[https://arxiv.org/abs/2505.22954?]， 核心解决的是让 Agent 的工具、工作流、上下文管理、patch 策略等执行框架持续进化。
+4、SICA：A Self-Improving Coding Agent[https://arxiv.org/abs/2504.15228]，核心要点是一个 agent 自己改自己
+5、Live-SWE-agent: Can Software Engineering Agents Self-Evolve on the Fly?[https://arxiv.org/abs/2511.13646] 它提出一种“运行时自进化”的软件工程 Agent，Agent可以临时生成、修改、执行自己的 custom tools，从而让 action space 随任务即时扩展。
+6、ADAS：Automated Design of Agentic Systems[https://arxiv.org/abs/2408.08435]，它让一个 meta-agent 自动搜索、编写、评估新的 agentic system。
+7、AlphaEvolve: A coding agent for scientific and algorithmic discovery[https://arxiv.org/abs/2506.13131] 一个“进化式 coding agent”，它让 LLM 不断修改算法代码，再用自动 evaluator 验证和打分，把表现好的代码变体保留下来继续进化，最终发现更优算法。
+8、GEPA: Reflective Prompt Evolution Can Outperform Reinforcement Learning[https://arxiv.org/abs/2507.19457] 让 LLM 读取自己的执行轨迹，用自然语言反思失败原因，然后进化 prompt / textual parameter
+9、PACEvolve: Enabling Long-Horizon Progress-Aware Consistent Evolution[https://arxiv.org/abs/2601.10657]，通过分层上下文管理、基于进展动量的回退、自适应多分支协作，解决上下文污染、模式坍缩和弱协作问题	
+10、hyperagents[https://arxiv.org/abs/2603.19461]： 让 Agent 改“自己如何改自己”
+11、meta-harness[https://arxiv.org/abs/2603.28052]: 自动搜索更好的 harness code
+12、Agentic Harness Engineering: Observability-Driven Automatic Evolution of Coding-Agent Harnesses[https://arxiv.org/abs/2604.25850]: 稳定、可归因地自动演进 coding-agent harness
+
+现在你需要根据这些项目或者论文做一次深度分析，包括如下任务
+1、分析这些agent自进化的方案，进行归纳总结，主要依据可以根据自进化的对象和时机，这两点必须讲清楚，每个项目或者文章用单独的一页讲清楚，也是对项目或者文章的deep research
+2、对比业务其他领先厂商或者竞争对手，如openAI，苹果，三星等厂商的技术和产品规划，给出2027年内可以完成技术落地的技术点
+3、最后结果需要输出三份文件，包括一份markdown文件，给出详细的技术分析；一份html文件，主要是基于markdown文件进行可视化呈现，还需要一份ppt文件，用于面向其他技术专家进行分享的技术报告
+
+
+
+
+
+
+补充如下两个关键知识点给LLM：
+i) Harness的定义，可以用https://github.com/Gloriaameng/Awesome-Agent-Harness
+ii) self-evolving agent的定义，A Systematic Survey of Self-Evolving Agents: From Model-Centric to Environment-Driven Co-Evolution
+
+你是一个agent领域的架构规划专家，主要是手机端Agent产品的技术和架构规划，现在在研究Agent自进化方向，目标是确认下一年Agent领域可交付的技术点。技术点要求具备先进性，同时要求在2027年时可以落地到产品里。
+
+现在Agent领域内自演进或者说自进化是个相当热门的话题，包括但不限于如下项目或者期刊论文：
+项目：
+1、generic agent是一个 极简自进化通用 Agent 框架，希望让任意 LLM 通过一组很小的原子工具，获得对真实本地系统的操作能力，并在使用过程中把成功经验沉淀成可复用技能。
+2、hermes agent是一个常驻式、自学习的个人 Agent Runtime
+3、openspace给已有 Agent 接上一套“技能发现、技能复用、技能演化、技能共享”的能力层
+另外，学术界在这方面的研究更多，包括：
+2、EvoRoute: Experience-Driven Self-Routing LLM Agent Systems[https://arxiv.org/abs/2601.02695], 核心讨论的是根据每一步子任务的历史经验，动态选择最合适的 LLM backbone
+3、Darwin Godel Machine: Open-Ended Evolution of Self-Improving Agents[https://arxiv.org/abs/2505.22954?]， 核心解决的是让 Agent 的工具、工作流、上下文管理、patch 策略等执行框架持续进化。
+4、SICA：A Self-Improving Coding Agent[https://arxiv.org/abs/2504.15228]，核心要点是一个 agent 自己改自己
+5、Live-SWE-agent: Can Software Engineering Agents Self-Evolve on the Fly?[https://arxiv.org/abs/2511.13646] 它提出一种“运行时自进化”的软件工程 Agent，Agent可以临时生成、修改、执行自己的 custom tools，从而让 action space 随任务即时扩展。
+6、ADAS：Automated Design of Agentic Systems[https://arxiv.org/abs/2408.08435]，它让一个 meta-agent 自动搜索、编写、评估新的 agentic system。
+7、AlphaEvolve: A coding agent for scientific and algorithmic discovery[https://arxiv.org/abs/2506.13131] 一个“进化式 coding agent”，它让 LLM 不断修改算法代码，再用自动 evaluator 验证和打分，把表现好的代码变体保留下来继续进化，最终发现更优算法。
+8、GEPA: Reflective Prompt Evolution Can Outperform Reinforcement Learning[https://arxiv.org/abs/2507.19457] 让 LLM 读取自己的执行轨迹，用自然语言反思失败原因，然后进化 prompt / textual parameter
+9、PACEvolve: Enabling Long-Horizon Progress-Aware Consistent Evolution[https://arxiv.org/abs/2601.10657]，通过分层上下文管理、基于进展动量的回退、自适应多分支协作，解决上下文污染、模式坍缩和弱协作问题	
+10、hyperagents[https://arxiv.org/abs/2603.19461]： 让 Agent 改“自己如何改自己”
+11、meta-harness[https://arxiv.org/abs/2603.28052]: 自动搜索更好的 harness code
+12、Agentic Harness Engineering: Observability-Driven Automatic Evolution of Coding-Agent Harnesses[https://arxiv.org/abs/2604.25850]: 稳定、可归因地自动演进 coding-agent harness
+
+现在你需要根据这些项目或者论文做一次深度分析，包括如下任务
+1、分析这些agent自进化的方案，进行归纳总结，每个项目或者文章用单独的一页讲清楚，也是对项目或者文章的deep research，问题，方案，实现，等
+2、对当前agent自进化领域进行归纳和总结, 备注，agent自进化的定义是指具备持续学习、自适应和自我修正能力的 AI Agent系统，而agent自进化的目标是实时地、自主地根据与环境、数据和用户的交互，改进其行为逻辑、内部参数和解决问题的方法
+2、最后结果需要输出三份文件：
+i) 一份markdown文件，给出详细的技术分析；
+ii) 一份html文件，主要是基于markdown文件进行可视化呈现
+iii) 需要一份ppt文件，用于面向其他技术专家进行分享的技术报告，要求风格是采用图文并茂的形式，叙事要有逻辑性。整体结构要采用总分总的形式
