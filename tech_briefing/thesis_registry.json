@@ -1,0 +1,1288 @@
+{
+  "schema_version": "1.0",
+  "description": "Persistent thesis registry — accumulates technical theses across runs. Backfilled from 多源技术热点简报_2026-10-19.html on 2026-10-20. Each thesis is keyed by stable ID; events list links back to brief sections.",
+  "last_updated": "2026-10-21",
+  "backfilled_from": "多源技术热点简报_2026-10-19.html",
+  "theses": [
+    {
+      "id": "TH-001",
+      "name": "扩散 LLM 商业规模化",
+      "name_en": "diffusion_llm_commercial_scale",
+      "thesis_type": "Frontier Thesis",
+      "statement": "生成范式从 token-sequential 向 parallel-diffusion 迁移，sub-second TTFT + 高吞吐成为 speed-tier 验收线",
+      "change_types": [
+        "CT-06",
+        "CT-09",
+        "CT-05"
+      ],
+      "tracks": [
+        "TR-MODEL"
+      ],
+      "sections": [
+        "s2-1",
+        "s2-4"
+      ],
+      "state": "active",
+      "confidence": "Medium-High",
+      "first_seen": "2026-10-20",
+      "last_seen": "2026-10-20",
+      "evidence_count": 4,
+      "convergence_entities": [
+        "Inception Labs"
+      ],
+      "counter_evidence": [],
+      "events": [
+        {
+          "brief_date": "2026-10-19",
+          "event_title": "Mercury 3：扩散 LLM 商业规模化拐点",
+          "first_publish_shanghai": "2026-10-20 01:27",
+          "rating": "A+",
+          "signal": "Frontier Signal",
+          "source": "https://www.inceptionlabs.ai/blog/introducing-mercury-3",
+          "key_data": "规模 ×40, 1M context, 1068 tok/s, $0.20/$0.70 per 1M"
+        },
+        {
+          "brief_date": "2026-10-19",
+          "event_title": "Mercury 3：扩散 LLM 商业规模化拐点（Inception）",
+          "first_publish_shanghai": "2026-10-20 01:27",
+          "rating": "A+",
+          "signal": "Frontier Signal",
+          "source": "https://www.inceptionlabs.ai/blog/introducing-mercury-3",
+          "key_data": "规模 ×40, 1M context, 1068 tok/s, $0.20/$0.70 per 1M, HN 241 分, Techmeme 头条"
+        },
+        {
+          "brief_date": "2026-10-19",
+          "event_title": "Mercury 3：扩散 LLM 商业规模化拐点（Inception）",
+          "first_publish_shanghai": "2026-10-20 01:27",
+          "rating": "A+",
+          "signal": "Frontier Signal",
+          "source": "https://www.inceptionlabs.ai/blog/introducing-mercury-3",
+          "key_data": "规模 ×40, 1M context, 1068 tok/s, $0.20/$0.70 per 1M, HN 241 分, Techmeme 头条"
+        },
+        {
+          "brief_date": "2026-10-19",
+          "event_title": "Mercury 3：扩散 LLM 商业规模化拐点（Inception）",
+          "first_publish_shanghai": "2026-10-20 01:27",
+          "rating": "A+",
+          "signal": "Frontier Signal",
+          "source": "https://www.inceptionlabs.ai/blog/introducing-mercury-3",
+          "key_data": "规模 ×40, 1M context, 1068 tok/s, $0.20/$0.70 per 1M, HN 241 分, Techmeme 头条"
+        }
+      ],
+      "notes": "首个公开声称扩散 LLM 在标准基准上追平 speed-optimized 前沿自回归模型的商用发布。尚需独立第三方基准与开源权重复核。"
+    },
+    {
+      "id": "TH-002",
+      "name": "Agent 时代开发基础设施重写",
+      "name_en": "agent_dev_infra_rewrite",
+      "thesis_type": "Convergence Thesis",
+      "statement": "Agent 代码产出速度把面向人类的开发基础设施推到失效点，source control / CI / review 需要为 Agent 量级重写",
+      "change_types": [
+        "CT-06",
+        "CT-01",
+        "CT-09"
+      ],
+      "tracks": [
+        "TR-HARNESS"
+      ],
+      "sections": [
+        "s3-1",
+        "s3-3",
+        "s3-5"
+      ],
+      "state": "active",
+      "confidence": "High",
+      "first_seen": "2026-10-13",
+      "last_seen": "2026-10-20",
+      "evidence_count": 9,
+      "convergence_entities": [
+        "Anthropic",
+        "Cloudflare",
+        "Claude Code"
+      ],
+      "counter_evidence": [],
+      "events": [
+        {
+          "brief_date": "2026-10-19",
+          "event_title": "Anthropic Scion：为 Agent 代码量级重写源码控制",
+          "first_publish_shanghai": "2026-10-13",
+          "rating": "A+",
+          "signal": "Frontier+Convergence",
+          "source": "https://www.anthropic.com/engineering/redesigning-source-control",
+          "key_data": "2500→30000 merges/day, 5 个月迁移 monorepo"
+        },
+        {
+          "brief_date": "2026-10-19",
+          "event_title": "Claude Code 团队代码 Review 流程",
+          "first_publish_shanghai": "2026-10-15",
+          "rating": "A+",
+          "signal": "Convergence Signal",
+          "source": "https://claude.dev/blog/solving-code-review-at-anthropic/",
+          "key_data": "Claude 写 90% 代码, PR 翻倍, revert 降 40%"
+        },
+        {
+          "brief_date": "2026-10-19",
+          "event_title": "Cloudflare AI Code Reviewer 成本优化",
+          "first_publish_shanghai": "2026-10-20 03:12",
+          "rating": "A",
+          "signal": "Convergence Signal",
+          "source": "https://blog.cloudflare.com/obsessive-inference-optimization/",
+          "key_data": "$2.43→$0.77 单次, 4m09s→1m32s 中位"
+        },
+        {
+          "brief_date": "2026-10-19",
+          "event_title": "Claude Code Review: Active Event",
+          "first_publish_shanghai": "2026-10-15",
+          "rating": "A+",
+          "signal": "Convergence Signal",
+          "source": "https://claude.dev/blog/solving-code-review-at-anthropic/",
+          "key_data": "Claude writes 90% code, PR doubled, revert -40%, superfan Claude"
+        },
+        {
+          "brief_date": "2026-10-19",
+          "event_title": "Anthropic Scion: Active Event Update",
+          "first_publish_shanghai": "2026-10-13",
+          "rating": "A+",
+          "signal": "Convergence Signal",
+          "source": "https://www.anthropic.com/engineering/redesigning-source-control",
+          "key_data": "2500->30000 merges/day, 5 months monorepo migration"
+        },
+        {
+          "brief_date": "2026-10-19",
+          "event_title": "Claude Code Review: Active Event",
+          "first_publish_shanghai": "2026-10-15",
+          "rating": "A+",
+          "signal": "Convergence Signal",
+          "source": "https://claude.dev/blog/solving-code-review-at-anthropic/",
+          "key_data": "Claude writes 90% code, PR doubled, revert -40%, superfan Claude"
+        },
+        {
+          "brief_date": "2026-10-19",
+          "event_title": "Anthropic Scion: Active Event Update",
+          "first_publish_shanghai": "2026-10-13",
+          "rating": "A+",
+          "signal": "Convergence Signal",
+          "source": "https://www.anthropic.com/engineering/redesigning-source-control",
+          "key_data": "2500->30000 merges/day, 5 months monorepo migration"
+        },
+        {
+          "brief_date": "2026-10-19",
+          "event_title": "Claude Code Review: Active Event",
+          "first_publish_shanghai": "2026-10-15",
+          "rating": "A+",
+          "signal": "Convergence Signal",
+          "source": "https://claude.dev/blog/solving-code-review-at-anthropic/",
+          "key_data": "Claude writes 90% code, PR doubled, revert -40%, superfan Claude"
+        },
+        {
+          "brief_date": "2026-10-19",
+          "event_title": "Anthropic Scion: Active Event Update",
+          "first_publish_shanghai": "2026-10-13",
+          "rating": "A+",
+          "signal": "Convergence Signal",
+          "source": "https://www.anthropic.com/engineering/redesigning-source-control",
+          "key_data": "2500->30000 merges/day, 5 months monorepo migration"
+        }
+      ],
+      "notes": "三实体共振 + 四定量数据点。本轮窗口最强的 Convergence Thesis。"
+    },
+    {
+      "id": "TH-003",
+      "name": "System One 专用模型谱系扩张",
+      "name_en": "system_one_specialized_models",
+      "thesis_type": "Convergence Thesis",
+      "statement": "System One 专用模型成为 LLM 的并行对象类型，harness 需要新的路由层决定何时用 LLM、何时用专用模型",
+      "change_types": [
+        "CT-03",
+        "CT-06",
+        "CT-01"
+      ],
+      "tracks": [
+        "TR-MODEL"
+      ],
+      "sections": [
+        "s2-4",
+        "s3-4"
+      ],
+      "state": "active",
+      "confidence": "Medium-High",
+      "first_seen": "2026-10-19",
+      "last_seen": "2026-10-20",
+      "evidence_count": 9,
+      "convergence_entities": [
+        "TypeSafe",
+        "Cloudflare",
+        "Mistral"
+      ],
+      "counter_evidence": [],
+      "events": [
+        {
+          "brief_date": "2026-10-19",
+          "event_title": "Cloudflare Clairic：System One 抽取模型",
+          "first_publish_shanghai": "2026-10-20 01:48",
+          "rating": "A",
+          "signal": "Frontier Signal",
+          "source": "https://blog.cloudflare.com/clairic-extraction-model/",
+          "key_data": "extract/compute/estimate/forecast, 预告开放权重"
+        },
+        {
+          "brief_date": "2026-10-19",
+          "event_title": "Mistral Timestral：时序基础模型",
+          "first_publish_shanghai": "2026-10-19 17:59",
+          "rating": "A-",
+          "signal": "Convergence Signal",
+          "source": "https://mistral.ai/news/timestral/",
+          "key_data": "时序预测/异常检测 FM, HN 550 分"
+        },
+        {
+          "brief_date": "2026-10-19",
+          "event_title": "Cloudflare Clairic：System One 抽取模型 + 预告开放权重",
+          "first_publish_shanghai": "2026-10-20 01:48",
+          "rating": "A",
+          "signal": "Frontier Signal",
+          "source": "https://blog.cloudflare.com/clairic-extraction-model/",
+          "key_data": "extract/compute/estimate/forecast, 预告开放权重, Workers AI 部署"
+        },
+        {
+          "brief_date": "2026-10-19",
+          "event_title": "Mistral Timestral：时序基础模型（System One 谱系扩张）",
+          "first_publish_shanghai": "2026-10-19 17:59",
+          "rating": "A-",
+          "signal": "Convergence Signal",
+          "source": "https://mistral.ai/news/timestral/",
+          "key_data": "时序预测/异常检测 FM, HN 580 分（上轮 550）, CERN 战略合作"
+        },
+        {
+          "brief_date": "2026-10-19",
+          "event_title": "Cloudflare Clairic：System One 抽取模型 + 预告开放权重",
+          "first_publish_shanghai": "2026-10-20 01:48",
+          "rating": "A",
+          "signal": "Frontier Signal",
+          "source": "https://blog.cloudflare.com/clairic-extraction-model/",
+          "key_data": "extract/compute/estimate/forecast, 预告开放权重, Workers AI 部署"
+        },
+        {
+          "brief_date": "2026-10-19",
+          "event_title": "Mistral Timestral：时序基础模型（System One 谱系扩张）",
+          "first_publish_shanghai": "2026-10-19 17:59",
+          "rating": "A-",
+          "signal": "Convergence Signal",
+          "source": "https://mistral.ai/news/timestral/",
+          "key_data": "时序预测/异常检测 FM, HN 580 分（上轮 550）, CERN 战略合作"
+        },
+        {
+          "brief_date": "2026-10-19",
+          "event_title": "Cloudflare Clairic：System One 抽取模型 + 预告开放权重",
+          "first_publish_shanghai": "2026-10-20 01:48",
+          "rating": "A",
+          "signal": "Frontier Signal",
+          "source": "https://blog.cloudflare.com/clairic-extraction-model/",
+          "key_data": "extract/compute/estimate/forecast, 预告开放权重, Workers AI 部署"
+        },
+        {
+          "brief_date": "2026-10-19",
+          "event_title": "Mistral Timestral：时序基础模型（System One 谱系扩张）",
+          "first_publish_shanghai": "2026-10-19 17:59",
+          "rating": "A-",
+          "signal": "Convergence Signal",
+          "source": "https://mistral.ai/news/timestral/",
+          "key_data": "时序预测/异常检测 FM, HN 580 分（上轮 550）, CERN 战略合作"
+        }
+      ],
+      "notes": "TypeSafe Jev（前轮）→ Cloudflare Clairic + Mistral Timestral（本轮）。术语与边界仍在分化，但多实体收敛已确认。"
+    },
+    {
+      "id": "TH-004",
+      "name": "speed tier 向 agent-optimized 分化",
+      "name_en": "speed_tier_agent_optimized",
+      "thesis_type": "Convergence Thesis",
+      "statement": "speed tier 从通用快模型演化为 agent-optimized 执行模型，成本/延迟成为 agent harness 选型主轴",
+      "change_types": [
+        "CT-02",
+        "CT-04"
+      ],
+      "tracks": [
+        "TR-MODEL"
+      ],
+      "sections": [
+        "s2-4",
+        "s3-1"
+      ],
+      "state": "active",
+      "confidence": "Medium",
+      "first_seen": "2026-10-20",
+      "last_seen": "2026-10-20",
+      "evidence_count": 5,
+      "convergence_entities": [
+        "Inception Labs",
+        "MiniMax"
+      ],
+      "counter_evidence": [],
+      "events": [
+        {
+          "brief_date": "2026-10-19",
+          "event_title": "Mercury 3：扩散 LLM 商业规模化拐点",
+          "first_publish_shanghai": "2026-10-20 01:27",
+          "rating": "A+",
+          "signal": "Frontier Signal",
+          "source": "https://www.inceptionlabs.ai/blog/introducing-mercury-3",
+          "key_data": "1068 tok/s, agent 部署合作伙伴"
+        },
+        {
+          "brief_date": "2026-10-19",
+          "event_title": "MiniMax M3.1 Flash：Agent/Computer Use/Cyber 三位一体",
+          "first_publish_shanghai": "2026-10-20 00:39",
+          "rating": "A",
+          "signal": "Frontier Signal",
+          "source": "https://www.minimax.io/blog/minimax-m31f",
+          "key_data": "3× 速度, 70% 降本, agent/coding/computer-use/cyber"
+        },
+        {
+          "brief_date": "2026-10-19",
+          "event_title": "MiniMax M3.1 Flash：Agent/Computer Use/Cyber 三位一体提速降本",
+          "first_publish_shanghai": "2026-10-20 00:39",
+          "rating": "A",
+          "signal": "Frontier Signal",
+          "source": "https://www.minimax.io/blog/minimax-m31f",
+          "key_data": "3× 速度, 70% 降本, agent/coding/computer-use/cyber, HN 451 分（上轮 383）"
+        },
+        {
+          "brief_date": "2026-10-19",
+          "event_title": "MiniMax M3.1 Flash：Agent/Computer Use/Cyber 三位一体提速降本",
+          "first_publish_shanghai": "2026-10-20 00:39",
+          "rating": "A",
+          "signal": "Frontier Signal",
+          "source": "https://www.minimax.io/blog/minimax-m31f",
+          "key_data": "3× 速度, 70% 降本, agent/coding/computer-use/cyber, HN 451 分（上轮 383）"
+        },
+        {
+          "brief_date": "2026-10-19",
+          "event_title": "MiniMax M3.1 Flash：Agent/Computer Use/Cyber 三位一体提速降本",
+          "first_publish_shanghai": "2026-10-20 00:39",
+          "rating": "A",
+          "signal": "Frontier Signal",
+          "source": "https://www.minimax.io/blog/minimax-m31f",
+          "key_data": "3× 速度, 70% 降本, agent/coding/computer-use/cyber, HN 451 分（上轮 383）"
+        }
+      ],
+      "notes": "Mercury 3 与 MiniMax M3.1 Flash 同窗口共振：speed tier 都在向 agent 优化。"
+    },
+    {
+      "id": "TH-005",
+      "name": "低资源语言迁移能力跨越",
+      "name_en": "low_resource_language_migration",
+      "thesis_type": "Frontier Thesis",
+      "statement": "模型在低资源语言上的迁移准确率跨越式提升，使企业遗留系统现代化从工程命题向模型命题迁移",
+      "change_types": [
+        "CT-06",
+        "CT-04"
+      ],
+      "tracks": [
+        "TR-MODEL"
+      ],
+      "sections": [
+        "s2-1",
+        "s3-3"
+      ],
+      "state": "active",
+      "confidence": "Medium",
+      "first_seen": "2026-10-19",
+      "last_seen": "2026-10-20",
+      "evidence_count": 4,
+      "convergence_entities": [
+        "OpenAI"
+      ],
+      "counter_evidence": [],
+      "events": [
+        {
+          "brief_date": "2026-10-19",
+          "event_title": "OpenAI 低资源编程语言能力：MultiLangBench + COBOL 迁移评测",
+          "first_publish_shanghai": "2026-10-19",
+          "rating": "A",
+          "signal": "Frontier Signal",
+          "source": "https://openai.com/index/low-resource-programming-languages/",
+          "key_data": "GPT-6 Astra 87.4% vs GPT-5.6 Sol 26.8%; COBOL 86.6% vs 5.4%"
+        },
+        {
+          "brief_date": "2026-10-19",
+          "event_title": "OpenAI low-resource programming languages: MultiLangBench + COBOL migration",
+          "first_publish_shanghai": "2026-10-19",
+          "rating": "A",
+          "signal": "Frontier Signal",
+          "source": "https://openai.com/index/low-resource-programming-languages/",
+          "key_data": "GPT-6 Astra 87.4% vs GPT-5.6 Sol 26.8%; COBOL 86.6% vs 5.4%; Oct 19 2026"
+        },
+        {
+          "brief_date": "2026-10-19",
+          "event_title": "OpenAI low-resource programming languages: MultiLangBench + COBOL migration",
+          "first_publish_shanghai": "2026-10-19",
+          "rating": "A",
+          "signal": "Frontier Signal",
+          "source": "https://openai.com/index/low-resource-programming-languages/",
+          "key_data": "GPT-6 Astra 87.4% vs GPT-5.6 Sol 26.8%; COBOL 86.6% vs 5.4%; Oct 19 2026"
+        },
+        {
+          "brief_date": "2026-10-19",
+          "event_title": "OpenAI low-resource programming languages: MultiLangBench + COBOL migration",
+          "first_publish_shanghai": "2026-10-19",
+          "rating": "A",
+          "signal": "Frontier Signal",
+          "source": "https://openai.com/index/low-resource-programming-languages/",
+          "key_data": "GPT-6 Astra 87.4% vs GPT-5.6 Sol 26.8%; COBOL 86.6% vs 5.4%; Oct 19 2026"
+        }
+      ],
+      "notes": "单实体证据，待其他厂商或独立基准复核。"
+    },
+    {
+      "id": "TH-006",
+      "name": "foundation model 谱系多任务专用化拆分",
+      "name_en": "fm_spectral_specialization",
+      "thesis_type": "Convergence Thesis",
+      "statement": "foundation model 谱系向多模态/多任务专用化拆分，harness 需要多模型路由层",
+      "change_types": [
+        "CT-03",
+        "CT-06"
+      ],
+      "tracks": [
+        "TR-MODEL"
+      ],
+      "sections": [
+        "s2-4",
+        "s3-4"
+      ],
+      "state": "active",
+      "confidence": "Medium",
+      "first_seen": "2026-10-19",
+      "last_seen": "2026-10-19",
+      "evidence_count": 2,
+      "convergence_entities": [
+        "Mistral",
+        "Cloudflare"
+      ],
+      "counter_evidence": [],
+      "events": [
+        {
+          "brief_date": "2026-10-19",
+          "event_title": "Mistral Timestral：时序基础模型",
+          "first_publish_shanghai": "2026-10-19 17:59",
+          "rating": "A-",
+          "signal": "Convergence Signal",
+          "source": "https://mistral.ai/news/timestral/",
+          "key_data": "时序 FM"
+        },
+        {
+          "brief_date": "2026-10-19",
+          "event_title": "Cloudflare Clairic：System One 抽取模型",
+          "first_publish_shanghai": "2026-10-20 01:48",
+          "rating": "A",
+          "signal": "Frontier Signal",
+          "source": "https://blog.cloudflare.com/clairic-extraction-model/",
+          "key_data": "抽取/计算/估计/预测模型"
+        }
+      ],
+      "notes": "与 TH-003 高度相关；TH-003 聚焦 System One 概念扩张，TH-006 聚焦 foundation model 谱系拆分。待后续 run 决定是否合并。"
+    },
+    {
+      "id": "TH-007",
+      "name": "robotics FM 作为 API 交付",
+      "name_en": "robotics_fm_api",
+      "thesis_type": "Frontier Thesis",
+      "statement": "robotics FM 作为 API 交付成为新对象，训练数据来源（人类视频）成为差异化轴",
+      "change_types": [
+        "CT-06"
+      ],
+      "tracks": [
+        "TR-MODEL"
+      ],
+      "sections": [
+        "s2-3"
+      ],
+      "state": "active",
+      "confidence": "Low-Medium",
+      "first_seen": "2026-10-20",
+      "last_seen": "2026-10-20",
+      "evidence_count": 4,
+      "convergence_entities": [
+        "Dream Labs"
+      ],
+      "counter_evidence": [],
+      "events": [
+        {
+          "brief_date": "2026-10-19",
+          "event_title": "Dream Labs Dream-1：人类视频训练的机器人 FM",
+          "first_publish_shanghai": "2026-10-20 05:25",
+          "rating": "B+",
+          "signal": "Early Signal",
+          "source": "Techmeme 聚合（指向 Dream Labs 公告）",
+          "key_data": "$90M seed, API 交付, 人类视频训练"
+        },
+        {
+          "brief_date": "2026-10-19",
+          "event_title": "Dream Labs Dream-1: human-video trained robotics FM ($90M seed)",
+          "first_publish_shanghai": "2026-10-20 05:25",
+          "rating": "B+",
+          "signal": "Early Signal",
+          "source": "Techmeme/Bloomberg",
+          "key_data": "$90M seed, API delivery, human video training, B Capital + Kindred Ventures"
+        },
+        {
+          "brief_date": "2026-10-19",
+          "event_title": "Dream Labs Dream-1: human-video trained robotics FM ($90M seed)",
+          "first_publish_shanghai": "2026-10-20 05:25",
+          "rating": "B+",
+          "signal": "Early Signal",
+          "source": "Techmeme/Bloomberg",
+          "key_data": "$90M seed, API delivery, human video training, B Capital + Kindred Ventures"
+        },
+        {
+          "brief_date": "2026-10-19",
+          "event_title": "Dream Labs Dream-1: human-video trained robotics FM ($90M seed)",
+          "first_publish_shanghai": "2026-10-20 05:25",
+          "rating": "B+",
+          "signal": "Early Signal",
+          "source": "Techmeme/Bloomberg",
+          "key_data": "$90M seed, API delivery, human video training, B Capital + Kindred Ventures"
+        }
+      ],
+      "notes": "资本信号强，技术细节待官方原文核实。状态 proposed — 待后续 run 再次出现升 active。"
+    },
+    {
+      "id": "TH-008",
+      "name": "agent harness inference 成本治理独立工程",
+      "name_en": "agent_inference_cost_engineering",
+      "thesis_type": "Convergence Thesis",
+      "statement": "agent harness 的 inference 成本治理成为独立工程学科，agent 自我分析 token 去向成为默认能力",
+      "change_types": [
+        "CT-06",
+        "CT-04"
+      ],
+      "tracks": [
+        "TR-HARNESS"
+      ],
+      "sections": [
+        "s3-1",
+        "s3-3"
+      ],
+      "state": "active",
+      "confidence": "Medium-High",
+      "first_seen": "2026-10-20",
+      "last_seen": "2026-10-20",
+      "evidence_count": 4,
+      "convergence_entities": [
+        "Cloudflare"
+      ],
+      "counter_evidence": [],
+      "events": [
+        {
+          "brief_date": "2026-10-19",
+          "event_title": "Cloudflare AI Code Reviewer 成本优化",
+          "first_publish_shanghai": "2026-10-20 03:12",
+          "rating": "A",
+          "signal": "Convergence Signal",
+          "source": "https://blog.cloudflare.com/obsessive-inference-optimization/",
+          "key_data": "$2.43→$0.77, 40% 代码侧 + 60% 模型/effort 侧"
+        },
+        {
+          "brief_date": "2026-10-19",
+          "event_title": "Cloudflare AI Code Reviewer cost optimization",
+          "first_publish_shanghai": "2026-10-20 03:12",
+          "rating": "A",
+          "signal": "Convergence Signal",
+          "source": "https://blog.cloudflare.com/obsessive-inference-optimization/",
+          "key_data": "$2.43->$0.77, 4m09s->1m32s, 40% code + 60% model/effort"
+        },
+        {
+          "brief_date": "2026-10-19",
+          "event_title": "Cloudflare AI Code Reviewer cost optimization",
+          "first_publish_shanghai": "2026-10-20 03:12",
+          "rating": "A",
+          "signal": "Convergence Signal",
+          "source": "https://blog.cloudflare.com/obsessive-inference-optimization/",
+          "key_data": "$2.43->$0.77, 4m09s->1m32s, 40% code + 60% model/effort"
+        },
+        {
+          "brief_date": "2026-10-19",
+          "event_title": "Cloudflare AI Code Reviewer cost optimization",
+          "first_publish_shanghai": "2026-10-20 03:12",
+          "rating": "A",
+          "signal": "Convergence Signal",
+          "source": "https://blog.cloudflare.com/obsessive-inference-optimization/",
+          "key_data": "$2.43->$0.77, 4m09s->1m32s, 40% code + 60% model/effort"
+        }
+      ],
+      "notes": "与 TH-002 共享 Cloudflare 事件但聚焦不同命题：TH-002 看 dev infra 整体重写，TH-008 看 inference cost 作为独立工程对象。"
+    },
+    {
+      "id": "TH-009",
+      "name": "observability 从 alert 演化为 agent-as-monitor",
+      "name_en": "agent_as_monitor",
+      "thesis_type": "Frontier Thesis",
+      "statement": "observability 从静态 alert 演化为 agent-as-monitor，grown 系统需要 grown 监控",
+      "change_types": [
+        "CT-06",
+        "CT-01"
+      ],
+      "tracks": [
+        "TR-HARNESS"
+      ],
+      "sections": [
+        "s3-5"
+      ],
+      "state": "active",
+      "confidence": "Medium",
+      "first_seen": "2026-10-19",
+      "last_seen": "2026-10-20",
+      "evidence_count": 5,
+      "convergence_entities": [
+        "Anthropic",
+        "Ben Congdon"
+      ],
+      "counter_evidence": [],
+      "events": [
+        {
+          "brief_date": "2026-10-19",
+          "event_title": "Agentic Monitoring：Agent 作为运维观测层",
+          "first_publish_shanghai": "2026-10-19 22:52",
+          "rating": "A",
+          "signal": "Frontier Signal",
+          "source": "https://benjamincongdon.me/blog/2026/10/19/Agentic-Monitoring/",
+          "key_data": "superfan Claude → agent-as-monitor 抽象命题"
+        },
+        {
+          "brief_date": "2026-10-19",
+          "event_title": "Agentic Monitoring: Agent as ops observation layer (Ben Congdon)",
+          "first_publish_shanghai": "2026-10-19 22:52",
+          "rating": "A",
+          "signal": "Frontier Signal",
+          "source": "https://benjamincongdon.me/blog/2026/10/19/Agentic-Monitoring/",
+          "key_data": "superfan Claude -> agent-as-monitor abstraction, HN 89 pts"
+        },
+        {
+          "brief_date": "2026-10-19",
+          "event_title": "Agentic Monitoring: Agent as ops observation layer (Ben Congdon)",
+          "first_publish_shanghai": "2026-10-19 22:52",
+          "rating": "A",
+          "signal": "Frontier Signal",
+          "source": "https://benjamincongdon.me/blog/2026/10/19/Agentic-Monitoring/",
+          "key_data": "superfan Claude -> agent-as-monitor abstraction, HN 89 pts"
+        },
+        {
+          "brief_date": "2026-10-19",
+          "event_title": "Agentic Monitoring: Agent as ops observation layer (Ben Congdon)",
+          "first_publish_shanghai": "2026-10-19 22:52",
+          "rating": "A",
+          "signal": "Frontier Signal",
+          "source": "https://benjamincongdon.me/blog/2026/10/19/Agentic-Monitoring/",
+          "key_data": "superfan Claude -> agent-as-monitor abstraction, HN 89 pts"
+        }
+      ],
+      "notes": "Ben Congdon 从 Anthropic superfan 实践抽象出命题。状态 proposed — 待后续 run 出现更多实践升 active。"
+    },
+    {
+      "id": "TH-010",
+      "name": "coding agent 从单 loop 向 blueprint-driven multi-agent 演化",
+      "name_en": "blueprint_driven_multi_agent",
+      "thesis_type": "Frontier Thesis",
+      "statement": "coding agent 从单 loop 向 blueprint-driven multi-agent 演化，'Agent OS as compiler' 成为新抽象层",
+      "change_types": [
+        "CT-06",
+        "CT-02"
+      ],
+      "tracks": [
+        "TR-HARNESS"
+      ],
+      "sections": [
+        "s3-1",
+        "s3-3",
+        "s3-4"
+      ],
+      "state": "active",
+      "confidence": "Low-Medium",
+      "first_seen": "2026-10-20",
+      "last_seen": "2026-10-20",
+      "evidence_count": 4,
+      "convergence_entities": [
+        "Spinoza Labs"
+      ],
+      "counter_evidence": [],
+      "events": [
+        {
+          "brief_date": "2026-10-19",
+          "event_title": "Vortex Code + Vortex Architect：蓝图驱动 Agent 软件团队",
+          "first_publish_shanghai": "2026-10-20 08:40",
+          "rating": "A-",
+          "signal": "Frontier Signal",
+          "source": "https://spinozalabs.ai/news/introducing-vortex-code",
+          "key_data": "blueprint 作为 source of truth, Agent OS 作为 compiler"
+        },
+        {
+          "brief_date": "2026-10-19",
+          "event_title": "Vortex Code + Vortex Architect: blueprint-driven agent software team (Spinoza Labs)",
+          "first_publish_shanghai": "2026-10-20 08:40",
+          "rating": "A-",
+          "signal": "Frontier Signal",
+          "source": "https://spinozalabs.ai/news/introducing-vortex-code",
+          "key_data": "blueprint as source of truth, Agent OS as compiler, HN low score early product"
+        },
+        {
+          "brief_date": "2026-10-19",
+          "event_title": "Vortex Code + Vortex Architect: blueprint-driven agent software team (Spinoza Labs)",
+          "first_publish_shanghai": "2026-10-20 08:40",
+          "rating": "A-",
+          "signal": "Frontier Signal",
+          "source": "https://spinozalabs.ai/news/introducing-vortex-code",
+          "key_data": "blueprint as source of truth, Agent OS as compiler, HN low score early product"
+        },
+        {
+          "brief_date": "2026-10-19",
+          "event_title": "Vortex Code + Vortex Architect: blueprint-driven agent software team (Spinoza Labs)",
+          "first_publish_shanghai": "2026-10-20 08:40",
+          "rating": "A-",
+          "signal": "Frontier Signal",
+          "source": "https://spinozalabs.ai/news/introducing-vortex-code",
+          "key_data": "blueprint as source of truth, Agent OS as compiler, HN low score early product"
+        }
+      ],
+      "notes": "单厂商早期产品，HN 仅 3 分。状态 proposed — 待后续 run 验证。"
+    },
+    {
+      "id": "TH-011",
+      "name": "agentic AI 军事化部署与自主网络扩散",
+      "name_en": "agentic_ai_military_network_spread",
+      "thesis_type": "Frontier Thesis",
+      "statement": "agentic AI 从辅助工具演化为可自主跨网络扩散的军事行动实体，信任/权限边界从人类授权移到系统自主",
+      "change_types": [
+        "CT-01",
+        "CT-07",
+        "CT-05"
+      ],
+      "tracks": [
+        "TR-HARNESS"
+      ],
+      "sections": [
+        "s3-5",
+        "s3-4"
+      ],
+      "state": "active",
+      "confidence": "Low-Medium",
+      "first_seen": "2026-10-20",
+      "last_seen": "2026-10-20",
+      "evidence_count": 2,
+      "convergence_entities": [
+        "US Army Cyber Command"
+      ],
+      "counter_evidence": [],
+      "events": [
+        {
+          "brief_date": "2026-10-19",
+          "event_title": "ECHOTRIBBLE: US Army Cyber Command agentic AI autonomous network spread program (leaked)",
+          "first_publish_shanghai": "2026-10-20 10:15",
+          "rating": "B+",
+          "signal": "Early Signal",
+          "source": "Techmeme/Bloomberg leaked documents",
+          "key_data": "US Army Cyber Command, agentic AI autonomously spread across networks, leaked docs, Techmeme"
+        },
+        {
+          "brief_date": "2026-10-19",
+          "event_title": "ECHOTRIBBLE: US Army Cyber Command agentic AI autonomous network spread program (leaked)",
+          "first_publish_shanghai": "2026-10-20 10:15",
+          "rating": "B+",
+          "signal": "Early Signal",
+          "source": "Techmeme/Bloomberg leaked documents",
+          "key_data": "US Army Cyber Command, agentic AI autonomously spread across networks, leaked docs, Techmeme"
+        }
+      ],
+      "notes": "New thesis. CT-07 trust/permission change first enters Agent Track. Strong signal but leaked docs evidence."
+    },
+    {
+      "id": "TH-012",
+      "name": "agent trace 错误检测专用模型",
+      "name_en": "agent_trace_error_detection_model",
+      "thesis_type": "Frontier Thesis",
+      "statement": "RL 训练的小型专用模型在 agent trace 错误检测上匹配 GPT-6 Sol，使 agent 可观测性成本下降 23x",
+      "change_types": [
+        "CT-06",
+        "CT-03"
+      ],
+      "tracks": [
+        "TR-HARNESS"
+      ],
+      "sections": [
+        "s3-5",
+        "s3-2"
+      ],
+      "state": "active",
+      "confidence": "Low-Medium",
+      "first_seen": "2026-10-20",
+      "last_seen": "2026-10-20",
+      "evidence_count": 2,
+      "convergence_entities": [
+        "Laminar"
+      ],
+      "counter_evidence": [],
+      "events": [
+        {
+          "brief_date": "2026-10-19",
+          "event_title": "Laminar Flow-1: RL-trained agent trace error detection (YC S24 Launch HN)",
+          "first_publish_shanghai": "2026-10-20 08:00",
+          "rating": "B+",
+          "signal": "Early Signal",
+          "source": "https://laminar.sh/blog/flow-1",
+          "key_data": "matches GPT-6 Sol, 23x cheaper, open-source observability, HN 53 pts"
+        },
+        {
+          "brief_date": "2026-10-19",
+          "event_title": "Laminar Flow-1: RL-trained agent trace error detection (YC S24 Launch HN)",
+          "first_publish_shanghai": "2026-10-20 08:00",
+          "rating": "B+",
+          "signal": "Early Signal",
+          "source": "https://laminar.sh/blog/flow-1",
+          "key_data": "matches GPT-6 Sol, 23x cheaper, open-source observability, HN 53 pts"
+        }
+      ],
+      "notes": "New thesis. Overlaps TH-009 (agent-as-monitor) and TH-003 (System One)."
+    },
+    {
+      "id": "TH-013",
+      "name": "专家观点：编程作为职业的终结",
+      "name_en": "expert_view_programming_career_end",
+      "thesis_type": "Frontier Thesis",
+      "statement": "Simon Willison 引用 Jeremy Scheff：编程从解决谜题获高薪的职业向 LLM 持续馈赠转变，享受解题过程的程序员面临真实损失",
+      "change_types": [],
+      "tracks": [
+        "TR-HARNESS"
+      ],
+      "sections": [
+        "s3-3"
+      ],
+      "state": "active",
+      "confidence": "Medium",
+      "first_seen": "2026-10-20",
+      "last_seen": "2026-10-20",
+      "evidence_count": 2,
+      "convergence_entities": [
+        "Simon Willison"
+      ],
+      "counter_evidence": [],
+      "events": [
+        {
+          "brief_date": "2026-10-19",
+          "event_title": "Simon Willison: My Obituary for Programming (Expert L1)",
+          "first_publish_shanghai": "2026-10-20 11:58",
+          "rating": "B+",
+          "signal": "Expert Thesis",
+          "source": "https://simonwillison.net/2026/Oct/19/my-obituary-for-programming/",
+          "key_data": "quotes Jeremy Scheff, tags: programming/careers/ai/llms/coding-agents/deep-blue"
+        },
+        {
+          "brief_date": "2026-10-19",
+          "event_title": "Simon Willison: My Obituary for Programming (Expert L1)",
+          "first_publish_shanghai": "2026-10-20 11:58",
+          "rating": "B+",
+          "signal": "Expert Thesis",
+          "source": "https://simonwillison.net/2026/Oct/19/my-obituary-for-programming/",
+          "key_data": "quotes Jeremy Scheff, tags: programming/careers/ai/llms/coding-agents/deep-blue"
+        }
+      ],
+      "notes": "L1 New Statement. Resonates with TH-002 Agent dev infra: Agent code output changing programming career essence."
+    },
+    {
+      "id": "TH-014",
+      "name": "LLM 系统指令作为可逆向工程的攻击面",
+      "name_en": "llm_system_prompt_as_attack_surface",
+      "thesis_type": "Frontier Thesis",
+      "statement": "LLM 系统指令隐藏在帮助页面中被逆向工程暴露，system prompt 作为可泄露资产成为新的安全边界",
+      "change_types": [
+        "CT-07",
+        "CT-01"
+      ],
+      "tracks": [
+        "TR-HARNESS"
+      ],
+      "sections": [
+        "s3-5"
+      ],
+      "state": "active",
+      "confidence": "Medium",
+      "first_seen": "2026-10-20",
+      "last_seen": "2026-10-20",
+      "evidence_count": 2,
+      "convergence_entities": [
+        "WhatsApp"
+      ],
+      "counter_evidence": [],
+      "events": [
+        {
+          "brief_date": "2026-10-19",
+          "event_title": "WhatsApp help pages hid LLM instructions including dont recommend a regulator",
+          "first_publish_shanghai": "2026-10-20 15:22",
+          "rating": "B",
+          "signal": "Early Signal",
+          "source": "https://redact.dev/blog/whatsapp-help-pages-hidden-ai-instructions",
+          "key_data": "WhatsApp help pages exposed LLM system prompts, dont recommend a regulator, HN 347 pts"
+        },
+        {
+          "brief_date": "2026-10-19",
+          "event_title": "WhatsApp help pages hid LLM instructions including dont recommend a regulator",
+          "first_publish_shanghai": "2026-10-20 15:22",
+          "rating": "B",
+          "signal": "Early Signal",
+          "source": "https://redact.dev/blog/whatsapp-help-pages-hidden-ai-instructions",
+          "key_data": "WhatsApp help pages exposed LLM system prompts, dont recommend a regulator, HN 347 pts"
+        }
+      ],
+      "notes": "New thesis. LLM system prompt leakage as security/governance. Resonates with abliterated models security research."
+    },
+    {
+      "id": "TH-015",
+      "name": "inference_framework_open_source_stack",
+      "name_en": "",
+      "thesis_type": "Frontier Thesis",
+      "statement": "推理框架从厂商私有栈向开源生产栈迁移，吞吐/延迟/成本三角的开源基线成为 agent harness 选型主轴",
+      "change_types": [
+        "CT-06",
+        "CT-09",
+        "CT-08"
+      ],
+      "tracks": [
+        "TR-MODEL",
+        "TR-HARNESS"
+      ],
+      "sections": [
+        "s2-1",
+        "s3-1"
+      ],
+      "state": "active",
+      "confidence": "Medium-High",
+      "first_seen": "2026-10-19",
+      "last_seen": "2026-10-19",
+      "evidence_count": 1,
+      "convergence_entities": [
+        "DeepSeek"
+      ],
+      "counter_evidence": [],
+      "events": [
+        {
+          "brief_date": "2026-10-19",
+          "event_title": "DeepSeek DeepInfer 开源推理框架",
+          "first_publish_shanghai": "2026-10-20 17:08",
+          "rating": "A",
+          "signal": "Frontier Signal",
+          "source": "https://github.com/deepseek-ai/DeepInfer",
+          "key_data": "Apache 2.0, powering DeepSeek-V4.1-Flash, high throughput low latency, HN 2153 分, 配套 deepseek-recipe (MIT)"
+        }
+      ],
+      "notes": ""
+    },
+    {
+      "id": "TH-016",
+      "name": "agent_purpose_built_vertical_government",
+      "name_en": "",
+      "thesis_type": "Frontier Thesis",
+      "statement": "Agent 从通用助手向垂直行业专用 agentic solution 迁移，政府场景的联邦/州/地方分级权限成为新约束",
+      "change_types": [
+        "CT-06",
+        "CT-07",
+        "CT-01"
+      ],
+      "tracks": [
+        "TR-HARNESS"
+      ],
+      "sections": [
+        "s3-4",
+        "s3-5"
+      ],
+      "state": "active",
+      "confidence": "Medium",
+      "first_seen": "2026-10-19",
+      "last_seen": "2026-10-19",
+      "evidence_count": 1,
+      "convergence_entities": [
+        "Google"
+      ],
+      "counter_evidence": [],
+      "events": [
+        {
+          "brief_date": "2026-10-19",
+          "event_title": "Google Gemini for Government Services agentic solution",
+          "first_publish_shanghai": "2026-10-20 22:00",
+          "rating": "A-",
+          "signal": "Convergence Signal",
+          "source": "https://www.googlecloudpresscorner.com/2026-10-20-Google-Public-Sector-Launches-Gemini-for-Government-Services",
+          "key_data": "Google Public Sector Summit '26, purpose-built agentic solution for federal/state/local government"
+        }
+      ],
+      "notes": ""
+    },
+    {
+      "id": "TH-017",
+      "name": "agent_entry_form_vehicle_surface",
+      "name_en": "",
+      "thesis_type": "Frontier Thesis",
+      "statement": "Agent 入口形态从手机/桌面向车载场景迁移，personal intelligence 与驾驶场景的交互契约（语音优先、低干扰）成为新约束",
+      "change_types": [
+        "CT-01",
+        "CT-05",
+        "CT-06"
+      ],
+      "tracks": [
+        "TR-HARNESS"
+      ],
+      "sections": [
+        "s3-4"
+      ],
+      "state": "active",
+      "confidence": "Medium",
+      "first_seen": "2026-10-19",
+      "last_seen": "2026-10-19",
+      "evidence_count": 1,
+      "convergence_entities": [
+        "Google"
+      ],
+      "counter_evidence": [],
+      "events": [
+        {
+          "brief_date": "2026-10-19",
+          "event_title": "Gemini Personal Intelligence rolls out to Android Auto",
+          "first_publish_shanghai": "2026-10-20 22:00",
+          "rating": "B+",
+          "signal": "Frontier Signal",
+          "source": "https://www.thurrott.com/category/a-i/google-gemini-a-i",
+          "key_data": "Gemini chatbot on Android Auto and cars with Google built-in, Personal Intelligence rollout"
+        }
+      ],
+      "notes": ""
+    },
+    {
+      "id": "TH-018",
+      "name": "domain_expert_parity_in_finance",
+      "name_en": "",
+      "thesis_type": "Frontier Thesis",
+      "statement": "模型在专业判断任务上跨越 senior expert parity 阈值，金融决策的 human-in-the-loop 默认值从必须转向可选",
+      "change_types": [
+        "CT-04",
+        "CT-09"
+      ],
+      "tracks": [
+        "TR-MODEL"
+      ],
+      "sections": [
+        "s2-1"
+      ],
+      "state": "active",
+      "confidence": "Medium",
+      "first_seen": "2026-10-19",
+      "last_seen": "2026-10-19",
+      "evidence_count": 1,
+      "convergence_entities": [
+        "OpenAI"
+      ],
+      "counter_evidence": [],
+      "events": [
+        {
+          "brief_date": "2026-10-19",
+          "event_title": "OpenAI Terminal X: GPT-6.1 matches senior investor judgment 88.6%",
+          "first_publish_shanghai": "2026-10-20 15:00",
+          "rating": "B+",
+          "signal": "Frontier Signal",
+          "source": "https://openai.com/index/terminal-x",
+          "key_data": "Terminal X matches senior investor judgment 88.6% with GPT-6.1"
+        }
+      ],
+      "notes": ""
+    },
+    {
+      "id": "TH-019",
+      "name": "frontier_lab_vertical_acquisition_life_sciences",
+      "name_en": "",
+      "thesis_type": "Frontier Thesis",
+      "statement": "前沿实验室从横向模型能力向垂直生命科学实体收购迁移，模型+湿实验室一体化成为新对象",
+      "change_types": [
+        "CT-08",
+        "CT-06",
+        "CT-01"
+      ],
+      "tracks": [
+        "TR-MODEL"
+      ],
+      "sections": [
+        "s2-4"
+      ],
+      "state": "active",
+      "confidence": "Medium",
+      "first_seen": "2026-10-19",
+      "last_seen": "2026-10-19",
+      "evidence_count": 1,
+      "convergence_entities": [
+        "OpenAI"
+      ],
+      "counter_evidence": [],
+      "events": [
+        {
+          "brief_date": "2026-10-19",
+          "event_title": "OpenAI acquires Orchestra Bio",
+          "first_publish_shanghai": "2026-10-20 08:00",
+          "rating": "B+",
+          "signal": "Frontier Signal",
+          "source": "https://openai.com/index/openai-to-acquire-orchestra-bio",
+          "key_data": "OpenAI to acquire Orchestra Bio"
+        }
+      ],
+      "notes": ""
+    },
+    {
+      "id": "TH-020",
+      "name": "gigawatt_scale_training_cluster",
+      "name_en": "",
+      "thesis_type": "Frontier Thesis",
+      "statement": "训练集群从百 MW 向 GW 级迁移，超大规模集群本身成为新一等对象，互连/能效/可靠性成为新约束",
+      "change_types": [
+        "CT-09",
+        "CT-06"
+      ],
+      "tracks": [
+        "TR-MODEL"
+      ],
+      "sections": [
+        "s2-1"
+      ],
+      "state": "active",
+      "confidence": "Medium-High",
+      "first_seen": "2026-10-19",
+      "last_seen": "2026-10-19",
+      "evidence_count": 1,
+      "convergence_entities": [
+        "Meta"
+      ],
+      "counter_evidence": [],
+      "events": [
+        {
+          "brief_date": "2026-10-19",
+          "event_title": "Meta Prometheus GB{2,3}00 gigawatt-scale supercluster",
+          "first_publish_shanghai": "2026-10-19 22:23",
+          "rating": "A-",
+          "signal": "Frontier Signal",
+          "source": "https://engineering.fb.com/2026/10/19/data-center-engineering/inside-prometheus-meta-gigawatt-scale-supercluster/",
+          "key_data": "Meta Prometheus GB{2,3}00 Cluster, gigawatt-scale supercluster, HN 67 分"
+        }
+      ],
+      "notes": ""
+    },
+    {
+      "id": "TH-021",
+      "name": "model_breaks_out_of_ruts_bug_fix_root_cause",
+      "name_en": "",
+      "thesis_type": "Frontier Thesis",
+      "statement": "模型从模式匹配修 Bug 向跳出思维定势定位根因迁移，bug 修复的交互契约从补丁向根因分析迁移",
+      "change_types": [
+        "CT-04",
+        "CT-05"
+      ],
+      "tracks": [
+        "TR-MODEL"
+      ],
+      "sections": [
+        "s2-1"
+      ],
+      "state": "active",
+      "confidence": "Low-Medium",
+      "first_seen": "2026-10-19",
+      "last_seen": "2026-10-19",
+      "evidence_count": 1,
+      "convergence_entities": [
+        "Anthropic"
+      ],
+      "counter_evidence": [],
+      "events": [
+        {
+          "brief_date": "2026-10-19",
+          "event_title": "qbitai: Claude 新模型曝光，跳出思维定势修 Bug 治本",
+          "first_publish_shanghai": "2026-10-20 09:09",
+          "rating": "B+",
+          "signal": "Frontier Signal",
+          "source": "https://www.qbitai.com/2026/10/claud-new-model-bug-fix",
+          "key_data": "qbitai 报道 Claude 新模型能跳出思维定势，修 Bug 治标又治本 — 二手源，官方原文未回溯"
+        }
+      ],
+      "notes": ""
+    },
+    {
+      "id": "TH-022",
+      "name": "rsi_open_source_research",
+      "name_en": "",
+      "thesis_type": "Frontier Thesis",
+      "statement": "RSI（递归自我改进）研究从封闭前沿向开源迁移，自我改进能力的开放化成为新的信任/权限命题",
+      "change_types": [
+        "CT-08",
+        "CT-07"
+      ],
+      "tracks": [
+        "TR-MODEL"
+      ],
+      "sections": [
+        "s2-1"
+      ],
+      "state": "active",
+      "confidence": "Low-Medium",
+      "first_seen": "2026-10-19",
+      "last_seen": "2026-10-19",
+      "evidence_count": 1,
+      "convergence_entities": [
+        "Google"
+      ],
+      "counter_evidence": [],
+      "events": [
+        {
+          "brief_date": "2026-10-19",
+          "event_title": "qbitai: 谷歌开源 RSI 新成果",
+          "first_publish_shanghai": "2026-10-19 11:11",
+          "rating": "B+",
+          "signal": "Frontier Signal",
+          "source": "https://www.qbitai.com/",
+          "key_data": "谷歌开源 RSI 新成果，华人浓度爆表 — 二手源"
+        }
+      ],
+      "notes": ""
+    },
+    {
+      "id": "TH-023",
+      "name": "inference_scale_trillion_token_daily",
+      "name_en": "",
+      "thesis_type": "Frontier Thesis",
+      "statement": "推理规模从亿级 token/日 向万亿级 token/日 迁移，推理效能治理成为独立工程学科",
+      "change_types": [
+        "CT-09",
+        "CT-06"
+      ],
+      "tracks": [
+        "TR-MODEL",
+        "TR-HARNESS"
+      ],
+      "sections": [
+        "s2-1",
+        "s3-1"
+      ],
+      "state": "active",
+      "confidence": "Low-Medium",
+      "first_seen": "2026-10-19",
+      "last_seen": "2026-10-19",
+      "evidence_count": 1,
+      "convergence_entities": [
+        "SenseTime"
+      ],
+      "counter_evidence": [],
+      "events": [
+        {
+          "brief_date": "2026-10-19",
+          "event_title": "qbitai: 商汤大装置日均 6 万亿 Token 推理效能",
+          "first_publish_shanghai": "2026-10-19 11:22",
+          "rating": "B+",
+          "signal": "Convergence Signal",
+          "source": "https://www.qbitai.com/",
+          "key_data": "日均 6 万亿 Token 服务背后，商汤大装置如何提升推理效能 — 二手源"
+        }
+      ],
+      "notes": ""
+    }
+  ]
+}
