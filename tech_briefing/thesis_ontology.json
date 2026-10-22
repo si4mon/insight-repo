@@ -1,0 +1,225 @@
+{
+  "schema_version": "1.0",
+  "source": "demo/tech_report_task_def/tech_report_task_def.md",
+  "description": "Upper ontology extracted from tech_report_task_def — stable backbone used by thesis_registry to ensure cross-run consistency. New categories emerge bottom-up via LLM proposal; this file only fixes the stable top-level axis.",
+  "change_types": [
+    {
+      "id": "CT-01",
+      "name": "边界迁移",
+      "name_en": "boundary_migration",
+      "definition": "能力/职责在 用户↔系统、Harness↔Model、端↔云、App↔OS、人工↔自动 之间移动",
+      "task_def_ref": "line 23"
+    },
+    {
+      "id": "CT-02",
+      "name": "抽象合并",
+      "name_en": "abstraction_merge",
+      "definition": "产品、模式、入口、API、角色合一",
+      "task_def_ref": "line 23"
+    },
+    {
+      "id": "CT-03",
+      "name": "抽象拆分",
+      "name_en": "abstraction_split",
+      "definition": "产品、模式、入口、API、角色分化",
+      "task_def_ref": "line 23"
+    },
+    {
+      "id": "CT-04",
+      "name": "默认值变化",
+      "name_en": "default_shift",
+      "definition": "从可选变默认、从手动变自动、从显式选择变系统路由",
+      "task_def_ref": "line 23"
+    },
+    {
+      "id": "CT-05",
+      "name": "交互契约变化",
+      "name_en": "interaction_contract_change",
+      "definition": "同步↔异步、阻塞↔后台、设备绑定↔设备脱离、单轮↔持续",
+      "task_def_ref": "line 23"
+    },
+    {
+      "id": "CT-06",
+      "name": "新一等对象",
+      "name_en": "new_first_class_object",
+      "definition": "新名词成为可创建、可共享、可计费、可调度、可恢复或可审计的对象（skill/routine/artifact/session/task）",
+      "task_def_ref": "line 23"
+    },
+    {
+      "id": "CT-07",
+      "name": "信任/权限模型变化",
+      "name_en": "trust_permission_change",
+      "definition": "信任边界、权限模型、治理结构发生变化",
+      "task_def_ref": "line 23"
+    },
+    {
+      "id": "CT-08",
+      "name": "生命周期变化",
+      "name_en": "lifecycle_change",
+      "definition": "Beta、GA、弃用、价格、可用性等生命周期阶段变化",
+      "task_def_ref": "line 23"
+    },
+    {
+      "id": "CT-09",
+      "name": "规模或成本拐点",
+      "name_en": "scale_cost_inflection",
+      "definition": "规模放大或成本下降达到拐点（如 40× 规模、70% 降本、1000+ tok/s）",
+      "task_def_ref": "line 23"
+    }
+  ],
+  "tracks": [
+    {
+      "id": "TR-MODEL",
+      "name": "Model Track",
+      "sections": [
+        {"id": "s2-1", "name": "Language / Reasoning / Training & Inference"},
+        {"id": "s2-2", "name": "Multimodal / Speech / Full-duplex / Vision"},
+        {"id": "s2-3", "name": "World Model / Spatial / Embodied"},
+        {"id": "s2-4", "name": "Model–Agent Boundary"}
+      ],
+      "watch_matrix": [
+        "Foundation / Reasoning",
+        "Realtime / Audio / Full-Duplex",
+        "Multimodal / Vision / Video",
+        "World Model / Spatial / Embodied",
+        "Model Internals / Interpretability",
+        "Model–Harness Boundary"
+      ],
+      "task_def_ref": "line 33-40, 82"
+    },
+    {
+      "id": "TR-HARNESS",
+      "name": "Harness Track",
+      "sections": [
+        {"id": "s3-1", "name": "Runtime / Session / Task State / Long-running"},
+        {"id": "s3-2", "name": "Memory / Knowledge / Context"},
+        {"id": "s3-3", "name": "Harness / Loop / Skill / Routine / Automation / Evolution"},
+        {"id": "s3-4", "name": "Multi-agent / AgentOS / Tool / MCP / A2A / Computer Use"},
+        {"id": "s3-5", "name": "Trusted Agent / Sandbox / Verify / Governance"}
+      ],
+      "watch_matrix": [
+        "Agent Runtime", "Loop / Harness / Scaffold", "Session / Task State",
+        "Long-running / Persistent Agent", "Memory / Knowledge / Context Engineering",
+        "Skill / Routine / Automation", "Tool Use", "MCP / A2A", "Computer Use",
+        "Multi-Agent / Swarm / Subagent", "Agent Teams", "AgentOS / Kernel",
+        "Sandbox", "Trusted Agent", "Policy / Permission / Verify / Governance",
+        "Evaluator / Observer / Commit Gate", "Registry / Discovery", "Agent Gateway",
+        "Recovery / Checkpoint / Audit / Observability", "Artifact / Evidence / Trajectory",
+        "端云协同", "多模型 / 多 Agent 编排", "Harness / Skill / Routine Evolution",
+        "Agent 入口形态与产品形态", "对话 / 代理 / 工作区合并或拆分", "任务路由",
+        "设备脱离执行", "跨端接续"
+      ],
+      "task_def_ref": "line 42-44, 83"
+    }
+  ],
+  "rating": {
+    "levels": [
+      {
+        "id": "R-A-PLUS",
+        "name": "A+",
+        "criteria": "机制新颖 + 定量充分 + 多源共振（Source Authority / Magnitude of Change / Mechanism Novelty / Quantitative Evidence / Strategic Adjacency 多数满足）",
+        "enters_top_watch": true,
+        "task_def_ref": "line 58-59, 77"
+      },
+      {
+        "id": "R-A",
+        "name": "A",
+        "criteria": "量化显著但缺乏独立基准；改变某一技术命题，证据强度稍逊 A+",
+        "enters_top_watch": true,
+        "task_def_ref": "line 59, 71-72"
+      },
+      {
+        "id": "R-B",
+        "name": "B",
+        "criteria": "信号明确但证据不足；进入值得关注但不进入今日必看",
+        "enters_top_watch": false,
+        "task_def_ref": "line 72-73"
+      },
+      {
+        "id": "R-C",
+        "name": "C",
+        "criteria": "旁证 / issue / discussion 级，仅作佐证",
+        "enters_top_watch": false,
+        "task_def_ref": "line 74"
+      },
+      {
+        "id": "R-D",
+        "name": "D",
+        "criteria": "丢弃或并入其他事件",
+        "enters_top_watch": false,
+        "task_def_ref": "line 92"
+      }
+    ],
+    "evaluation_dimensions": {
+      "technical_value": ["Source Authority", "Magnitude of Change", "Mechanism Novelty", "Quantitative Evidence", "Strategic Adjacency"],
+      "abstraction_specific": ["Abstraction Novelty", "Architectural Leverage", "Strategic Adjacency"],
+      "task_def_ref": "line 59"
+    }
+  },
+  "signal_types": [
+    {
+      "id": "SIG-FRONTIER",
+      "name": "Frontier Signal",
+      "definition": "单实体拐点 — 某一 Tier-1 实体出现机制新颖/规模/能力的实质跃迁，即使部署早期也单独评估",
+      "task_def_ref": "line 59, 61"
+    },
+    {
+      "id": "SIG-CONVERGENCE",
+      "name": "Convergence Signal",
+      "definition": "多实体收敛 — 跨实体在同一技术命题上对齐（不要求使用相同名词）",
+      "task_def_ref": "line 61-62"
+    }
+  ],
+  "evaluation_chain": {
+    "stages": ["Event", "Signal", "Pattern", "Thesis"],
+    "convergence_dimensions": [
+      "Cross-Entity", "Cross-Form", "Temporal Persistence",
+      "Adoption / Deployment", "Mechanism Consistency", "Counter-Evidence"
+    ],
+    "confidence_levels": ["High", "Medium", "Low"],
+    "low_confidence_rule": "Low 不进入核心技术判断",
+    "thesis_types": ["Frontier Thesis", "Convergence Thesis"],
+    "task_def_ref": "line 61-62"
+  },
+  "value_ranking": {
+    "P0": "Frontier Lab / 头部厂商模型；Audio / Live；Agent；Runtime；协议；架构正式发布；重要 open weights；重大能力 / API lifecycle 变化；系统级 benchmark；核心专家范式判断；头部厂商 Agent 产品形态 / 入口合并、拆分或默认行为变化",
+    "P1": "高质量论文 / 报告的新架构、机制、benchmark、定量证据；重大 Runtime / Framework Release；Memory / Harness / AgentInfra / MCP / A2A；New Abstraction；New Paradigm；New Engineering Layer；达到跨源共振阈值",
+    "P2": "近 3 日 Active Event 实质增量；企业部署 / 生态落地；高价值 Thesis Validation",
+    "P3": "issue / discussion / bug 默认仅作旁证",
+    "main_event_count": "8–14 个，高价值明显多于 14 可扩到 16–18，禁止为数量降低证据门槛",
+    "task_def_ref": "line 70-75"
+  },
+  "expert_watch": {
+    "experts": [
+      "Andrej Karpathy", "Dario Amodei", "Sam Altman", "Demis Hassabis",
+      "Yann LeCun", "Ilya Sutskever", "Geoffrey Hinton", "Jensen Huang",
+      "Satya Nadella", "Mustafa Suleyman", "Jeff Dean", "Noam Brown",
+      "Aidan Gomez", "Thomas Wolf", "Yoshua Bengio", "Fei-Fei Li",
+      "Lilian Weng", "Liang Wenfeng"
+    ],
+    "categories": {
+      "L1": "New Statement — TARGET_WINDOW 内首次公开表达的新观点",
+      "L2": "Reactivated Thesis — 原始观点早于窗口，本轮重新传播",
+      "L3": "Thesis Validation — 事件/数据验证了专家既有论点"
+    },
+    "task_def_ref": "line 64-65"
+  },
+  "tier1_entities": [
+    "OpenAI", "Anthropic", "Google / DeepMind", "xAI", "Meta",
+    "Microsoft", "NVIDIA", "DeepSeek", "Qwen / Alibaba",
+    "ByteDance / Seed / Doubao", "Moonshot / Kimi", "Tencent / Hunyuan",
+    "Baidu", "Zhipu", "MiniMax", "World Labs", "Runway", "Pika",
+    "Luma", "Black Forest Labs", "Stability AI"
+  ],
+  "thesis_lifecycle": {
+    "states": ["proposed", "active", "dormant", "retired"],
+    "transitions": {
+      "proposed->active": "再次在后续 run 中出现且证据增强",
+      "active->dormant": "连续 N run 未出现新证据（N 默认 14）",
+      "dormant->active": "重新出现新证据",
+      "dormant->retired": "被 counter-evidence 否证或被新 thesis 合并",
+      "any->merged": "与另一 thesis 合并"
+    },
+    "note": "lifecycle 由 thesis_registry.py 维护，不由 ontology 直接约束"
+  }
+}
