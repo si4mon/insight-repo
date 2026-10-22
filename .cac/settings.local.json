@@ -1,0 +1,8 @@
+{
+  "model": "Glm-5.2-Auto",
+  "permissions": {
+    "allow": [
+      "Bash(curl:*)"
+    ]
+  }
+}
