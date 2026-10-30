@@ -1744,3 +1744,160 @@ def _extract_sitemap(body: bytes):
     """sitemap 只产出 URL，用于 surface diff。"""
     text = body.decode("utf-8", "ignore")
     return [_item_from("", u, "", "") for u in re.findall(r"<loc>\s*([^<\s]+)\s*</loc>", text)]
+
+
+# ---------- 总入口 ----------
+def extract_items(body: bytes, mode: str, source_url: str = "", json_mode: str = "") -> dict:
+    """
+    返回 {status, items, error}。
+    status:
+      ok            解析成功且产出条目
+      empty         解析成功但 0 条目（源确实没有内容，或站点结构变了）
+      parse_failed  解析器报错（内容形态与声明模式不匹配）
+      blocked       代理拦截页
+      skipped       非采集类（sitemap 之外需要跳过的）
+    """
+    kind = classify(body, source_url)
+    if kind == "block_page":
+        return {"status": "blocked", "items": [], "error": "proxy block page detected"}
+
+    try:
+        if mode in ("rss", "atom"):
+            if kind not in ("rss", "atom"):
+                return {"status": "parse_failed", "items": [],
+                        "error": f"expected feed, got {kind}"}
+            items = _extract_xml(body, kind)
+        elif mode == "json_api":
+            if kind != "json":
+                return {"status": "parse_failed", "items": [],
+                        "error": f"expected json, got {kind}"}
+            items = _extract_json(body, json_mode)
+        elif mode == "markdown_dated":
+            if kind != "markdown":
+                return {"status": "parse_failed", "items": [],
+                        "error": f"expected markdown, got {kind}"}
+            items = extract_markdown_any(body, source_url)
+        elif mode == "html_cards":
+            if kind != "html":
+                return {"status": "parse_failed", "items": [],
+                        "error": f"expected html, got {kind}"}
+            # 先试精确的 <article> 结构，再退回通用 <a> 扫描，取条目多的
+            arts = _extract_html_articles(body, source_url)
+            cards = _extract_html_cards(body, source_url)
+            items = arts if len(arts) >= len(cards) else cards
+        elif mode == "sitemap":
+            items = _extract_sitemap(body)
+            return {"status": "ok" if items else "empty", "items": items, "error": ""}
+        else:
+            return {"status": "skipped", "items": [], "error": f"unknown mode {mode}"}
+    except ValueError as e:
+        return {"status": "parse_failed", "items": [], "error": str(e)}
+    except Exception as e:  # 防御：解析器不能把整个采集流程带崩
+        return {"status": "parse_failed", "items": [], "error": f"{type(e).__name__}: {e}"}
+
+    # 0 条目时区分"源结构正常但没内容"与"内容不对劲"：
+    #   前者（arXiv 周日返回合法但空的 RSS、发布稀疏的厂商 blog）不是失明；
+    #   后者是空响应 / 结构被换掉，必须补检。
+    structure_ok = bool(items) or _structure_matches(kind, mode, body)
+    return {"status": "ok" if items else "empty", "items": items, "error": "",
+            "structure_ok": structure_ok}
+
+
+_MIN_DOC_BYTES = {"rss": 300, "atom": 300, "json": 50, "markdown": 50, "html": 800}
+
+
+def _structure_matches(kind: str, mode: str, body: bytes) -> bool:
+    """响应是否具备声明的结构（不看有没有条目）。"""
+    expected = {"rss": ("rss", "atom"), "atom": ("atom",),
+                "json_api": ("json",), "markdown_dated": ("markdown",),
+                "markdown": ("markdown",), "html_cards": ("html",)}
+    want = expected.get(mode)
+    if want and kind not in want:
+        return False
+    return len(body or b"") >= _MIN_DOC_BYTES.get(kind, 50)
+
+
+# 日期只到"日"时，源站时区不可知。全球时区范围 UTC-12 ~ UTC+14，
+# 日期串 "D" 表示"某时区的 D 日"，其真实 UTC 跨度：
+#   时区 +14 → UTC [D 00:00 -14h, D+1 00:00 -14h) = [D-1 10:00Z, D 10:00Z)
+#   时区 -12 → UTC [D 00:00 +12h, D+1 00:00 +12h) = [D 12:00Z, D+1 12:00Z)
+# 合并即 [D-1 10:00Z, D+1 12:00Z)，共 50 小时。
+# 因此下界 = d - 14h，上界 = d + 36h（不是 +12h——那只有 26 小时，会漏掉西半球整天）。
+_DAY_UNCERTAINTY_EARLY = timedelta(hours=14)
+_DAY_UNCERTAINTY_LATE = timedelta(hours=36)
+
+
+def _as_utc(value: str) -> datetime | None:
+    try:
+        d = datetime.fromisoformat(value)
+    except (ValueError, TypeError):
+        return None
+    return d.replace(tzinfo=timezone.utc) if d.tzinfo is None else d.astimezone(timezone.utc)
+
+
+def precision_span(item: dict) -> tuple[datetime, datetime] | None:
+    """
+    条目可能的真实时刻区间。精度为 second 时退化为一个点（起止相同）。
+
+    day 精度必须返回区间：把"Oct 21"当成 10-21T00:00Z 是把不确定性
+    伪装成精确值，会让日粒度源的窗口边界事件被静默判到窗口外。
+    """
+    d = _as_utc(item.get("published") or "")
+    if d is None:
+        return None
+    if item.get("date_precision") == "day":
+        return d - _DAY_UNCERTAINTY_EARLY, d + _DAY_UNCERTAINTY_LATE
+    return d, d
+
+
+def window_match(item: dict, start_iso: str, end_iso: str) -> str | None:
+    """
+    返回 'exact' / 'fuzzy' / None。
+
+    exact — 时刻精确到秒，且落在窗口内（确定事件）；
+    fuzzy — 日期只到日，其 50 小时不确定区间与窗口相交（可能事件）。
+            这类条目必须保留：宁可多带一条待核实的，也不能让日粒度源
+            的窗口边界事件静默掉出候选池。下游不得把它当确定事件计数，
+            8.2 引用时必须同时标注 date_precision。
+
+    day 精度一律判 fuzzy，即使区间端点恰好落在窗口内——"Oct 22" 本身
+    不是任何确定时刻，把它标成 exact 等于把时区猜测伪装成事实。
+    """
+    span = precision_span(item)
+    s = _as_utc(start_iso)
+    e = _as_utc(end_iso)
+    if span is None or s is None or e is None:
+        return None
+    lo, hi = span
+    if item.get("date_precision") == "day":
+        return "fuzzy" if lo < e and hi > s else None
+    return "exact" if s <= lo <= e else None
+
+
+def in_window(item: dict, start_iso: str, end_iso: str) -> bool:
+    """
+    是否可归入窗口。日粒度条目按"不确定区间与窗口相交"判定（模糊精度），
+    避免日粒度源因时刻被钉在零点而整批掉出窗口。
+    无日期返回 False（不可归窗，交由上层标 time_unknown）。
+    """
+    return window_match(item, start_iso, end_iso) is not None
+
+
+if __name__ == "__main__":
+    # 自检：跑一段 markdown changelog
+    demo = b"""# Changelog
+
+## October, 2026
+
+### Oct 22
+
+Update - Model: gpt-6-luna - API: v1/decisions
+
+The Decisions API is now generally available.
+
+### Oct 15
+
+Feature - gpt-live-1
+"""
+    print(json.dumps(extract_items(demo, "markdown_dated", "https://x/docs/changelog.md"),
+                     ensure_ascii=False, indent=2))
