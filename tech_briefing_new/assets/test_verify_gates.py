@@ -15,24 +15,27 @@ import unittest
 from pathlib import Path
 
 from taxonomy import TAXONOMY
-from verify_gates import (Check, check_event_paths, check_html_taxonomy,
-                          check_publish_precision, check_taxonomy_definition,
-                          check_unclassified)
+from verify_gates import (Check, check_event_annotations, check_event_paths,
+                          check_markdown, check_publish_precision,
+                          check_taxonomy_definition, check_unclassified)
 
 
-def _card(ev: str, extra: str = "", cls: str = "", column: str = "") -> str:
-    attr = f' data-column="{column}"' if column else ""
-    return (f'<div class="card{cls}"{attr}><div class="chd"><span class="rank">{ev}</span>'
-            f'<h5>t</h5></div>{extra}</div>')
+def _card(ev: str, extra: str = "", decl: str = "", rating: str = "B") -> str:
+    """一张 MD 事件卡：EV 编号只写在标记行里（门禁按标记区识别，不靠标题）。"""
+    tag = f" · 归属 {decl}" if decl else ""
+    return f"#### 事件标题\n\n**{rating} · {ev}{tag}**\n\n{extra}\n\n"
 
 
 def _column(col: str, cards: str) -> str:
-    return f'<h4 id="s{col.replace(".", "-")}">{col} 标题</h4>{cards}'
+    return f"### {col} 栏目标题\n\n{cards}"
 
 
-def _html(*columns: str) -> str:
-    body = "".join(columns)
-    return f'<html><head><title>t</title></head><body><h1>h</h1>{body}</body></html>'
+def _md(*columns: str, focus: str = "") -> str:
+    """最小简报：章 1 结论、章 2 今日必看（focus）、章 3 放所有分类栏目。"""
+    return ("---\ntitle: t\ndate: 2026-10-30\n---\n\n"
+            "## 本轮结论与技术趋势\n\n结论。\n\n"
+            f"## 今日必看\n\n{focus}"
+            "## 分类\n\n" + "".join(columns))
 
 
 def _events(tmp: Path, **evs) -> Path:
@@ -116,10 +119,8 @@ class AnnotationMapGateTest(unittest.TestCase):
         self.addCleanup(self._tmp.cleanup)
 
     def _run(self, **evs) -> Check:
-        p = self.tmp / "r.html"
-        p.write_text(_html(_column("4.6", "")), encoding="utf-8")
         c = Check()
-        check_html_taxonomy(c, p, _events(self.tmp, **evs))
+        check_event_annotations(c, _events(self.tmp, **evs))
         return c
 
     def test_every_leaf_has_exactly_one_label(self):
@@ -226,119 +227,175 @@ class PublishPrecisionGateTest(unittest.TestCase):
         self.assertEqual(c.failed, [], c.results)
 
 
-class HtmlTaxonomyGateTest(unittest.TestCase):
+class MdTaxonomyGateTest(unittest.TestCase):
+    """分类呈现规则在 Markdown 源上校验（设计文档 §5）。"""
+
     def setUp(self):
         self._tmp = tempfile.TemporaryDirectory()
         self.tmp = Path(self._tmp.name)
         self.addCleanup(self._tmp.cleanup)
 
-    def _run(self, html: str, **evs) -> Check:
-        p = self.tmp / "r.html"
-        p.write_text(html, encoding="utf-8")
+    def _run(self, md: str, **evs) -> Check:
+        p = self.tmp / "r-2026-10-30.md"
+        p.write_text(md, encoding="utf-8")
         d = _events(self.tmp, **evs) if evs else None
         c = Check()
-        check_html_taxonomy(c, p, d)
+        check_markdown(c, p, {}, d)
         return c
 
-    def test_conformant_html_passes(self):
-        html = _html(_column("3.2", _card("EV-01")), _column("4.1", _card("EV-02")))
-        c = self._run(html,
-                      **{"EV-01": {"primary_path": "B1.1"},
-                         "EV-02": {"primary_path": "C1.1"}})
-        self.assertEqual(c.failed, [], c.results)
+    def test_conformant_md_passes(self):
+        md = _md(_column("3.2", _card("EV-01")), _column("4.1", _card("EV-02")))
+        c = self._run(md, **{"EV-01": {"primary_path": "B1.1"},
+                             "EV-02": {"primary_path": "C1.1"}})
+        failed = [r for r in c.failed if r["gate"] == "taxonomy"]
+        self.assertEqual(failed, [], c.results)
 
     def test_duplicate_main_card_fails(self):
         # 同一事件在两个栏目各写一张完整卡片 → Dashboard 会重复计数
-        html = _html(_column("3.2", _card("EV-01")), _column("4.1", _card("EV-01")))
-        c = self._run(html, **{"EV-01": {"primary_path": "B1.1"}})
+        md = _md(_column("3.2", _card("EV-01")), _column("4.1", _card("EV-01")))
+        c = self._run(md, **{"EV-01": {"primary_path": "B1.1"}})
         self.assertEqual(_status(c, "唯一主卡：事件不在多个栏目重复写全卡"), "FAIL")
 
     def test_card_in_wrong_column_fails(self):
         # primary_path=B1.2 应落 4.1，却写进了 3.2
-        html = _html(_column("3.2", _card("EV-01")))
-        c = self._run(html, **{"EV-01": {"primary_path": "B1.2"}})
+        md = _md(_column("3.2", _card("EV-01")))
+        c = self._run(md, **{"EV-01": {"primary_path": "B1.2"}})
         self.assertEqual(_status(c, "主卡落在 primary_path 对应的栏目"), "FAIL")
 
+    def test_aa_event_without_main_card_fails(self):
+        md = _md(_column("3.2", _card("EV-01")))
+        c = self._run(md, **{"EV-01": {"primary_path": "B1.1"},
+                             "EV-02": {"primary_path": "C1.1", "rating": "A"}})
+        self.assertEqual(_status(c, "主卡落在 primary_path 对应的栏目"), "FAIL")
+
+    def test_b_event_without_main_card_passes(self):
+        # B 级可只出现在章 5，不强制主卡
+        md = _md(_column("3.2", _card("EV-01")))
+        c = self._run(md, **{"EV-01": {"primary_path": "B1.1"},
+                             "EV-02": {"primary_path": "C1.1", "rating": "B"}})
+        self.assertEqual(_status(c, "主卡落在 primary_path 对应的栏目"), "PASS")
+
     def test_empty_column_rendered_fails(self):
-        html = _html(_column("3.2", _card("EV-01")), _column("3.4", ""))
-        c = self._run(html, **{"EV-01": {"primary_path": "B1.1"}})
+        # 旧实现只登记"有卡的栏目"，空栏目永远查不到（空集恒真）
+        md = _md(_column("3.2", _card("EV-01")), _column("3.4", ""))
+        c = self._run(md, **{"EV-01": {"primary_path": "B1.1"}})
         self.assertEqual(_status(c, "空栏目不出现在正文"), "FAIL")
 
     def test_old_structure_column_ids_fail(self):
-        html = _html(_column("2.1", _card("EV-01")))
-        c = self._run(html, **{"EV-01": {"primary_path": "A1.1"}})
-        self.assertEqual(_status(c, "HTML 栏目编号均属 11 个栏目"), "FAIL")
+        md = _md(_column("2.1", _card("EV-01")))
+        c = self._run(md, **{"EV-01": {"primary_path": "A1.1"}})
+        self.assertEqual(_status(c, "栏目编号均属 11 个栏目"), "FAIL")
 
     def test_audit_subsections_not_treated_as_columns(self):
-        html = _html(_column("3.2", _card("EV-01")), _column("8.1", ""),
-                     _column("8.2", ""), _column("8.3", ""))
-        c = self._run(html, **{"EV-01": {"primary_path": "B1.1"}})
-        self.assertEqual(_status(c, "HTML 栏目编号均属 11 个栏目"), "PASS")
+        md = _md(_column("3.2", _card("EV-01")), _column("8.1", ""),
+                 _column("8.2", ""), _column("8.3", ""))
+        c = self._run(md, **{"EV-01": {"primary_path": "B1.1"}})
+        self.assertEqual(_status(c, "栏目编号均属 11 个栏目"), "PASS")
+        self.assertEqual(_status(c, "空栏目不出现在正文"), "PASS")
 
-    def test_last_column_card_is_counted(self):
-        # 最后一段没有 </section> 结尾，旧正则会把它的卡片整个漏掉
-        html = _html(_column("3.2", _card("EV-01")), _column("4.7", _card("EV-02")))
-        c = self._run(html, **{"EV-01": {"primary_path": "B1.1"},
-                               "EV-02": {"primary_path": "E1.1"}})
+    def test_marker_only_event_ids_are_read_in_every_column(self):
+        # EV 只写在标记行；第二个栏目的卡片此前按片段内偏移切全文而读丢
+        md = _md(_column("3.2", _card("EV-01")), _column("4.7", _card("EV-02")))
+        c = self._run(md, **{"EV-01": {"primary_path": "B1.1"},
+                             "EV-02": {"primary_path": "E1.1", "rating": "A"}})
         self.assertEqual(_status(c, "主卡落在 primary_path 对应的栏目"), "PASS")
 
+    def test_focus_card_can_hold_main_card(self):
+        # 章 2 的 Top 卡声明归属 → 它就是主卡，分类章不再写全卡
+        md = _md(_column("4.1", _card("EV-02")),
+                 focus=_card("EV-01", decl="3.2", rating="A+"))
+        c = self._run(md, **{"EV-01": {"primary_path": "B1.1", "rating": "A+"},
+                             "EV-02": {"primary_path": "C1.1"}})
+        self.assertEqual(_status(c, "主卡落在 primary_path 对应的栏目"), "PASS")
+        self.assertEqual(_status(c, "唯一主卡：事件不在多个栏目重复写全卡"), "PASS")
+
+    def test_column_holding_only_a_cross_reference_is_not_empty(self):
+        # 主卡在章 2，分类章 3.2 只留一句交叉引用 —— 规定写法，不是空栏目
+        md = _md(_column("3.2", "（主卡见章 2。）\n\n"), _column("4.1", _card("EV-02")),
+                 focus=_card("EV-01", decl="3.2", rating="A+"))
+        c = self._run(md, **{"EV-01": {"primary_path": "B1.1", "rating": "A+"},
+                             "EV-02": {"primary_path": "C1.1"}})
+        self.assertEqual(_status(c, "空栏目不出现在正文"), "PASS")
+
+    def test_focus_card_plus_column_card_is_duplicate(self):
+        md = _md(_column("3.2", _card("EV-01")),
+                 _column("4.1", _card("EV-02")),
+                 focus=_card("EV-02", decl="3.2", rating="A+"))
+        c = self._run(md, **{"EV-01": {"primary_path": "B1.1"},
+                             "EV-02": {"primary_path": "C1.1"}})
+        self.assertEqual(_status(c, "唯一主卡：事件不在多个栏目重复写全卡"), "FAIL")
+
+    def test_focus_summary_card_is_not_a_main_card(self):
+        # 未声明归属的章 2 卡片是摘要卡，不参与唯一主卡计数
+        md = _md(_column("3.2", _card("EV-01")), focus=_card("EV-01", rating="A"))
+        c = self._run(md, **{"EV-01": {"primary_path": "B1.1"}})
+        self.assertEqual(_status(c, "唯一主卡：事件不在多个栏目重复写全卡"), "PASS")
+
     def test_annotation_required_in_aggregate_column(self):
-        html = _html(_column("4.6", _card("EV-01", "<p>只是可信治理</p>")))
-        c = self._run(html, **{"EV-01": {"primary_path": "D3.2"}})
+        md = _md(_column("4.6", _card("EV-01", "只是可信治理")))
+        c = self._run(md, **{"EV-01": {"primary_path": "D3.2"}})
         self.assertEqual(_status(c, "聚合栏目卡片标注了具体技术域"), "FAIL")
 
     def test_annotation_satisfied_by_specific_domain(self):
-        html = _html(_column("4.6", _card("EV-01", "<p>具体属于执行隔离：Sandbox</p>")))
-        c = self._run(html, **{"EV-01": {"primary_path": "D3.2"}})
+        md = _md(_column("4.6", _card("EV-01", "具体属于执行隔离：Sandbox")))
+        c = self._run(md, **{"EV-01": {"primary_path": "D3.2"}})
+        self.assertEqual(_status(c, "聚合栏目卡片标注了具体技术域"), "PASS")
+
+    def test_annotation_not_required_elsewhere(self):
+        md = _md(_column("4.1", _card("EV-01", "无细分标注")))
+        c = self._run(md, **{"EV-01": {"primary_path": "C1.1"}})
         self.assertEqual(_status(c, "聚合栏目卡片标注了具体技术域"), "PASS")
 
     def test_folded_card_declares_real_column(self):
-        # 4.5 只有 1 条 → 按设计折进相邻栏目 4.4，但必须用 data-column 声明归属
-        html = _html(_column("4.4", _card("EV-01", column="4.5")),
-                     _column("4.1", _card("EV-02")))
-        c = self._run(html, **{"EV-01": {"primary_path": "B4.1"},
-                               "EV-02": {"primary_path": "C1.1"}})
+        # 4.5 只有 1 条 → 按设计折进相邻栏目 4.4，并在标记行声明「归属 4.5」
+        md = _md(_column("4.4", _card("EV-01", decl="4.5")),
+                 _column("4.1", _card("EV-02")))
+        c = self._run(md, **{"EV-01": {"primary_path": "B4.1"},
+                             "EV-02": {"primary_path": "C1.1"}})
         self.assertEqual(_status(c, "主卡落在 primary_path 对应的栏目"), "PASS")
-        self.assertEqual(_status(c, "折叠卡的 data-column 是合法栏目"), "PASS")
+        self.assertEqual(_status(c, "归属声明是合法栏目"), "PASS")
 
     def test_folded_card_without_declaration_fails(self):
-        html = _html(_column("4.4", _card("EV-01")),
-                     _column("4.1", _card("EV-02")))
-        c = self._run(html, **{"EV-01": {"primary_path": "B4.1"},
-                               "EV-02": {"primary_path": "C1.1"}})
+        md = _md(_column("4.4", _card("EV-01")),
+                 _column("4.1", _card("EV-02")))
+        c = self._run(md, **{"EV-01": {"primary_path": "B4.1"},
+                             "EV-02": {"primary_path": "C1.1"}})
         self.assertEqual(_status(c, "主卡落在 primary_path 对应的栏目"), "FAIL")
 
     def test_folded_card_with_bogus_column_fails(self):
-        html = _html(_column("4.4", _card("EV-01", column="9.9")),
-                     _column("4.1", _card("EV-02")))
-        c = self._run(html, **{"EV-01": {"primary_path": "B4.1"},
-                               "EV-02": {"primary_path": "C1.1"}})
-        self.assertEqual(_status(c, "折叠卡的 data-column 是合法栏目"), "FAIL")
+        md = _md(_column("4.4", _card("EV-01", decl="9.9")),
+                 _column("4.1", _card("EV-02")))
+        c = self._run(md, **{"EV-01": {"primary_path": "B4.1"},
+                             "EV-02": {"primary_path": "C1.1"}})
+        self.assertEqual(_status(c, "归属声明是合法栏目"), "FAIL")
 
     def test_two_cards_folded_into_one_column_fails(self):
-        html = _html(_column("4.4", _card("EV-01", column="4.5") + _card("EV-02", column="4.5")))
-        c = self._run(html, **{"EV-01": {"primary_path": "B4.1"},
-                               "EV-02": {"primary_path": "B4.2"}})
+        md = _md(_column("4.4", _card("EV-01", decl="4.5") + _card("EV-02", decl="4.5")))
+        c = self._run(md, **{"EV-01": {"primary_path": "B4.1"},
+                             "EV-02": {"primary_path": "B4.2"}})
         self.assertEqual(_status(c, "折叠栏目只折 1 条"), "FAIL")
 
-    def test_annotation_not_required_elsewhere(self):
-        html = _html(_column("4.1", _card("EV-01", "<p>无细分标注</p>")))
-        c = self._run(html, **{"EV-01": {"primary_path": "C1.1"}})
-        self.assertEqual(_status(c, "聚合栏目卡片标注了具体技术域"), "PASS")
+    def test_declaring_an_expanded_column_does_not_fold(self):
+        # 4.1 有自己的小节，卡片却写在 3.2 并声明归属 4.1 → 位置写错，不算折叠
+        md = _md(_column("3.2", _card("EV-01", decl="4.1")),
+                 _column("4.1", _card("EV-02")))
+        c = self._run(md, **{"EV-01": {"primary_path": "C1.1"},
+                             "EV-02": {"primary_path": "C1.2"}})
+        self.assertEqual(_status(c, "主卡落在 primary_path 对应的栏目"), "FAIL")
 
 
 class TaxonomyCoverageTest(unittest.TestCase):
-    """确认 11 个栏目都能被 HTML 切分器识别，没有编号形式上的盲区。"""
+    """确认 11 个栏目都能被 MD 切分器识别，没有编号形式上的盲区。"""
 
     def test_all_columns_reachable(self):
         cols = TAXONOMY.column_ids()
-        html = _html(*[_column(c, "") for c in cols])
-        p = Path(tempfile.mkdtemp()) / "r.html"
-        p.write_text(html, encoding="utf-8")
+        md = _md(*[_column(col, _card(f"EV-{i:02d}")) for i, col in enumerate(cols, 1)])
+        p = Path(tempfile.mkdtemp()) / "r-2026-10-30.md"
+        p.write_text(md, encoding="utf-8")
         c = Check()
-        # 只跑"未知栏目"这一项，空栏目报 FAIL 是预期的
-        check_html_taxonomy(c, p, None)
-        self.assertEqual(_status(c, "HTML 栏目编号均属 11 个栏目"), "PASS")
+        check_markdown(c, p, {})
+        self.assertEqual(_status(c, "栏目编号均属 11 个栏目"), "PASS")
+        self.assertEqual(_status(c, "空栏目不出现在正文"), "PASS")
 
 
 if __name__ == "__main__":

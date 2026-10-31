@@ -218,6 +218,7 @@ a.topbar__btn { text-decoration: none; }
 [data-edit-mode="true"] .article h2,
 [data-edit-mode="true"] .article h3,
 [data-edit-mode="true"] .article h4,
+[data-edit-mode="true"] .article h5,
 [data-edit-mode="true"] .article p,
 [data-edit-mode="true"] .article li,
 [data-edit-mode="true"] .article dt,
@@ -1008,15 +1009,29 @@ h3 {
   scroll-margin-top: var(--s-12);
 }
 
+/* h4 = event card title; h5 = sub-label inside a card (e.g. deep-dive sections);
+   h6 = quieter sub-label. Neither carries an id, so repeated labels don't collide. */
 h4 {
+  font-family: var(--font-body);
+  font-size: 1.125rem;
+  font-weight: 600;
+  line-height: 1.35;
+  letter-spacing: -0.005em;
+  text-wrap: balance;
+  color: var(--text);
+  margin: var(--s-8) 0 var(--s-3);
+}
+
+h5, h6 {
   font-family: var(--font-ui);
   font-size: 0.75rem;
   font-weight: 600;
-  letter-spacing: 0.10em;
+  letter-spacing: 0.06em;
   text-transform: uppercase;
   color: var(--text-subtle);
-  margin: var(--s-8) 0 var(--s-3);
+  margin: var(--s-6) 0 var(--s-2);
 }
+h6 { font-weight: 500; }
 
 /* Anchor link on hover */
 .heading-anchor {

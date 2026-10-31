@@ -365,182 +365,15 @@ def check_event_paths(c: Check, events_dir: Path | None):
           ", ".join(bad_obj[:6]))
 
 
-def _column_segments(raw: str) -> dict[str, str]:
-    """按三级锚点 id="sN-M" 切分正文，返回 {"N.M": 片段}。
+def check_event_annotations(c: Check, events_dir: Path | None):
+    """聚合栏目（4.6）的事件 JSON 必须写 annotation，且等于 primary_path 叶子对应的标签。
 
-    注意：返回的是**所有**三级锚点，包括章 8 的审计子节（8.1/8.2/8.3）
-    和旧结构残留的 2.x / 3.x。哪些是合法栏目由 taxonomy 判定，
-    这里不做过滤 —— 否则"HTML 仍在用旧栏目编号"就查不出来了。
-
-    栏目锚点在正文里是 h3/h4/h5，值为 s3-1 / s4-6 这类。
-    片段止于下一个栏目锚点**或下一个章锚点**——否则最后一栏会吞掉后续所有章节，
-    把 s4–s8 的卡片算进 4.7（"唯一主卡"会因此误报重复）。
+    标签与叶子一一对应（设计文档 §5.3），不能自选更宽或更窄的标签。
+    只看事件 JSON，与正文写法无关；正文侧的标注义务由 check_markdown 校验。
     """
-    marks = [(m.start(), m.end(), f"{int(m.group(1))}.{m.group(2)}")
-             for m in re.finditer(r'<h[3-6][^>]*id="s(\d)-(\d)"', raw)]
-    chapter_starts = [m.start() for m in
-                      re.finditer(r'<section[^>]*id="s\d+"|<h[1-6][^>]*id="s\d+"', raw)]
-    out = {}
-    for i, (start, end, col) in enumerate(marks):
-        stops = [len(raw)]
-        if i + 1 < len(marks):
-            stops.append(marks[i + 1][0])
-        stops.extend(s for s in chapter_starts if s > end)
-        out[col] = raw[end:min(stops)]
-    return out
-
-
-def _card_bodies(seg: str) -> list[str]:
-    """切出片段里的每张完整事件卡（卡片 <div> 的内部内容）。
-
-    片段已被 _column_segments 截到栏目边界，所以"下一张卡"或"片段结束"
-    都是合法终止条件。只写 `(?=<div class="card|</section>)` 会漏掉
-    片段内的最后一张卡（片段里已没有 </section>）。
-
-    返回**含开标签**的完整卡片：`data-column` 这类声明在属性上，
-    只取内部内容会读不到，折叠卡的主卡归位检查就会失效。
-    """
-    return re.findall(r'<div class="card[^"]*"[^>]*>.*?(?=<div class="card|\Z)', seg, re.S)
-
-
-def _cards(seg: str) -> list[str]:
-    """切出片段里的完整事件卡，返回每张卡包含的 EV 编号。"""
-    out = []
-    for body in _card_bodies(seg):
-        eid = EV_ID_RE.search(body)
-        out.append(eid.group(0) if eid else "")
-    return out
-
-
-def check_html_taxonomy(c: Check, html_path: Path, events_dir: Path | None):
-    """
-    【待迁移，当前无调用方】旧 HTML 路线的分类门禁，随 --html 通道一并下线。
-    其中"主卡归位""4.6 标注与 primary_path 一致""聚合栏目标注具体技术域"
-    三条规则在 check_markdown 里尚无对应实现，迁移到 MD 通道前暂留，
-    test_verify_gates 仍直接调用它以保住规则语义。
-
-    HTML 分类呈现的三条硬规则：
-
-      唯一主卡   — 一个事件只在一个栏目写完整卡片，其余位置只能是标签；
-      主卡归位   — 完整卡片必须出现在 primary_path 解析出的栏目里；
-      空栏目不列 — 没有入选事件的栏目不得出现标题（设计文档 §5.4）。
-
-    旧实现只看 section id 齐不齐，不关心事件落在哪一节 ——
-    于是"同一事件在两个栏目各写一张全卡、Dashboard 重复计数"永远查不出来。
-    """
-    if not html_path.exists():
-        return
-    raw = html_path.read_text(encoding="utf-8", errors="ignore")
-    segs = _column_segments(raw)
-
-    known = set(TAXONOMY.column_ids())
-    audit = {f"8.{i}" for i in (1, 2, 3)}      # 章 8 的审计子节，不是归类栏目
-    stray = sorted(set(segs) - known - audit)
-    c.add("taxonomy", "HTML 栏目编号均属 11 个栏目", not stray,
-          f"未知栏目: {stray}")
-
-    cards_by_col = {col: _cards(seg) for col, seg in segs.items()
-                    if col in known}
-    ev_cols: dict[str, list[str]] = {}
-    # 折叠卡片：只有"声明的主栏目没有独立片段"时才算折叠。
-    # 展开栏目里的卡片也能带 data-column（用于自证归属），但不算折叠，
-    # 否则"折叠栏目只折 1 条"会把整个展开栏目误报成过折。
-    folded = {}          # eid -> 声明的主栏目
-    for col, seg in segs.items():
-        for body in _card_bodies(seg):
-            m = re.search(r'data-column="([\d.]+)"', body)
-            if not m:
-                continue
-            declared = m.group(1)
-            if declared in segs:      # 该栏目有自己的片段 → 是正常展开
-                continue
-            eid = EV_ID_RE.search(body)
-            if eid:
-                folded[eid.group(0)] = declared
-
-    # 主卡归属：折叠卡取 data-column，普通卡取所在栏目
-    for col, cards in cards_by_col.items():
-        for eid in cards:
-            ev_cols.setdefault(eid, []).append(folded.get(eid, col))
-
-    # 焦点层（章 2）也可以放唯一主卡：Top 1 的完整论证放在那里，
-    # 分类章只留交叉引用。这类卡片用 data-column 声明归属栏目。
-    focus = re.search(r'<section[^>]*id="s2"[^>]*>(.*?)(?=<section|</body>)', raw, re.S)
-    if focus:
-        for body in _card_bodies(focus.group(1)):
-            m = re.search(r'data-column="([\d.]+)"', body)
-            eid = EV_ID_RE.search(body)
-            if m and eid:
-                ev_cols.setdefault(eid.group(0), []).append(m.group(1))
-
-    # 唯一主卡：同一 EV 的完整卡片不得出现在多个栏目
-    dup = {e: cols for e, cols in ev_cols.items() if e and len(set(cols)) > 1}
-    c.add("taxonomy", "唯一主卡：事件不在多个栏目重复写全卡", not dup,
-          "; ".join(f"{e} 出现在 {', '.join(cols)}" for e, cols in list(dup.items())[:4]))
-
-    # 空栏目不列：渲染了标题却一张卡也没有 = 空栏目。
-    # 折叠栏目（1 条事件、并入相邻栏目）按设计不出现标题，不在此列。
-    empty = [col for col, cards in cards_by_col.items() if not cards]
-    c.add("taxonomy", "空栏目不出现在正文", not empty,
-          f"已渲染但无事件: {empty}")
-
-    # 折叠密度：同一栏目内若塞了 ≥2 张 card，说明该栏目本应展开而不是折叠
-    over_folded = []
-    for eid, declared in folded.items():
-        same = [e for e, d in folded.items() if d == declared]
-        if len(same) >= 2:
-            over_folded.append(f"{declared} 折叠了 {len(same)} 条")
-    c.add("taxonomy", "折叠栏目只折 1 条", not over_folded,
-          "; ".join(sorted(set(over_folded))[:4]))
-
-    # data-column 必须是真实存在的栏目编号。折叠栏目的特征就是"不渲染标题"，
-    # 所以"该栏目没有独立片段"是预期的，不能当作错误。
-    bad_fold = [f"{eid} 声明了不存在的栏目 {declared}"
-                for eid, declared in folded.items() if declared not in known]
-    c.add("taxonomy", "折叠卡的 data-column 是合法栏目", not bad_fold,
-          "; ".join(bad_fold[:4]))
-
     events = _load_events(events_dir)
     if not events:
-        c.warn("taxonomy", "未提供事件文件", "跳过主卡归位检查")
         return
-
-    misplaced = []
-    for eid, ev in events.items():
-        path = ev.get("primary_path")
-        if not path:
-            continue
-        try:
-            expect = TAXONOMY.resolve(path)
-        except TaxonomyError:
-            continue
-        got = ev_cols.get(eid, [])
-        if expect not in got:
-            misplaced.append(f"{eid} primary={path}→{expect}，实际在 {got or '未出现'}")
-    c.add("taxonomy", "主卡落在 primary_path 对应的栏目", not misplaced,
-          "; ".join(misplaced[:5]))
-
-    # 聚合栏目 4.6 的标注义务：卡片必须写明具体技术域
-    annotated = []
-    for col, seg in segs.items():
-        if col not in known:      # 旧结构栏目（2.x / 3.x）已在上面报为未知
-            continue
-        labels = TAXONOMY.annotation_labels(col)
-        if not labels:
-            continue
-        for body in _card_bodies(seg):
-            # 只检查主栏目就是 4.6 的卡片。折叠进来的其他栏目事件
-            # （如 4.5、4.7 的单条）不承担 4.6 的标注义务。
-            m = re.search(r'data-column="([\d.]+)"', body)
-            if m and m.group(1) != col:
-                continue
-            if not any(lb in _text(body) for lb in labels):
-                eid = EV_ID_RE.search(body)
-                annotated.append(f"{eid.group(0) if eid else '?'}@{col}")
-    c.add("taxonomy", "聚合栏目卡片标注了具体技术域", not annotated,
-          "未标注: " + ", ".join(annotated[:6]))
-
-    # 4.6 的标注不能自选：必须是 primary_path 叶子对应的那一个标签
     mismatch = []
     for eid, ev in events.items():
         path = ev.get("primary_path")
@@ -677,7 +510,143 @@ def _md_is_aa_card(body: str) -> bool:
     return first in ("A+", "A")
 
 
-def check_markdown(c: Check, md_path: Path, report: dict):
+# 卡片在标记行里声明主栏目：**A · Frontier · EV-07 · 归属 4.5**
+# 两种场景用它：栏目只有 1 条事件、折叠进相邻栏目（设计文档 §5.1）；
+# 章 2 的 Top 卡承载唯一主卡、分类章只留交叉引用（SKILL P5）。
+_DECL_RE = re.compile(r'归属\s*(\d+\.\d+)')
+
+
+def _md_card_decl(body: str) -> str:
+    """从卡片标记区（body 前 200 字符的 **...**）取「归属 N.M」声明。"""
+    for seg in re.findall(r'\*\*([^*]+)\*\*', body[:200]):
+        m = _DECL_RE.search(seg)
+        if m:
+            return m.group(1)
+    return ""
+
+
+def _md_layout(text: str) -> dict:
+    """一次线性扫描切出分类栏目与章 2 焦点卡。
+
+    每张卡用它在全文中的真实偏移取正文：此前按"栏目片段内偏移"去全文切片，
+    只写在标记行里的 EV 编号会被读到错误位置而漏检。
+    """
+    known = set(TAXONOMY.column_ids())
+    audit = {"8.1", "8.2", "8.3"}
+    columns: dict[str, list[dict]] = {}   # 出现过 ### 标题的栏目 → 其下卡片（可为空）
+    focus: list[dict] = []                # 章 2 中不在任何栏目下的卡片
+    stray: list[str] = []
+    chapter, cur = 0, None
+    for level, title, off in _md_sections(text):
+        if level <= 2:
+            chapter += level == 2
+            cur = None
+        elif level == 3:
+            cid = _md_column_id(title)
+            if cid in known:
+                cur = cid
+                columns.setdefault(cid, [])
+            else:
+                if cid and cid not in audit:
+                    stray.append(cid)
+                cur = None
+        elif level == 4:
+            body = _md_section_body(text, off)
+            eid = _md_card_event(title, body)
+            if not eid:
+                continue
+            card = {"eid": eid, "decl": _md_card_decl(body), "body": body}
+            if cur:
+                columns[cur].append(card)
+            elif chapter == 2:
+                focus.append(card)
+    return {"columns": columns, "focus": focus, "stray": stray, "known": known}
+
+
+def _check_md_columns(c: Check, text: str, events_dir: Path | None):
+    """分类呈现规则（设计文档 §5）：栏目合法、唯一主卡、主卡归位、空栏目、
+    折叠声明、4.6 聚合栏目的标注义务。"""
+    lay = _md_layout(text)
+    columns, focus, known = lay["columns"], lay["focus"], lay["known"]
+
+    c.add("taxonomy", "栏目编号均属 11 个栏目", not lay["stray"],
+          f"未知栏目: {sorted(set(lay['stray']))}")
+
+    # 折叠：声明的主栏目没有自己的 ### 小节时，这张卡才算折叠进来；
+    # 主栏目已展开却声明归属它，说明卡写错了位置，按所在栏目计（随后报归位错误）。
+    folded: dict[str, str] = {}
+    ev_cols: dict[str, list[str]] = {}
+    placed: list[tuple[str, dict]] = []    # (有效栏目, 卡片)
+    for col, cards in columns.items():
+        for card in cards:
+            eff = col
+            if card["decl"] and card["decl"] != col and card["decl"] not in columns:
+                folded[card["eid"]] = card["decl"]
+                eff = card["decl"]
+            ev_cols.setdefault(card["eid"], []).append(eff)
+            placed.append((eff, card))
+    # 章 2 的卡片只有声明了归属才是主卡；未声明的是摘要卡，不计入。
+    for card in focus:
+        if card["decl"]:
+            ev_cols.setdefault(card["eid"], []).append(card["decl"])
+            placed.append((card["decl"], card))
+
+    dup = {e: cols for e, cols in ev_cols.items() if len(set(cols)) > 1}
+    c.add("taxonomy", "唯一主卡：事件不在多个栏目重复写全卡", not dup,
+          "; ".join(f"{e} 出现在 {', '.join(cols)}" for e, cols in list(dup.items())[:4]))
+
+    # 空栏目：标题下没有卡片，且没有任何主卡归属于它。章 2 承载主卡时，
+    # 分类章的该栏目只留交叉引用，这是规定写法，不是空栏目。
+    owned = {eff for eff, _ in placed}
+    empty = sorted(col for col, cards in columns.items() if not cards and col not in owned)
+    c.add("taxonomy", "空栏目不出现在正文", not empty,
+          f"已渲染但无事件: {empty}")
+
+    decls = [(card["eid"], card["decl"]) for cards in columns.values() for card in cards
+             if card["decl"]] + [(card["eid"], card["decl"]) for card in focus if card["decl"]]
+    bad_decl = [f"{e} 声明了不存在的栏目 {d}" for e, d in decls if d not in known]
+    c.add("taxonomy", "归属声明是合法栏目", not bad_decl, "; ".join(bad_decl[:4]))
+
+    per_target: dict[str, int] = {}
+    for d in folded.values():
+        per_target[d] = per_target.get(d, 0) + 1
+    over = [f"{d} 折叠了 {n} 条" for d, n in sorted(per_target.items()) if n >= 2]
+    c.add("taxonomy", "折叠栏目只折 1 条", not over, "; ".join(over[:4]))
+
+    # 聚合栏目：主卡落在 4.6 的卡片正文必须写出具体技术域标签
+    unlabeled = []
+    for eff, card in placed:
+        if eff not in known:
+            continue          # 非法声明已由「归属声明是合法栏目」报出
+        labels = TAXONOMY.annotation_labels(eff)
+        if labels and not any(lb in card["body"] for lb in labels):
+            unlabeled.append(f"{card['eid']}@{eff}")
+    c.add("taxonomy", "聚合栏目卡片标注了具体技术域", not unlabeled,
+          "未标注: " + ", ".join(unlabeled[:6]))
+
+    events = _load_events(events_dir)
+    if not events:
+        c.warn("taxonomy", "未提供事件文件", "跳过主卡归位检查")
+        return
+    # 主卡归位：写了主卡的事件必须落在 primary_path 解析出的栏目；
+    # A/A+ 必须有主卡。B 级及以下可只出现在章 5（值得关注），不强制主卡。
+    misplaced = []
+    for eid, ev in sorted(events.items()):
+        try:
+            expect = TAXONOMY.resolve(ev.get("primary_path") or "")
+        except TaxonomyError:
+            continue          # 不可解析的路径由 check_event_paths 报
+        got = ev_cols.get(eid, [])
+        if got and expect not in got:
+            misplaced.append(f"{eid} primary={ev['primary_path']}→{expect}，实际在 {got}")
+        elif not got and ev.get("rating") in ("A", "A+"):
+            misplaced.append(f"{eid} primary={ev['primary_path']}→{expect}，未写主卡")
+    c.add("taxonomy", "主卡落在 primary_path 对应的栏目", not misplaced,
+          "; ".join(misplaced[:5]))
+
+
+def check_markdown(c: Check, md_path: Path, report: dict,
+                   events_dir: Path | None = None):
     """MD 路线的核心门禁：八章齐全、栏目合法、A/A+ 四节、唯一主卡、空栏目。"""
     if not md_path.exists():
         c.add("md", "Markdown 文件存在", False, str(md_path))
@@ -765,47 +734,7 @@ def check_markdown(c: Check, md_path: Path, report: dict):
           "; ".join(missing_sec[:4]) if missing_sec
           else f"{len(aa_cards)} 张 A/A+ 主卡")
 
-    # 栏目合法性 + 唯一主卡 + 空栏目
-    known_cols = set(TAXONOMY.column_ids())
-    audit = {"8.1", "8.2", "8.3"}
-    col_cards: dict[str, list[str]] = {}
-    stray_cols = []
-    for level, title, off in secs:
-        if level != 3:
-            continue
-        cid = _md_column_id(title)
-        if cid is None:
-            continue
-        if cid not in known_cols and cid not in audit:
-            stray_cols.append(cid)
-            continue
-        if cid in audit:
-            continue
-        body = _md_section_body(text, off)
-        # 该栏目下的四级卡片
-        for clv, ctitle, coff in _md_sections(body):
-            if clv != 4:
-                continue
-            eid = _md_card_event(ctitle, _md_section_body(text, coff))
-            if eid:
-                col_cards.setdefault(cid, []).append(eid)
-
-    c.add("md", "栏目编号均属 11 个栏目", not stray_cols,
-          f"未知栏目: {sorted(set(stray_cols))}")
-
-    # 唯一主卡：同一 EV 不在多个栏目出现
-    ev_cols: dict[str, list[str]] = {}
-    for col, eids in col_cards.items():
-        for e in eids:
-            ev_cols.setdefault(e, []).append(col)
-    dup = {e: cols for e, cols in ev_cols.items() if len(set(cols)) > 1}
-    c.add("md", "唯一主卡：事件不在多个栏目重复写全卡", not dup,
-          "; ".join(f"{e} 出现在 {', '.join(cols)}" for e, cols in list(dup.items())[:4]))
-
-    # 空栏目：标题出现但零张卡
-    empty = [col for col, eids in col_cards.items() if not eids]
-    c.add("md", "空栏目不出现在正文", not empty,
-          f"已渲染但无事件: {empty}")
+    _check_md_columns(c, text, events_dir)
 
 
 def check_md_event_index(c: Check, md_path: Path, report: dict,
@@ -1001,10 +930,6 @@ def check_publish_precision(c: Check, events_dir: Path | None):
           "; ".join(bad_first[:4]) + "（day 精度却写成精确时刻且无 note）" if bad_first else "")
 
 
-def _text(fragment: str) -> str:
-    return re.sub(r"\s+", " ", re.sub(r"<[^>]+>", " ", fragment)).strip()
-
-
 def _tokens(s: str) -> set[str]:
     """取有区分度的词，用于 HTML 行标题与 EV JSON 的事件标题做弱匹配。"""
     stop = {"when", "into", "your", "main", "loop", "building", "with", "from",
@@ -1083,6 +1008,7 @@ def main():
     c = Check()
     check_taxonomy_definition(c)
     check_event_paths(c, events_dir)
+    check_event_annotations(c, events_dir)
     check_unclassified(c, events_dir)
     check_publish_precision(c, events_dir)
 
@@ -1095,7 +1021,7 @@ def main():
         check_pool_retains_undated(c, report, pool_path)
         if md_path:
             # MD 路线：HTML 是机械渲染副本，门禁校验 MD 源；HTML 只做轻量断言
-            check_markdown(c, md_path, report)
+            check_markdown(c, md_path, report, events_dir)
             check_md_event_index(c, md_path, report, events_dir)
             html_sibling = md_path.with_suffix(".html")
             if html_sibling.exists():

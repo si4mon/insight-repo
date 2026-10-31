@@ -253,7 +253,7 @@ export function findMarkdownBlockStarts(markdown) {
     while (
       i < lines.length
       && !/^\s*$/.test(lines[i].text)
-      && !/^(#{1,4})\s+/.test(lines[i].text)
+      && !/^(#{1,6})\s+/.test(lines[i].text)
       && !/^[-*]\s+/.test(lines[i].text)
       && !/^\d+\.\s+/.test(lines[i].text)
       && !/^>\s?/.test(lines[i].text)

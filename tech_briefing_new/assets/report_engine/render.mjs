@@ -18,7 +18,8 @@
  *   ---
  *
  * Supported Markdown:
- *   - # / ## / ### / #### headings (auto-ids, # anchor links)
+ *   - # / ## / ### headings (auto-ids, # anchor links); #### / ##### / ###### without ids
+ *     (card titles and repeated sub-labels would otherwise collide on the same id)
  *   - paragraphs with **bold**, *italic*, `code`, [link](url), ==mark==, [^1]
  *   - ordered + unordered lists (one level of nesting)
  *   - tables (pipe syntax, header + separator + rows; align via : in separator)
@@ -33,7 +34,9 @@
  *
  * Conventions:
  *   - The first italic-only paragraph immediately after an H2 becomes a section lede.
- *   - The first paragraph of the very first section gets a drop-cap.
+ *   - The first paragraph of the very first section gets a drop-cap, but only when it
+ *     starts with a Latin letter: an enlarged CJK glyph splits the first word into an
+ *     orphan ("窗" + "口统计"), so CJK openings render without one.
  */
 
 import crypto from 'node:crypto';
@@ -244,8 +247,14 @@ function renderHeading(level, text, blockId = '') {
   const anchor = `<a class="heading-anchor" href="#${id}" aria-label="Link to ${escapeHtml(text)}">#</a>`;
   const attrs = blockId ? reportBlockAttr(blockId) : '';
   if (level === 1) return { html: `<h1${attrs}>${inline(text)}</h1>`, id, level };
-  if (level === 4) return { html: `<h4${attrs}>${inline(text)}</h4>`, id, level };
+  if (level >= 4) return { html: `<h${level}${attrs}>${inline(text)}</h${level}>`, id, level };
   return { html: `<h${level} id="${id}"${attrs}>${inline(text)}${anchor}</h${level}>`, id, level };
+}
+
+// Drop caps only suit alphabetic scripts: skip leading markup, then require A–Z.
+function startsWithLatin(text) {
+  const first = String(text).replace(/^[\s*_`~=\[("'“‘]+/u, '').charAt(0);
+  return /[A-Za-z]/.test(first);
 }
 
 function isItalicOnly(line) {
@@ -299,7 +308,7 @@ function tokenize(md) {
     if (/^---+\s*$/.test(line)) { out.push({ type: 'hr' }); i++; continue; }
 
     // heading
-    const h = line.match(/^(#{1,4})\s+(.+?)\s*#*$/);
+    const h = line.match(/^(#{1,6})\s+(.+?)\s*#*$/);
     if (h) { out.push({ type: 'heading', level: h[1].length, text: h[2] }); i++; continue; }
 
     // fenced code
@@ -472,7 +481,7 @@ function render(tokens) {
         continue;
       }
       pendingSectionLede = false;
-      if (!dropCapApplied && lastHeadingLevel === 2) {
+      if (!dropCapApplied && lastHeadingLevel === 2 && startsWithLatin(t.text)) {
         cls = ' class="dropcap"';
         dropCapApplied = true;
       }

@@ -316,9 +316,18 @@ def main():
                    "column_name": TAXONOMY.column(TAXONOMY.column_of(args.path))["name"]})
         elif args.cmd == "resolve":
             col = TAXONOMY.resolve(args.path)
-            _dump({"path": args.path, "column": col,
+            out = {"path": args.path, "column": col,
                    "column_name": TAXONOMY.column(col)["name"],
-                   "anchor": TAXONOMY.anchor(col)})
+                   "anchor": TAXONOMY.anchor(col)}
+            label = ""
+            if TAXONOMY.annotation_map(col):
+                try:
+                    label = TAXONOMY.annotation_label_for(args.path)
+                except TaxonomyError:
+                    label = ""      # 非叶子路径（如 D3）没有唯一标签
+            if label:
+                out["annotation"] = label   # 聚合栏目：事件 JSON 的 annotation 必须等于它
+            _dump(out)
         elif args.cmd == "validate":
             results = TAXONOMY.validate()
             for x in results:
