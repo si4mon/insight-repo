@@ -12,7 +12,6 @@ allowed-tools:
   - Bash(date:*)
   - Bash(powershell:*)
   - Bash(node:*)
-  - Skill(visual-explainer)
   - Read
   - Write
   - Edit
@@ -47,19 +46,20 @@ $SKILL_DIR/                           # 本 skill 的安装目录（SKILL.md 所
 │   ├── collect_sources.py            # 采集主流程
 │   ├── build_pool.py                 # P1 候选池构建（归窗 + 无日期条目差分）
 │   ├── gap_tasks.py                  # 覆盖缺口 → 可执行补检任务
-│   ├── verify_gates.py               # Gate 校验器（机器可判，支持 --md / --html 两通道）
+│   ├── verify_gates.py               # Gate 校验器（机器可判，校验 .md 工作源）
 │   ├── render_report.py              # MD 路线渲染包装层（调 report_engine 把 .md → .html）
 │   ├── report_engine/                # 内置 MD→HTML 渲染引擎（纯 Node 零依赖）
 │   │   ├── render.mjs                #   渲染器主入口（含 slug/unstash/Windows 路径修复）
 │   │   ├── template.html             #   自包含 HTML 模板（TOC/脚注/评注/导出）
 │   │   ├── build-index.mjs           #   报告库索引生成（index.json + index.html）
 │   │   └── ...                       #   comments/review/extract 等配套脚本
-│   ├── render_html.py                # 旧路线：调 visual-explainer kit 渲染 .src.html → .html（保留作 A/B 基线）
-│   ├── html_render_guide.md          # 渲染指南（§0 设计约束零依赖；§2 起为旧路线 kit 配合，MD 路线见本文 P5）
 │   ├── thesis_registry.py            # Thesis registry API
 │   ├── taxonomy.py                   # 分类映射 API（54 叶子 ↔ 11 栏目 ↔ 8 章）
 │   ├── test_*.py                     # 单测（taxonomy / gates / extract / coverage）
 │   └── thesis_ontology.json          # Upper Ontology 骨架 + taxonomy 定义
+├── references/                       # 按需读取的参考
+│   ├── design-constraints.md         # P5 设计约束（写作侧 + 排版侧）
+│   └── design-rationale.md           # 设计决策记录
 └── data/                             # 可写全局状态
     └── thesis_registry.json          # Thesis 实例库（跨 run 累积）
 ```
@@ -95,7 +95,7 @@ $SKILL_DIR/                           # 本 skill 的安装目录（SKILL.md 所
 
 - **渲染引擎（默认 MD 路线必需）**：`$ASSETS/render_report.py` + `$ASSETS/report_engine/`。
   步骤 1 之前跑一次 `python "$ASSETS/render_report.py" --check` 确认引擎与 node 可用。
-  引擎是 vendored 的纯 Node 零依赖实现，不需要 visual-explainer。
+  引擎是 vendored 的纯 Node 零依赖实现，不依赖任何外部 skill。
 - **任务定义**：`$ASSETS/tech_report_task_def.md`
   — 24KB 的完整任务定义，包含 TARGET_WINDOW Gate、五路召回、变化类型分类、
   技术命题映射、A/A+ 评级标准、八章结构规范等全部规则。
@@ -114,13 +114,10 @@ $SKILL_DIR/                           # 本 skill 的安装目录（SKILL.md 所
     ```
   - `$DATA/thesis_registry.json` — Thesis 实例库（跨 run 累积的 thesis 历史）。
   - `$ASSETS/thesis_registry.py` — query / ingest / update / merge API。
-- **旧路线 A/B 基线（仅做对比时需要）**：`visual-explainer` skill + `$ASSETS/render_html.py` +
-  `$ASSETS/html_render_guide.md`。默认 MD 路线不依赖它们；仅在跑旧 `.src.html` 路线对比时
-  按 P5 末尾"旧路线"小节的步骤使用。**不修改 visual-explainer 的任何文件。**
 
 ## Goal
 
-生成一个完整的 `$WORKDIR/多源技术热点简报_YYYY-MM-DD.html` 文件，满足：
+在 `$WORKDIR/reports/` 下生成 `<标题 slug>-YYYY-MM-DD.md` 工作源及其渲染出的自包含 `.html`，满足：
 1. TARGET_WINDOW 正确冻结（昨日 00:00 → 今日执行时刻 Asia/Shanghai）
 2. 包含完整八章结构
 3. 通过 `verify_gates.py` 机器校验 + 人工复核表
@@ -169,9 +166,9 @@ $SKILL_DIR/                           # 本 skill 的安装目录（SKILL.md 所
   正确做法是不传，让脚本用真实今天；只在**补采历史某天**时才传，且传的是"那一天"。
 - **两处日期不是同一个**，不要互相推导：
   - `raw_<date>/` 的 date = 脚本运行的**今天**（`target_date`）
-  - `多源技术热点简报_<date>.html` 的 date = **WINDOW_START_DATE**（昨天）
+  - `reports/<标题 slug>-<date>.md` / `.html` 的 date = **WINDOW_START_DATE**（昨天）
   - `events_run_<date>/` 的 date = **WINDOW_START_DATE**，与输出文件名一致
-  例：10-27 运行 → `raw_2026-10-27/`、`events_run_2026-10-26/`、`多源技术热点简报_2026-10-26.html`。
+  例：10-27 运行 → `raw_2026-10-27/`、`events_run_2026-10-26/`、`reports/<标题 slug>-2026-10-26.md`。
   门禁按 `collect_report.json` 的 `target_window.start` 校验文件名，推错会在步骤 6 才暴露。
 - 步骤 1 结束前跑一次 `python "$ASSETS/render_report.py" --check`，确认引擎与 node 可用；
   等到步骤 5 才发现缺 node，等于把内容白写一遍。
@@ -551,8 +548,8 @@ B = 信号明确但证据不足。
 Top 1 需深拆（架构可视化 + 落地场景 + 与历史路线关系）。评级相同时，优先"改变技术判断"而非"刷新数字"的那条。
 对比 registry 中同名/相关 thesis 的历史置信度，更新本轮置信度。
 
-**A/A+ 事件卡四维深拆硬约束**：每张 A/A+ 主卡（不只是 Top 1）必须含四个 `<h4>` 小节，
-缺一不成稿：
+**A/A+ 事件卡四维深拆硬约束**：每张 A/A+ 主卡（不只是 Top 1）必须含四个 `#####` 五级小节
+（结构契约见 P5），缺一不成稿：
 
 | 章节 | 内容 | 数据来源 |
 |---|---|---|
@@ -560,12 +557,6 @@ Top 1 需深拆（架构可视化 + 落地场景 + 与历史路线关系）。�
 | **机制与架构** | 新方案如何回应这三道坎，引用原文关键设计词（如 natively multimodal / event-driven / commit-order prediction） | **必须 fetch 官方原文** |
 | **效果与定量** | 原文披露的关键数字（benchmark/参数/定价/速度），抓不到就显式标"blog 未在首发时披露"，不得编造 | **必须 fetch 官方原文** |
 | **对比其他方案的价值** | 横向对比 2-3 个竞品（同栏目优先），点出本方案差异化价值，回扣 TH 命题 | 原文 + 候选池同栏目事件 |
-
-**深拆四节折叠进 `<details>`**（视觉呼吸感硬约束）：
-四节用 `<details class="deep-dive"><summary><span class="dd-label">深拆：挑战 / 机制 / 效果 / 对比</span></summary>...四节...</details>`
-包裹，默认折叠。主卡只露：标题 + meta-line + kv 表 + 一段摘要。
-平铺四节让每张 A/A+ 卡变成密集长方块，压抑阅读；折叠后读者按需展开。
-门禁读 HTML 文本，details 折叠不影响四节检测。
 
 - **写卡前必须 fetch 原文**（候选池 snippet 截断到 300 字，见 P3）。抓原文遇企业网络拦截用
   华为代理 `proxyca.huawei.com:8080` + `urllib.request.ProxyHandler` 绕过；URL 从
@@ -619,9 +610,8 @@ reg.save()   # CLI 每个进程都会 load/save；一个进程内批量写要显
 
 ### 5. P5 成稿：写 Markdown，用内置引擎渲染成 HTML 简报
 
-**先读 `$ASSETS/html_render_guide.md` §0 设计约束** —— 零依赖，写 `.md` **之前**就要过一遍
-（字阶、tracking/leading、字体选择、8px 网格、对比度、反 AI-slop、图表诚实性、中文禁用首字下沉）。
-这部分不依赖任何渲染器，是内容侧的硬约束。
+**先读 `references/design-constraints.md`**，写 `.md` **之前**过一遍其中的写作侧条款
+（§6 反 AI-slop、§7 数据图表的诚实性、§8 密度取舍）；排版侧条款由 `report_engine/template.html` 承担。
 
 **为什么让 LLM 只写 Markdown**：见 `references/design-rationale.md` §1。
 核心收益：同等信息量下 LLM 输出量降 41%，无信息损失。
@@ -732,14 +722,6 @@ intro 区（第 1 章）不只是列举事件，必须分两层写，缺第二�
 - **必须标证据边界**：跨事件推理的因果链若未经单一来源证实，结尾写明"应视为本轮窗口内的分析假设而非已确立结论"。
 - **可空但不可假**：若本轮事件间无明确跨层关系，推理层可写"本轮事件以独立信号为主，未发现跨层收敛"，
   不得强行编造因果。
-
-**旧路线（visual-explainer + .src.html）保留作 A/B 基线**（理由见
-`references/design-rationale.md` §3）：`render_html.py` 与 `html_render_guide.md`
-§2 起仍可用。如需跑旧路线做对比，按 `html_render_guide.md` §2 手写 `.src.html`
-再用 `render_html.py` 渲染；门禁用 `--html`（而非 `--md`）走旧通道。
-**禁止用旧路线产物覆盖 `reports/` 下的新路线产物。**
-
-完整 CSS 见 `$ASSETS/html_render_guide.md` §10。
 
 ### 6. P6 验收 + 漏检回溯 + Registry 生命周期更新
 
@@ -873,10 +855,8 @@ ISO 串带 `T`，二次解析会把日粒度升级成秒级。
 - **问题**：旧 HTML 门禁（`check_html` 的 `id="sN"`/`<p class="eyebrow">` DOM 契约）
   对 MD 路线渲染的 HTML 全部"假绿 PASS"——0 张卡匹配，唯一主卡/空栏目断言在空集上恒真。
 - **根因**：门禁靠生成器 DOM 结构定位对象；换渲染路线后 0 匹配，缺失性断言在空集恒真。
-- **约束**：`--md` 通道用 `check_markdown` + `check_md_event_index` + `check_html_lightweight`；
-  旧 `check_html`/`check_html_taxonomy`/`check_event_index` 仅 `--html` 通道调用。
-  切换渲染路线时，e2e 实跑后若 `[html]` 层 fail 出现在结构锚点（id/eyebrow）上，
-  是旧契约量新 DOM，不是真内容问题——立刻分函数，不要去改 HTML 结构。
+- **约束**：文档层只走 `check_markdown` + `check_md_event_index` + `check_html_lightweight`；
+  HTML 只做轻量存在性断言。更换渲染器时，结构契约仍在 `.md` 上校验，不要回到 DOM 契约。
 
 ### 2026-10-27 起：`_iso()` 必须补 SH_TZ
 
@@ -909,3 +889,13 @@ ISO 串带 `T`，二次解析会把日粒度升级成秒级。
   库只有 1 份时过滤后自然为 0。
 - **约束**：排查 Ctrl-O 问题时先确认报告库 ≥2 份；只有 1 份应点 Reports 按钮看
   `index.html`，不要当成 bug 去改 filter 逻辑。
+
+### 2026-10-31 起：移除 visual-explainer 旧路线
+
+- **问题**：旧路线（visual-explainer kit + 手写 `.src.html` + `render_html.py` + 门禁 `--html` 通道）
+  作为 A/B 基线保留，但 MD 路线已经验证无信息损失，旧路线只剩维护负担，且其指令
+  （`<h4>`/`<details>` 写法、`html_render_guide.md` §10 CSS）与 MD 结构契约冲突。
+- **处置**：删除 `render_html.py`、`test_render_html.py`、`html_render_guide.md`，门禁去掉 `--html`
+  通道；设计约束保留为 `references/design-constraints.md`。
+- **约束**：渲染只走 `render_report.py` + `report_engine/`；`verify_gates.py` 未给 `--md` 时
+  文档层直接 FAIL，不再存在"只查 HTML"的分支。

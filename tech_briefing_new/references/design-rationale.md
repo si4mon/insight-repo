@@ -22,15 +22,21 @@ HTML 是渲染器机械生成的副本，DOM 结构随引擎版本变化；`.md`
 结构稳定、切分可靠。校验副本等于让渲染器结构变更静默绕过门禁——曾实测旧 HTML
 门禁对新 MD 路线 HTML 全部"假绿 PASS"（0 张卡 → 唯一主卡/空栏目断言在空集上恒真）。
 
-`--md` 通道在校验 MD 之外对 HTML 做轻量存在性断言（`check_html_lightweight`），
-不重复跑旧 DOM 契约检查（`id="sN"`/`<p class="eyebrow">` 等）。
+门禁在校验 MD 之外只对 HTML 做轻量存在性断言（`check_html_lightweight`），
+不做 DOM 契约检查。
 
-## 3. 为什么旧路线（visual-explainer + .src.html）保留作 A/B 基线
+## 3. 为什么移除旧路线（visual-explainer + .src.html）
 
-保留旧路线是为了对比验证新路线的信息完整性。新旧路线共用同一套采集/分类/评级管道，
-只在渲染层分叉。禁止用旧路线产物覆盖 `reports/` 下的新路线产物——两者产物目录隔离：
-- 新路线：`reports/<slug>-<date>.md` → `.html`
-- 旧路线：`$WORKDIR/<title>.src.html` → `.html`
+旧路线曾保留作 A/B 基线，用来验证 MD 路线的信息完整性。§1 的实测已经给出结论
+（输出量降 41%、信息量 102%），基线的使命完成。继续保留的代价是：
+
+- 外部依赖：旧路线需要安装 visual-explainer skill，MD 路线零依赖；
+- 指令冲突：旧路线的 `<h4>` / `<details>` 写法和 CSS 细则与 MD 结构契约互相矛盾，
+  LLM 读到两套写法会混用；
+- 门禁分叉：`--html` 通道是一套独立的 DOM 契约，维护两套校验让规则在两处漂移。
+
+2026-10-31 移除：删除 `render_html.py`、`html_render_guide.md` 及其单测，门禁去掉
+`--html` 通道。旧指南中与渲染器无关的设计约束迁入 `references/design-constraints.md`。
 
 ## 4. 为什么交付约定用"方案 1"（所有简报统一落 reports/）
 

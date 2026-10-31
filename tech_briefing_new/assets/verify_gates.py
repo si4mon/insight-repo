@@ -10,14 +10,14 @@ Gate 校验器：把"必须满足的条件"变成机器可判的 pass/fail。
 
 本脚本只做机器能确定的事，不代替人工判断：
   - 采集层：覆盖 gate（每个必须实体×面是否读到内容）、补检任务是否清空
-  - 文档层：HTML 结构、时间窗口一致性、8.2 事件时刻落在窗口内
+  - 文档层：Markdown 源的结构、时间窗口一致性、8.2 事件时刻落在窗口内；
+            渲染出的 HTML 只做轻量存在性断言
   - 追溯层：thesis convergence 是否被记录、丢弃日志是否完整
 
 用法：
   python verify_gates.py --report raw_2026-10-23/collect_report.json
-  python verify_gates.py --report ... --html 多源技术热点简报_2026-10-22.html
-  python verify_gates.py --report ... --events events_run_2026-10-23/
-  python verify_gates.py --all --raw-dir raw_2026-10-23 --html ...
+  python verify_gates.py --raw-dir raw_2026-10-23 \\
+      --md reports/<标题 slug>-2026-10-22.md --events events_run_2026-10-22/
 退出码：0 全部通过；1 有 FAIL；2 参数错误
 """
 import argparse
@@ -170,9 +170,9 @@ def _iso(s):
         dt = datetime.fromisoformat(s)
     except (ValueError, TypeError):
         return None
-    # collect_report 的窗口串可能不带时区，统一补成 +08，否则与 _row_dates
-    # 给出的带时区 datetime 比较会抛 "can't compare offset-naive and
-    # offset-aware datetimes"。这是旧路线切到 MD 路线前就存在的 bug。
+    # collect_report 的窗口串可能不带时区，统一补成 +08，否则与 8.2 表格里
+    # 解析出的带时区 datetime 比较会抛 "can't compare offset-naive and
+    # offset-aware datetimes"。
     if dt.tzinfo is None:
         dt = dt.replace(tzinfo=SH_TZ)
     return dt
@@ -182,8 +182,8 @@ def check_html_lightweight(c: Check, html_path: Path, report: dict):
     """MD 路线的 HTML 轻量断言。
 
     HTML 是 render_report.py 机械渲染的副本，DOM 结构随引擎版本变化，因此这里
-    只校验"渲染确实发生了且产物是自包含 HTML"，不校验旧 .src.html 的 DOM 契约
-    （id="sN"、<p class="eyebrow"> 等）。旧契约由 check_html 承担，仅 --html 通道调用。
+    只校验"渲染确实发生了且产物是自包含 HTML"，不校验 DOM 结构；结构契约
+    一律在 Markdown 源上校验（check_markdown / check_md_event_index）。
     """
     if not html_path.exists():
         c.add("html", "HTML 副本存在", False, str(html_path))
@@ -202,121 +202,6 @@ def check_html_lightweight(c: Check, html_path: Path, report: dict):
     links = re.findall(r'href="(https?://[^"]+)"', raw)
     c.add("html", "HTML 原始来源链接 >= 10", len(set(links)) >= 10,
           f"{len(set(links))} unique links")
-
-
-def check_html(c: Check, html_path: Path, report: dict):
-    if not html_path.exists():
-        c.add("html", "HTML 文件存在", False, str(html_path))
-        return
-    raw = html_path.read_text(encoding="utf-8", errors="ignore")
-    size = len(raw)
-
-    c.add("html", "文件 size > 0", size > 0, f"{size} bytes")
-
-    title = re.search(r"<title[^>]*>(.*?)</title>", raw, re.S | re.I)
-    c.add("html", "<title> 存在", bool(title), title.group(1)[:80] if title else "")
-
-    h1 = re.search(r"<h1[^>]*>(.*?)</h1>", raw, re.S | re.I)
-    c.add("html", "<h1> 存在", bool(h1),
-          re.sub(r"<[^>]+>", "", h1.group(1))[:80] if h1 else "")
-
-    # 八个 section — 章号与 section id 由 taxonomy 提供，不在这里硬编码
-    sec_ids = {TAXONOMY.section_id(ch["chapter"]) for ch in TAXONOMY.chapters()}
-    found = set(re.findall(r'id="(s[1-8])"', raw))
-    c.add("html", "八章 section id 齐全", sec_ids <= found,
-          f"missing={sorted(sec_ids - found)}")
-
-    c.add("html", "8.1/8.2/8.3 子节存在",
-          all(x in raw for x in ("8.1", "8.2", "8.3")), "")
-
-    # 来源链接 ≥ 10
-    links = re.findall(r'href="(https?://[^"]+)"', raw)
-    c.add("html", "原始来源链接 >= 10", len(set(links)) >= 10,
-          f"{len(set(links))} unique links")
-
-    # 窗口显示一致
-    ws = report.get("target_window", {}).get("start", "")
-    we = report.get("target_window", {}).get("end", "")
-    if ws and we:
-        ws_date = ws[:10]
-        we_date = we[:10]
-        c.add("html", "H1/正文含窗口起始日期",
-              ws_date in raw, f"expect {ws_date}")
-        # 文件名日期
-        c.add("html", "文件名日期 = WINDOW_START_DATE",
-              ws_date in html_path.name, f"expect {ws_date} in {html_path.name}")
-    else:
-        c.warn("html", "报告缺 target_window", "跳过窗口一致性检查")
-
-    # 窗口截断必须在正文可见。
-    # collect_report 里记了 note，但正文完全没提时，读者会认为"25 源覆盖了窗口"。
-    partial = [r for r in report.get("sources", [])
-               if r.get("covered_quality") == "partial"]
-    if partial:
-        m81 = re.search(r'id="s8-1"[^>]*>(.*?)(?=id="s8-2"|</section>)', raw, re.S)
-        seg81 = m81.group(1) if m81 else raw
-        t81 = _text(seg81)
-        # 只出现实体名不够 —— 覆盖矩阵里 arXiv/Techmeme 本来就会以"覆盖"出现。
-        # 必须出现"截断/不完整"的显式措辞，否则等于没披露。
-        markers = ("覆盖不完整", "窗口截断", "partial", "前半段", "未回溯")
-        has_marker = any(k in t81 for k in markers)
-        missing = [r["id"] for r in partial
-                   if r["id"] not in t81 and (r.get("entity") or "") not in t81]
-        c.add("html", "8.1 披露了窗口截断源",
-              has_marker and not missing,
-              ("缺截断措辞" if not has_marker else "")
-              + (" 未列源: " + ", ".join(missing[:6]) if missing else ""))
-
-    # A/A+ 主卡四维深拆硬约束：每张 A/A+ 主卡必须含四个 h4 小节
-    # （挑战与问题 / 机制与架构 / 效果与定量 / 对比其他方案的价值）。
-    # eyebrow 形如 "A+ · Frontier · EV-02" 或 "A · Frontier · EV-09"。
-    # 摘要卡（章 2 的 Top N 折叠卡）不含 h4，用 eyebrow 的 "Top N" 标记排除。
-    REQUIRED_H4 = ("挑战与问题", "机制与架构", "效果与定量", "对比其他方案的价值")
-    cards = re.findall(r'<div class="card"[^>]*>(.*?)</div>\s*</div>',
-                       raw, re.S)
-    # 上面正则可能贪婪匹配错，改用更稳的 eyebrow 锚定
-    aa_cards = []
-    for m in re.finditer(r'<p class="eyebrow">([^<]*)</p>',
-                         raw):
-        label = m.group(1)
-        if "Top " in label:       # 章 2 摘要卡，不承担四节义务
-            continue
-        # Active Event Update / Active Event 是分类章的摘要引用卡，
-        # 深拆在章 2 Top 1 卡里，不在分类章重复。这类卡片也不承担四节义务。
-        if "Active Event" in label:
-            continue
-        # Convergence / 聚合卡是多事件聚合信号，不是单事件主卡，不承担四节义务。
-        # 四节深拆针对的是"单事件价值论证"，聚合卡的价值在收敛证据本身。
-        if "Convergence" in label:
-            continue
-        # Active（非 Active Event）是持续信号更新，不是本轮单事件拐点，
-        # 深拆在首次出现的 Frontier 卡里。只有 Frontier 是单事件主卡，承担四节。
-        # Early Signal / Counter-signal / Background 等子类型同理豁免。
-        if "Frontier" not in label:
-            continue
-        if not re.search(r'\bA\+?\b', label):
-            continue
-        # 找到该 eyebrow 所属 card 的边界：从 eyebrow 往后到下一个 card 开头或 section 结束
-        start = m.start()
-        nxt = re.search(r'<div class="card"', raw[start + 10:])
-        end = (start + 10 + nxt.start()) if nxt else len(raw)
-        seg = raw[start:end]
-        # 简易判：A 标签也可能出现在 B 级卡片的对比文字里，用 eyebrow 首词严格匹配
-        first = label.split()[0].rstrip("·").strip()
-        if first not in ("A+", "A"):
-            continue
-        aa_cards.append((label, seg))
-
-    missing_h4 = []
-    for label, seg in aa_cards:
-        h4s = re.findall(r"<h4[^>]*>(.*?)</h4>", seg, re.S)
-        h4_texts = [re.sub(r"<[^>]+>", "", h).strip() for h in h4s]
-        for req in REQUIRED_H4:
-            if not any(req in t for t in h4_texts):
-                missing_h4.append(f"{label}: 缺「{req}」")
-    c.add("html", "A/A+ 主卡含四维深拆（挑战/机制/效果/对比）",
-          not missing_h4,
-          "; ".join(missing_h4[:4]) if missing_h4 else f"{len(aa_cards)} 张 A/A+ 主卡")
 
 
 # ---------- 分类层 ----------
@@ -529,6 +414,11 @@ def _cards(seg: str) -> list[str]:
 
 def check_html_taxonomy(c: Check, html_path: Path, events_dir: Path | None):
     """
+    【待迁移，当前无调用方】旧 HTML 路线的分类门禁，随 --html 通道一并下线。
+    其中"主卡归位""4.6 标注与 primary_path 一致""聚合栏目标注具体技术域"
+    三条规则在 check_markdown 里尚无对应实现，迁移到 MD 通道前暂留，
+    test_verify_gates 仍直接调用它以保住规则语义。
+
     HTML 分类呈现的三条硬规则：
 
       唯一主卡   — 一个事件只在一个栏目写完整卡片，其余位置只能是标签；
@@ -683,8 +573,8 @@ def check_html_taxonomy(c: Check, html_path: Path, events_dir: Path | None):
 #   ##### 挑战与问题 / 机制与架构 / 效果与定量 / 对比其他方案的价值
 #
 # MD 是稳定的工作源，HTML 可能因渲染器升级而改 DOM；校验 MD 等于校验事实源
-# 本身，不会被渲染器结构变更静默绕过。HTML 侧只保留 check_html 的轻量断言
-# （title/h1/链接数/窗口日期），不再做卡片切分。
+# 本身，不会被渲染器结构变更静默绕过。HTML 侧只保留 check_html_lightweight
+# 的轻量断言（title/内嵌源/链接数/窗口日期），不做卡片切分。
 
 _MD_HEADING = re.compile(r'^(#{1,6})\s+(.*?)\s*$', re.M)
 _REQUIRED_DEEP_SECTIONS = ("挑战与问题", "机制与架构", "效果与定量", "对比其他方案的价值")
@@ -837,7 +727,7 @@ def check_markdown(c: Check, md_path: Path, report: dict):
     else:
         c.warn("md", "报告缺 target_window", "跳过窗口一致性检查")
 
-    # 窗口截断披露（同 check_html 的逻辑，但读 MD 正文）
+    # 窗口截断披露：partial 源必须在正文里被点名
     partial = [r for r in report.get("sources", [])
                if r.get("covered_quality") == "partial"]
     if partial:
@@ -920,7 +810,7 @@ def check_markdown(c: Check, md_path: Path, report: dict):
 
 def check_md_event_index(c: Check, md_path: Path, report: dict,
                          events_dir: Path | None = None):
-    """MD 路线的 8.2 Event Index 校验，逻辑同 check_event_index 但读 MD 表格。"""
+    """8.2 Event Index 校验：解析 MD 表格行，与 EV JSON 逐条对账。"""
     if not md_path.exists():
         return
     text = md_path.read_text(encoding="utf-8", errors="ignore")
@@ -1111,21 +1001,8 @@ def check_publish_precision(c: Check, events_dir: Path | None):
           "; ".join(bad_first[:4]) + "（day 精度却写成精确时刻且无 note）" if bad_first else "")
 
 
-def _rows(seg: str) -> list[str]:
-    return re.findall(r"<tr[^>]*>(.*?)</tr>", seg, re.S | re.I)
-
-
 def _text(fragment: str) -> str:
     return re.sub(r"\s+", " ", re.sub(r"<[^>]+>", " ", fragment)).strip()
-
-
-def _row_dates(row: str) -> list[datetime]:
-    out = []
-    for d in re.findall(r"(20\d{2}-\d{2}-\d{2}[T ]\d{2}:\d{2}(?::\d{2})?)", row):
-        dt = _iso(d.replace(" ", "T"))
-        if dt:
-            out.append(dt if dt.tzinfo else dt.replace(tzinfo=SH_TZ))
-    return out
 
 
 def _tokens(s: str) -> set[str]:
@@ -1136,165 +1013,6 @@ def _tokens(s: str) -> set[str]:
             "发布", "参考", "架构"}
     raw = re.findall(r"[A-Za-z][A-Za-z0-9.\-]{2,}|[\u4e00-\u9fa5]{2,}", s)
     return {t.lower() for t in raw if t.lower() not in stop}
-
-
-def check_event_index(c: Check, html_path: Path, report: dict,
-                      events_dir: Path | None = None):
-    """
-    检查 8.2 Event Index：
-      1. 每行首发时刻落在窗口内（早于窗口的行必须显式标 Active/Historical）；
-      2. 8.2 声明的每个 EV 编号都必须有对应的 events_run_<date>/EV-xx.json；
-      3. 每个 EV JSON 的首发时刻必须落在窗口内（或正文已标为背景）；
-      4. HTML 行标题与 EV JSON 的 event_title 必须语义对得上。
-
-    为什么必须做 2/3/4：此前只从 HTML 里抓日期做判定，门禁看到的是"文档里写的时刻"。
-    当 EV-03 的 JSON 记 10-21（窗口外）、HTML 表里却写 10-23 时，门禁照样 PASS ——
-    它校验的是呈现值，不是事实源。事件编号与 JSON 内容对调同理无法被发现。
-    """
-    if not html_path.exists():
-        return
-    raw = html_path.read_text(encoding="utf-8", errors="ignore")
-
-    ws = _iso(report.get("target_window", {}).get("start", ""))
-    we = _iso(report.get("target_window", {}).get("end", ""))
-    if not (ws and we):
-        c.warn("html", "缺窗口信息，跳过 Event Index 检查")
-        return
-
-    # 抓 8.2 段落中的 ISO 日期。
-    # 必须按 id 锚点定位，不能用文本 "8.2" —— 侧边栏的 href="#s8-2"
-    # 和标题里的 "8.2" 都会先命中，导致正则只截到一小段导航链接。
-    m = (re.search(r'id="s8-2"[^>]*>(.*?)(?=id="s8-3"|</section>)', raw, re.S)
-         or re.search(r'id=["\']?8\.2["\']?[^>]*>(.*?)(?=8\.3|</section>)', raw, re.S)
-         or re.search(r'8\.2\s*Event\s*Index(.*?)(?=8\.3|</section>)', raw, re.S))
-    if not m:
-        # 退化为全文检索：至少能验证"无晚于窗口的事件"，代价是可能误伤导航日期
-        seg = raw
-        c.warn("html", "未按锚点定位 8.2，退化为全文检索", "建议 8.2 使用 id=\"s8-2\"")
-    else:
-        seg = m.group(1) if m.groups() else m.group(0)
-
-    rows = _rows(seg)
-    idx_rows = {}          # EV-01 -> {"text":..., "dates":[...]}
-    all_dates = []
-    for row in rows:
-        dates = _row_dates(row)
-        all_dates.extend(dates)
-        text = _text(row)
-        eid = re.search(r"EV-\d+", text)
-        if eid:
-            idx_rows[eid.group(0)] = {"text": text, "dates": dates}
-
-    if not all_dates:
-        c.warn("html", "8.2 中未找到结构化时刻", "需人工核对 Event Index")
-    else:
-        # 排除等于 WINDOW_END 本身的时刻：那是引用窗口边界，不是事件时刻。
-        # 8.2 表头/注释常写 "全部首发时刻均落在 [START, END] 内"，其中 END 会被正则捕获。
-        end_str = we.strftime("%Y-%m-%dT%H:%M")
-        dates = [d for d in all_dates if d.strftime("%Y-%m-%dT%H:%M") != end_str]
-
-        late = [d for d in dates if d > we]
-        c.add("html", "无晚于 WINDOW_END 的新事件",
-              not late, ", ".join(d.isoformat() for d in late[:3]))
-
-        # 早于窗口的时刻必须落在"被显式标注为背景"的那一行里。
-        # 旧实现只要求 seg 中任意位置出现 Active Event 字样，于是
-        # 一行没标、另一行标了，也能整体通过。
-        bad_rows = []
-        for eid, info in idx_rows.items():
-            early = [d for d in info["dates"] if d < ws
-                     and d.strftime("%Y-%m-%dT%H:%M") != end_str]
-            if not early:
-                continue
-            if not any(k in info["text"] for k in
-                       ("Active Event", "Historical", "历史", "不计入本轮")):
-                bad_rows.append(f"{eid} ({early[0].strftime('%m-%d %H:%M')})")
-        before = [d for d in dates if d < ws]
-        if before:
-            c.add("html", "早于 WINDOW_START 的事件标为 Active/Historical",
-                  not bad_rows,
-                  "未标注的行: " + ", ".join(bad_rows[:6]) if bad_rows
-                  else f"{len(before)} 个早于窗口，已标注")
-
-    # ---- 与事件 JSON 交叉校验 ----
-    if not events_dir or not events_dir.exists():
-        if idx_rows:
-            c.warn("html", "8.2 声明了事件但未提供 events 目录",
-                   f"{len(idx_rows)} 行事件无法回溯到事实源")
-        return
-
-    ev_files = {}
-    for f in sorted(events_dir.glob("EV-*.json")):
-        try:
-            ev_files[f.stem] = json.loads(f.read_text(encoding="utf-8"))
-        except Exception:
-            c.add("trace", f"{f.name} 可解析", False, "JSON 解析失败")
-
-    no_json = sorted(set(idx_rows) - set(ev_files))
-    c.add("trace", "8.2 每个事件都有 EV JSON",
-          not no_json,
-          "缺事实源: " + ", ".join(no_json[:8]))
-
-    not_in_html = sorted(set(ev_files) - set(idx_rows))
-    c.add("trace", "每个 EV JSON 都在 8.2 出现",
-          not not_in_html,
-          "未在 Event Index 引用: " + ", ".join(not_in_html[:8]))
-
-    # 事实源时刻必须落在窗口内。正文允许把窗口外事件作为背景引用，
-    # 但那一行会被上面的 per-row 标注检查覆盖；这里只核对 JSON 自身。
-    outside, id_mismatch, time_mismatch = [], [], []
-    for eid, ev in ev_files.items():
-        # 无发布时间的 Trending 类事件（date_precision=none）不参与窗口校验：
-        # 它们本来就不能作为"本轮新事件"，正文里必须标为持续热度信号。
-        # 把它们当"缺字段"判红，等于要求一个不存在的事实。
-        if ev.get("date_precision") == "none":
-            if not ev.get("date_precision_note"):
-                outside.append(f"{eid} (date_precision=none 但无说明)")
-            continue
-        fp = _iso(ev.get("first_publish_shanghai", ""))
-        if fp is None:
-            outside.append(f"{eid} (缺 first_publish_shanghai)")
-        elif fp.tzinfo is None:
-            fp = fp.replace(tzinfo=SH_TZ)
-        if fp is not None and not (ws <= fp <= we):
-            row = idx_rows.get(eid)
-            if row and any(k in row["text"] for k in
-                           ("Active Event", "Historical", "历史", "不计入本轮")):
-                continue   # 明确作为背景引用，允许窗口外
-            outside.append(f"{eid} {fp.strftime('%m-%d %H:%M')}")
-
-        row = idx_rows.get(eid)
-        if row:
-            ev_tokens = _tokens((ev.get("event_title") or "") + " "
-                                + (ev.get("statement") or ""))
-            if ev_tokens and not (ev_tokens & _tokens(row["text"])):
-                id_mismatch.append(
-                    f"{eid}: HTML「{row['text'][:40]}」↔ JSON「"
-                    f"{(ev.get('event_title') or '')[:40]}」")
-            # 评级也必须一致：A/A+ 才要求 convergence + claims，
-            # 若 HTML 写 A、JSON 写 B（或反之），追溯层的检查对象就错了。
-            if ev.get("rating") and ev["rating"] not in row["text"]:
-                id_mismatch.append(
-                    f"{eid}: 评级不一致 HTML 无 {ev['rating']} ↔ JSON={ev['rating']}")
-
-            # 表格里的时刻必须与事实源一致（分钟粒度）。
-            # 这是最初漏检的根源：HTML 写的是源站原始时区的钟面时间，
-            # JSON 记的是换算后的 +08。两者差 4-12 小时，但此前的门禁
-            # 只分别检查"两边各自落在窗口内"，从不比对两者是否相等 ——
-            # 于是 EV-04 表里写 10-22 15:13、JSON 记 10-23 02:00 也能通过。
-            if fp is not None and row["dates"]:
-                html_times = {d.strftime("%Y-%m-%dT%H:%M") for d in row["dates"]}
-                if fp.strftime("%Y-%m-%dT%H:%M") not in html_times:
-                    time_mismatch.append(
-                        f"{eid}: HTML {sorted(html_times)[0]} ↔ JSON "
-                        f"{fp.strftime('%Y-%m-%d %H:%M')}")
-
-    c.add("trace", "EV JSON 首发时刻落在 TARGET_WINDOW",
-          not outside, "窗口外: " + ", ".join(outside[:6]))
-    c.add("trace", "EV 编号与事件内容一致",
-          not id_mismatch, "; ".join(id_mismatch[:3]))
-    c.add("trace", "8.2 时刻与 EV JSON 一致（同一时区）",
-          not time_mismatch, "; ".join(time_mismatch[:4]))
 
 
 # ---------- 追溯层 ----------
@@ -1345,8 +1063,7 @@ def check_traceability(c: Check, events_dir: Path | None):
 def main():
     ap = argparse.ArgumentParser(description="Gate 校验器")
     ap.add_argument("--report", default="", help="collect_report.json")
-    ap.add_argument("--html", default="", help="简报 HTML 路径（旧路线）")
-    ap.add_argument("--md", default="", help="简报 Markdown 路径（MD 路线，优先于 --html）")
+    ap.add_argument("--md", default="", help="简报 Markdown 源路径（reports/<slug>-<date>.md）")
     ap.add_argument("--events", default="", help="events_run_<date>/ 目录")
     ap.add_argument("--gap-tasks", default="", help="gap_tasks.json")
     ap.add_argument("--raw-dir", default="", help="raw_<date>/ 目录（自动推导其它参数）")
@@ -1354,7 +1071,6 @@ def main():
     args = ap.parse_args()
 
     report_path = Path(args.report) if args.report else None
-    html_path = Path(args.html) if args.html else None
     md_path = Path(args.md) if args.md else None
     events_dir = Path(args.events) if args.events else None
     gap_path = Path(args.gap_tasks) if args.gap_tasks else None
@@ -1384,10 +1100,10 @@ def main():
             html_sibling = md_path.with_suffix(".html")
             if html_sibling.exists():
                 check_html_lightweight(c, html_sibling, report)
-        elif html_path:
-            check_html(c, html_path, report)
-            check_event_index(c, html_path, report, events_dir)
-            check_html_taxonomy(c, html_path, events_dir)
+        else:
+            # 未给 --md 时不能静默跳过文档层，否则门禁对简报正文恒绿
+            c.add("md", "提供了 --md 简报源", False,
+                  "文档层未校验：用 --md reports/<slug>-<WINDOW_START_DATE>.md")
     else:
         c.add("collection", "采集报告存在", False, str(report_path))
 
