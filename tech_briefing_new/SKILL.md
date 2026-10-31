@@ -53,21 +53,24 @@ $SKILL_DIR/                           # 本 skill 的安装目录（SKILL.md 所
 │   │   ├── template.html             #   自包含 HTML 模板（TOC/脚注/评注/导出）
 │   │   ├── build-index.mjs           #   报告库索引生成（index.json + index.html）
 │   │   └── ...                       #   comments/review/extract 等配套脚本
-│   ├── thesis_registry.py            # Thesis registry API
+│   ├── events.py                     # 事件 JSON 规范化（event_key / 枚举 / schema）
+│   ├── thesis_registry.py            # Thesis registry v2（召回 / 事务入库 / 派生状态 / 报告）
 │   ├── taxonomy.py                   # 分类映射 API（54 叶子 ↔ 11 栏目 ↔ 8 章）
-│   ├── test_*.py                     # 单测（taxonomy / gates / extract / coverage）
+│   ├── test_*.py                     # 单测（taxonomy / gates / extract / coverage / registry / events）
 │   └── thesis_ontology.json          # Upper Ontology 骨架 + taxonomy 定义
 ├── references/                       # 按需读取的参考
 │   ├── design-constraints.md         # P5 设计约束（写作侧 + 排版侧）
-│   └── design-rationale.md           # 设计决策记录
-└── data/                             # 可写全局状态
-    └── thesis_registry.json          # Thesis 实例库（跨 run 累积）
+│   ├── design-rationale.md           # 设计决策记录
+│   └── registry-v2-design.md         # Thesis registry v2 设计
+└── data/                             # 只读参考资料（四层技术地图等）
 ```
 
 **工作目录**（用户执行 skill 时所在的目录）存放运行时产物：
 - `raw_<date>/` — 原始字节 + `items_<source>.json` 提取条目 + `collect_report.json` + `gap_tasks.json`
 - `snapshots/surface_snapshot.json` — 跨 run 的条目 uid 快照，用于官方面差分
-- `events_run_<date>/` — 本轮事件 JSON 文件
+- `events_run_<date>/` — 本轮事件 JSON 文件 + `thesis_report.json`（第 7 章输入）
+- `state/` — registry 状态（`thesis_registry.json` + `registry_log.jsonl`），跨 run 累积；
+  可用 `TECH_BRIEFING_STATE` 指向共享目录
 - `reports/` — **简报交付目录（方案 1：所有简报统一落此）**
   - `<标题 slug>-<YYYY-MM-DD>.md` — LLM 手写的工作源（唯一手写产物）
   - `<标题 slug>-<YYYY-MM-DD>.html` — 交付用的自包含页面（机械渲染，勿手改）
@@ -88,8 +91,8 @@ $SKILL_DIR/                           # 本 skill 的安装目录（SKILL.md 所
   `~/.claude/...` 之类的客户端根目录。
 - `$ASSETS` 或 `$DATA` 不存在，说明 `$SKILL_DIR` 解析错了：回到上一条重新定位，
   **不要创建空目录顶替**。
-- `data/thesis_registry.json` 不存在时由 `thesis_registry.py` 自动创建在 `$DATA` 下，
-  这是唯一的自动建目录行为，位置由脚本用 `Path(__file__)` 自推，与客户端无关。
+- registry 状态写在 `$WORKDIR/state/`（或 `TECH_BRIEFING_STATE`），首次 ingest 时自动创建；
+  不写进 skill 目录。
 
 ## 前置依赖
 
@@ -112,8 +115,9 @@ $SKILL_DIR/                           # 本 skill 的安装目录（SKILL.md 所
     python $ASSETS/taxonomy.py resolve B1.1      # 主技术路径 → 栏目 + 锚点
     python $ASSETS/taxonomy.py validate          # 完整性校验
     ```
-  - `$DATA/thesis_registry.json` — Thesis 实例库（跨 run 累积的 thesis 历史）。
-  - `$ASSETS/thesis_registry.py` — query / ingest / update / merge API。
+  - `$ASSETS/events.py` — 事件规范化；`$ASSETS/thesis_registry.py` — registry v2
+    （candidates / ingest / report / show / search / merge / retire / revise / supersede），
+    状态在 `$WORKDIR/state/`，设计见 `references/registry-v2-design.md`。
 
 ## Goal
 
@@ -123,7 +127,7 @@ $SKILL_DIR/                           # 本 skill 的安装目录（SKILL.md 所
 3. 通过 `verify_gates.py` 机器校验 + 人工复核表
 4. 采集报告 collect_report.json 落盘到 `$WORKDIR`
 5. 必须先运行 collect_sources.py 采集数据，不能跳过采集步骤
-6. Thesis registry 正确读写（convergence 查询 + ingest + 生命周期更新）
+6. Thesis registry 正确读写（normalize + candidates + 裁决 + ingest + report），第 7 章取自 report
 
 ## Steps
 
@@ -402,10 +406,14 @@ PY
 - 编号 EV-01..EV-NN 在本轮内连续自洽即可，不要求与上一次执行的编号对齐
   （8.2 与 `EV-*.json` 一一对应见下方"编号一致性"硬约束）。
 
-**Registry 三件套位置**：
-- Ontology（只读骨架）：`$ASSETS/thesis_ontology.json`
-- Registry 实例库（可写全局状态）：`$DATA/thesis_registry.json`
-- API 脚本：`$ASSETS/thesis_registry.py`
+**Registry v2**（设计见 `references/registry-v2-design.md`）：
+- 参数（只读）：`$ASSETS/thesis_ontology.json` 的 `confidence_model` / `thesis_lifecycle` / `thesis_rules`
+- 状态（可写）：`$STATE/thesis_registry.json`，`$STATE` 默认 `$WORKDIR/state`，可用 `--state` 或
+  环境变量 `TECH_BRIEFING_STATE` 指向共享目录；同时追加审计日志 `registry_log.jsonl`
+- 工具：`$ASSETS/events.py`（事件规范化）、`$ASSETS/thesis_registry.py`（召回 / 入库 / 报告 / 决策）
+
+registry 只存证据（事件）、命题定义、两者的 link 与显式决策；命题的**状态、置信度、
+Frontier/Convergence 类型都由证据派生**，不由 LLM 填写。
 
 **P2 抽象提升**：对每个候选识别变化类型（CT-01..CT-09，见 ontology），映射到技术命题。
 对每个候选事件构造 event 记录，保存为 `$WORKDIR/events_run_<date>/EV-xx.json`。
@@ -415,13 +423,14 @@ PY
 | 字段 | 说明 |
 |---|---|
 | `event_title` | 一句话说清技术变化，不是产品口号 |
-| `thesis_name` / `statement` | 技术命题与论证 |
+| `evidence_form` | `paper` / `product` / `api` / `code` / `benchmark` / `deployment` / `expert`（置信度的跨形态维度靠它） |
+| `thesis_decision` | 归属裁决，见 P3（A/A+ 必填） |
 | `change_types` | `CT-01..CT-09` |
 | `primary_path` | 主技术路径，通常到三级叶子；`A1`/`B1`/`C3` 必须下钻 |
 | `related_domains` | 关联技术域，≤2 项 |
 | `change_object` | `Model` / `Harness` / `运行平台` / `交互·应用` / `尚未披露` |
 | `annotation` | 仅当 `primary_path` 落在 `4.6` 时必填：取 `python $ASSETS/taxonomy.py resolve <primary_path>` 输出的 `annotation`，不得自选 |
-| `rating` / `signal` / `confidence` | 评级与信号 |
+| `rating` / `signal` | 评级与信号（命题置信度由 registry 派生，事件里不写） |
 | `first_publish_shanghai` | 换算后的 +08 时刻，配合 `date_precision` |
 | `date_precision` | `second` / `day` / `batch` / `none`；为 `day` 时必须写 `date_precision_note` |
 | `source` / `entity` / `key_data` | 来源、实体、关键定量 |
@@ -430,54 +439,19 @@ PY
 `tracks` 与 `sections` 已废弃：不要在事件里写，归属一律由 `primary_path`
 经 `taxonomy.resolve()` 推出。写旧字段不会报错，但会让门禁与正文各算各的。
 
-**写入方式：用一个脚本批量生成，不要逐个 `Write`**
+**写入方式**：可以用一次性脚本批量落盘（字段集合天然一致），也可以逐个写；
+**写完必须规范化**，不要手填 `event_key`：
 
-逐个手写事件既慢又容易字段漂移（同一个 `date_precision` 写成三种拼法）。
-在 `$WORKDIR` 下写一个一次性的 `make_events.py`（`EVENTS = [(id, dict), ...]` + 循环
-`json.dump`），一次落盘全部事件。理由：
-
-- 字段集合天然一致，`claims` 的 `document`/`disposition` 拼法不会漂；
-- 批次事件共用同一个 `B`（`2026-10-26T12:00:00+08:00`）与 `BN`（批次说明），改一处全生效；
-- 判断本身（哪些进正文、怎么评级）仍然逐条写，脚本只是载体。
-
-落盘后必须用下面的脚本**统一修一次 convergence**，不要在写事件时手填 TH 编号。
-
-```python
-# fix_events.py —— 用 registry 真实查询覆写 convergence_hits，并修正 absorbed 指向
-import json, sys
-from pathlib import Path
-sys.path.insert(0, '<ASSETS>')
-from thesis_registry import Registry
-from taxonomy import TAXONOMY
-
-reg = Registry()
-for f in sorted(Path('events_run_<date>').glob('EV-*.json')):
-    ev = json.loads(f.read_text(encoding='utf-8'))
-    col = TAXONOMY.resolve(ev['primary_path'])
-    track = 'TR-MODEL' if int(col.split('.')[0]) == 3 else 'TR-HARNESS'
-    q = {'change_types': ev['change_types'], 'tracks': [track],
-         'sections': [f"s{col.replace('.', '-')}"]}
-    ev['convergence_checked'] = True
-    ev['convergence_hits'] = [h['id'] for h in reg.query_for_convergence(q)]
-    ev['convergence_semantic'] = [...]   # 人判：与命题直接对齐的历史 thesis（≤2）
-    for c in ev.get('claims', []):
-        if str(c.get('disposition', '')).startswith('absorbed:'):
-            c['disposition'] = f"absorbed:{ev['event_id']}"
-    f.write_text(json.dumps(ev, ensure_ascii=False, indent=1), encoding='utf-8')
+```bash
+python "$ASSETS/events.py" normalize --events-dir events_run_<WINDOW_START_DATE>
 ```
 
-两个必须分开的字段：
+它补 `event_key`（事件身份：arXiv 去版本号、GitHub release 取 org/repo@tag、URL 去 query），
+统一枚举拼写，校验必填字段；有任何错误时一个文件都不改写。同一事件换了来源 URL 时，
+在事件里写 `canonical_source` 指向原始来源。
 
-| 字段 | 来源 | 用途 |
-|---|---|---|
-| `convergence_hits` | **机械查询**（change_types ∩ track ∩ section） | 证明"确实查过"，通常 4~13 条，含大量宽泛命中 |
-| `convergence_semantic` | **人判** | 真正与本轮命题对齐的历史 thesis，≤2 条；章 7 的 Convergence 判断引用它 |
-
-只写 `convergence_hits` 会让章 7 引用到一堆不相关 thesis；只写语义判断则无法证明查询执行过。
-
-`absorbed:<EV-xx>` 指向**本事件**的 thesis（一个事件承载一个 thesis）；
-`separated:EV-xx` 才是"拆成另一个事件"。把 absorbed 写成另一个 TH 编号，会让
-claims 看起来被并入了历史命题，实际没有。
+`absorbed:<EV-xx>` 指向**本事件**（一个事件承载一个命题）；`separated:EV-xx` 才是
+"拆成另一个事件"。
 
 **编号一致性（硬约束）**：`EV-01.json` 的内容必须就是正文 8.2 里编号 `EV-01` 的那一行。
 8.2 中出现的每个 EV 编号都必须有同名 JSON，**不允许"正文 14 条、落盘 3 条"**。
@@ -492,11 +466,11 @@ claims 看起来被并入了历史命题，实际没有。
 
 每个 A / A+ 事件必须在 event JSON 中写 `claims` 数组，每项：
 ```json
-{"claim": "一句话原文论点", "change_types": ["CT-01"], "section": "s3-4",
- "disposition": "absorbed:TH-010 | separated:EV-07 | discarded:重复",
+{"claim": "一句话原文论点", "change_types": ["CT-01"], "primary_path": "C2.1",
+ "disposition": "absorbed:EV-03 | separated:EV-07 | discarded:重复",
  "reason": "处置理由（discarded 必填）"}
 ```
-- `absorbed` — 并入某已有 thesis
+- `absorbed` — 由本事件承载（写本事件编号），本事件再经 `thesis_decision` 归属命题
 - `separated` — 独立成一个事件（跨层/跨命题时必须分离）
 - `discarded` — 丢弃，必须写理由
 
@@ -522,20 +496,36 @@ claims 看起来被并入了历史命题，实际没有。
 DGX Spark（Hardware）合并成"NVIDIA Agent 基础设施"，会让四个不同技术命题
 互相吞没。它们分属四层，本就不该合并。
 
-**P3 聚类收敛（含跨时间收敛）**：
-1. 先用 `python "$ASSETS/thesis_registry.py" convergence --event-file <event.json>`
-   对每个事件查询历史 thesis 的 change_types / primary_path 交集，
-   识别"本轮事件 ↔ 历史 thesis"的跨时间收敛。
+**P3 聚类收敛：召回 → 裁决**（机器负责不漏，LLM 负责是不是同一命题）：
 
-   **必须留痕**。把查询结果写回 event JSON：
-   ```json
-   {"convergence_checked": true, "convergence_hits": ["TH-010", "TH-002"]}
+1. **召回**（工具写入，不要手改）：
+   ```bash
+   python "$ASSETS/thesis_registry.py" candidates --events-dir events_run_<WINDOW_START_DATE>
    ```
-   若结果为 `[]`，也要写 `convergence_checked: true` 表示查询确实执行过。
-2. 再做本轮窗口内的聚类：同一技术命题的候选聚到一起，识别
-   Convergence Signal（多实体收敛）和 Frontier Signal（单实体拐点）。
-3. 跨时间收敛 + 本轮收敛共同决定 thesis 的 state 迁移：
-   proposed → active（再次出现）、active → dormant（长期无新证据）。
+   按叶子路径、二级域、关联域、变化类型、实体给历史命题打分，把 ≤8 个候选写进每个
+   事件的 `thesis_candidates`（含得分与理由）。门禁会重算并比对。
+2. **裁决**：逐个事件写 `thesis_decision`：
+   ```jsonc
+   {"action": "attach",               // attach | new | none（A/A+ 不能 none）
+    "thesis_id": "TH-0007",           // attach；同批新建的命题写 "NEW:<alias>"
+    "relation": "supports",           // supports | contradicts | refines
+    "rationale": "一句话：为什么是同一命题",
+    "override_reason": "",            // attach 目标不在候选里时必填
+    "new_thesis": {                   // new 时必填
+      "alias": "decision-model",      // 同批其他事件要挂上来时用
+      "name": "...", "statement": "X 从 A 移到 B，因此 C 成为新约束",
+      "object": "X", "consequence": "C 成为新约束",
+      "scope_leaves": ["B1.1"],       // 1–3 个叶子，不能停在二级域
+      "change_types": ["CT-01"]},
+    "rejected": [{"id": "TH-0003", "reason": "同叶子但方向相反"}]}  // new 且有候选时，必须覆盖全部候选
+   ```
+   - **新建命题必须逐个说明为何不归入候选**——这是防止"一个事件一个命题"的关键约束。
+   - 本轮两个实体在同一新命题上对齐：第一个 `new` 并给 `alias`，其余 `attach` 到 `NEW:<alias>`。
+   - 命题粒度：方向性、可证伪的判断，不是事件标题；范围 1–3 个叶子；预期寿命以周到月计；
+     写不出 consequence 的不是技术命题。商业套餐、融资、管制类变化不建命题。
+   - B 级事件可以 `attach` 到已有命题作支持证据（贡献跨实体与持续性），也可以 `none`。
+3. 再做本轮窗口内聚类：同一技术命题的候选聚到一起，识别 Convergence Signal（多实体）
+   与 Frontier Signal（单实体拐点）。
 
 **P4 价值门控排序**：按 Technical Value / Evidence Confidence / Trend Maturity 评级。
 A+ = 机制新颖 + 定量充分 + 多源共振；A = 量化显著但缺乏独立基准；
@@ -547,7 +537,7 @@ B = 信号明确但证据不足。
 - 全卡超过 5 条时，Top 1 保留深拆，其余压缩为摘要卡（标题 + 评级 + 一句话命题 + 锚点指向分类章主卡），不重复正文。
 
 Top 1 需深拆（架构可视化 + 落地场景 + 与历史路线关系）。评级相同时，优先"改变技术判断"而非"刷新数字"的那条。
-对比 registry 中同名/相关 thesis 的历史置信度，更新本轮置信度。
+命题的置信度与升降不由 LLM 判断，以 `registry report` 的输出为准（见下方"P4 后写入 registry"）。
 
 **A/A+ 事件卡四维深拆硬约束**：每张 A/A+ 主卡（不只是 Top 1）必须含四个 `#####` 五级小节
 （结构契约见 P5），缺一不成稿：
@@ -566,48 +556,38 @@ Top 1 需深拆（架构可视化 + 落地场景 + 与历史路线关系）。�
 - **无官方原文可抓的事件**（仅媒体转载）标"媒体摘要，未回溯原文"，并在 8.3 记为"官方原文未回溯"。
 - 四节总长 200-350 字/卡；横向对比至少 2 个竞品（1 同栏目 + 1 跨栏目）。
 
-**P4 后写入 registry**：对每个入选事件执行
-`python "$ASSETS/thesis_registry.py" ingest --event-file <event.json> --run-date <YYYY-MM-DD>`。
+**P4 后写入 registry**（整批事务，`--run-date` 用 **WINDOW_START_DATE**）：
 
-**批量 ingest 要自己补 track / section**：`ingest_event()` 会读事件的 `tracks` /
-`sections` 字段，而这两个字段按规则已废弃、事件里没有。直接 ingest 会让所有 thesis 的
-track/section 为空，下一轮的 convergence 查询就次次落空（交集为空，永远不收敛）。
-批量入库时按栏目补：
-
-```python
-col = TAXONOMY.resolve(ev['primary_path'])
-payload = dict(ev)
-payload['tracks'] = ['TR-MODEL' if int(col.split('.')[0]) == 3 else 'TR-HARNESS']
-payload['sections'] = [f"s{col.replace('.', '-')}"]
-t = reg.ingest_event(payload, run_date='<WINDOW_START_DATE>')
-...
-reg.save()   # CLI 每个进程都会 load/save；一个进程内批量写要显式 save
+```bash
+python "$ASSETS/thesis_registry.py" ingest --events-dir events_run_<WINDOW_START_DATE> \
+    --run-date <WINDOW_START_DATE> --report raw_<date>/collect_report.json
+python "$ASSETS/thesis_registry.py" report --run-date <WINDOW_START_DATE> \
+    --out events_run_<WINDOW_START_DATE>/thesis_report.json
 ```
 
-- `--run-date` 用 **WINDOW_START_DATE**，不是今天；否则 `first_seen` 记错一天，
-  生命周期按"最后出现日期"推算时会提前进入 dormant。
-- 每个事件都会分配一个新 TH 编号；这是预期行为，
-  thesis 是"命题"而非"事件"，一个命题一个编号。
-- 先 ingest 再 `update --run-date <WINDOW_START_DATE>` 跑生命周期迁移。
-- 映射到已有 thesis：追加 event 记录，更新 last_seen / evidence_count，
-  proposed → active；若新实体出现则加入 convergence_entities。
-- 新建 thesis：分配新 ID（TH-xxx），rating B/C 默认 state=proposed，
-  A/A+ 默认 state=active。
-- 若发现两个 thesis 语义重合：`python "$ASSETS/thesis_registry.py" merge --source TH-xxx --target TH-yyy`。
+- 校验失败时整批不写、逐条报错，修正裁决后重跑即可。**同一 run 重跑会整批替换**，
+  不会重复计数；相邻窗口重叠出现的事件按 `event_key` 去重，输出里的 `seen_before`
+  给出首次入库的 run，8.2 可据此标"上期已报"。
+- 只能入库最新 run 或重跑最近一次 run。
+- 输出中的 `warnings`（疑似重复事件 / 疑似重复命题）要逐条看：确属同一命题就改为 `attach`，
+  或事后 `merge --source TH-a --target TH-b --reason ...`。
+- `report` 是第 7 章的唯一输入：本轮触及的命题、状态与置信度的前后对比、得分明细、
+  `本轮收敛` / `跨时间收敛`、`core_judgment`（active/contested 且非 Low 才为 true）。
+- 其他决策：命题被否证 `retire --id TH-x --reason ...`；表述需收窄 `revise`；方向实质变化
+  新建命题后 `supersede --old --new`。statement 不直接改写。
 
 **Success criteria**:
 - 每个入选事件有变化类型（CT-xx）+ 技术命题 + 评级
 - Top N 已按技术价值选取（数量由达标事件数决定，无配额），Top 1 深拆完成
-- Convergence / Frontier Signal 已识别，并标注"本轮收敛"或"跨时间收敛"
-- thesis_registry.json 已更新：新 thesis 入库或已有 thesis 追加 event
-- 没有重复 thesis（已通过 merge 合并）
+- Convergence / Frontier Signal 已识别，"本轮收敛 / 跨时间收敛"取自 `thesis_report.json`
+- `events.py normalize`、`thesis_registry.py candidates`、`ingest`、`report` 均已执行且退出码为 0
+- ingest 的 warnings 已逐条处理（attach 或 merge）
 
 **Rules**:
-- P3 必须调用 registry 的 convergence 查询，不能只做本轮窗口内聚类
-- thesis 的 statement 一经写入尽量保持稳定；若本轮发现 statement 需要修订，
-  在 notes 中追加修订原因，不直接改写 statement（保留可追溯性）
-- proposed 状态的 thesis 不进入第 7 章"本轮技术判断"核心技术判断，
-  只在第 5 章"值得关注"中作为 Early Signal 出现
+- 候选只能由 `thesis_registry.py candidates` 生成，不能手写或删改
+- statement 不直接改写，修订走 `revise` / `supersede` 决策（保留可追溯性）
+- 第 7 章只写 `core_judgment = true` 的命题；proposed 与 Low 的命题只能作为第 5 章 Early Signal，
+  contested 的命题进第 7 章时必须写出反证
 
 ### 5. P5 成稿：写 Markdown，用内置引擎渲染成 HTML 简报
 
@@ -656,7 +636,9 @@ python "$ASSETS/render_report.py" \
    4.5 学习与系统自进化；4.6 评测、验证与可信治理；4.7 交互、主动服务与持续委托）
 5. 值得关注（Early Signal / Active Event / Counter-signal / 时间边界候选 / 未归类高信号）
 6. 业界专家观点与趋势信号（L1 New Statement / L2 Reactivated / L3 Validation）
-7. 本轮技术判断（Frontier Thesis / Convergence Thesis + 置信度）
+7. 本轮技术判断（Frontier Thesis / Convergence Thesis + 置信度）：只写 `thesis_report.json` 中
+   `core_judgment = true` 的命题，每条写 `TH-xxxx`、类型、置信度（与 report 一致）、本轮收敛 /
+   跨时间收敛与前后变化；contested 的命题同一行写出反证
 8. 信息源采集统计（8.1 源与覆盖审计、8.2 事件索引、8.3 丢弃与漏检回溯）
 
 栏目的叶子归属一律查 `$ASSETS/taxonomy.py`，不要在提示词里另抄一份映射表。
@@ -735,7 +717,8 @@ intro 区（第 1 章）不只是列举事件，必须分两层写，缺第二�
 python "$ASSETS/verify_gates.py" \
   --raw-dir raw_<date> \
   --md "reports/<标题 slug>-<WINDOW_START_DATE>.md" \
-  --events events_run_<date>/ \
+  --events events_run_<WINDOW_START_DATE>/ \
+  --state state/ \
   --json-out verify_result.json
 
 # 关卡 2：视觉（排版、可读性、figure 完整性）—— 重渲染即可复验
@@ -762,7 +745,9 @@ python "$ASSETS/render_report.py" \
 | taxonomy | 折叠：`归属 N.M` 是合法栏目、每个栏目最多折 1 条；`4.6` 卡片正文写具体技术域，事件 JSON 的 `annotation` 与 `primary_path` 一致 |
 | md | 文件非空、frontmatter title 存在、八章 `##` 按顺序齐全、8.1/8.2/8.3 存在、来源链接 ≥10、文件名与 H1 的窗口日期一致 |
 | md | 8.2 无晚于 WINDOW_END 的新事件、早于 WINDOW_START 的**那一行**标为 Active/Historical |
-| trace | A/A+ 事件有 `convergence_checked` 留痕、有 `claims` 数组 |
+| trace | 每个事件已规范化（有 `event_key`）；A/A+ 事件有 `claims` 数组 |
+| registry | 本轮已入库且入库事件与 events 目录一致；A/A+ 的 `thesis_candidates` 等于工具重算结果；A/A+ 有 attach/new 裁决且已写入 registry |
+| registry | 第 7 章引用的 `TH-xxxx` 存在、为 active/contested 且非 Low、置信度文字与 registry 一致、contested 写出反证 |
 | trace | 8.2 每个 EV 编号都有对应 `EV-xx.json`；JSON 的 `first_publish_shanghai` 落在窗口内；编号与事件内容/评级一致 |
 | trace | **8.2 表格里的时刻必须等于 EV JSON 的 `first_publish_shanghai`**（分钟粒度，同一时区） |
 
@@ -833,12 +818,10 @@ ISO 串带 `T`，二次解析会把日粒度升级成秒级。
 - 每个实体×面的覆盖情况（哪些面读过、哪些面失明）
 - 不可达面的登记理由（来自 `sources.py` 的 `UNCOVERABLE`）
 
-**6d. Registry 生命周期更新**：MD 验收通过（`verify_gates.py --md` 退出码 0）后执行
-`python "$ASSETS/thesis_registry.py" update --run-date <YYYY-MM-DD>`，
-触发 thesis 的 state 迁移（active → dormant / dormant → retired）。
-若 8.3 漏检回溯发现"抽象提升失败 / 价值误判"导致漏检，
-应向对应 thesis 追加 counter_evidence：模块调用
-`reg.add_counter_evidence(thesis_id, evidence, run_date)`。
+**6d. Registry**：状态迁移（proposed / active / contested / dormant / retired）由证据与 run 计数
+派生，ingest 记录了本轮 run 即自动推进，**没有单独的生命周期命令**。
+若 8.3 回溯发现某命题被证伪，用 `retire --id TH-x --reason ...`；若发现两个命题实为同一命题，
+用 `merge`。反驳某命题的新事件走正常裁决（`attach` + `relation: contradicts`）。
 
 **Success criteria**:
 - `verify_gates.py --md` 退出码为 0（GATE PASS）
@@ -913,3 +896,13 @@ ISO 串带 `T`，二次解析会把日粒度升级成秒级。
 - **约束**：分类规则一律由 `_check_md_columns` 在 `.md` 上校验，折叠与章 2 主卡用标记里的
   `归属 N.M` 声明；渲染器支持到六级标题（h4 卡片标题、h5/h6 小标签，均不生成 id），
   首字下沉只用于拉丁字母开头的段落。新增门禁规则时同时写"该红时红"的测试。
+
+### 2026-10-31 起：Thesis registry v2
+
+- **问题**：v1 registry 一个事件新建一个 thesis（51 个里 37 个只有 1 条证据），收敛查询依赖已废弃的
+  track/section、对 v2 事件恒返回空，置信度只升不降，相邻窗口重叠会重复计数，
+  每轮靠 LLM 现写 `make_events.py` / `fix_events.py` 适配。
+- **处置**：重写为 v2（`references/registry-v2-design.md`）：事件与命题分离、状态与置信度由证据派生、
+  召回 → 裁决 → 事务入库三步留痕、按 `event_key` 幂等、状态移到 `$WORKDIR/state/`。v1 数据不迁移。
+- **约束**：候选只能由 `candidates` 生成；新建命题必须逐个拒绝候选；第 7 章只取 `report` 的
+  `core_judgment` 命题。改裁决后重跑 ingest 即可，同一 run 整批替换。

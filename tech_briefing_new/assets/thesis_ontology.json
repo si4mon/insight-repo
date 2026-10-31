@@ -75,14 +75,62 @@
       "data/技术简报分类和规则说明.txt"
     ],
     "chapters": [
-      {"chapter": 1, "section_id": "s1", "name": "本轮结论与技术趋势", "part": "I 焦点", "role": "跨栏目主线，最多 3 条"},
-      {"chapter": 2, "section_id": "s2", "name": "今日必看", "part": "I 焦点", "role": "按技术价值取 Top N，不设固定数量，不按栏目配额；Top1 深拆，N>5 时其余压缩为摘要卡"},
-      {"chapter": 3, "section_id": "s3", "name": "模型技术热点", "part": "II 分类", "role": "3.1–3.4 动态栏目"},
-      {"chapter": 4, "section_id": "s4", "name": "Agent 系统技术热点", "part": "II 分类", "role": "4.1–4.7 动态栏目"},
-      {"chapter": 5, "section_id": "s5", "name": "值得关注", "part": "III 信号与判断", "role": "Early Signal / Counter-signal / Active Event / 未归类"},
-      {"chapter": 6, "section_id": "s6", "name": "业界专家观点与趋势信号", "part": "III 信号与判断", "role": "人与其判断"},
-      {"chapter": 7, "section_id": "s7", "name": "本轮技术判断", "part": "III 信号与判断", "role": "Frontier Thesis / Convergence Thesis"},
-      {"chapter": 8, "section_id": "s8", "name": "信息源采集统计", "part": "IV 证据", "role": "8.1 源与覆盖审计 / 8.2 事件索引 / 8.3 丢弃与漏检回溯"}
+      {
+        "chapter": 1,
+        "section_id": "s1",
+        "name": "本轮结论与技术趋势",
+        "part": "I 焦点",
+        "role": "跨栏目主线，最多 3 条"
+      },
+      {
+        "chapter": 2,
+        "section_id": "s2",
+        "name": "今日必看",
+        "part": "I 焦点",
+        "role": "按技术价值取 Top N，不设固定数量，不按栏目配额；Top1 深拆，N>5 时其余压缩为摘要卡"
+      },
+      {
+        "chapter": 3,
+        "section_id": "s3",
+        "name": "模型技术热点",
+        "part": "II 分类",
+        "role": "3.1–3.4 动态栏目"
+      },
+      {
+        "chapter": 4,
+        "section_id": "s4",
+        "name": "Agent 系统技术热点",
+        "part": "II 分类",
+        "role": "4.1–4.7 动态栏目"
+      },
+      {
+        "chapter": 5,
+        "section_id": "s5",
+        "name": "值得关注",
+        "part": "III 信号与判断",
+        "role": "Early Signal / Counter-signal / Active Event / 未归类"
+      },
+      {
+        "chapter": 6,
+        "section_id": "s6",
+        "name": "业界专家观点与趋势信号",
+        "part": "III 信号与判断",
+        "role": "人与其判断"
+      },
+      {
+        "chapter": 7,
+        "section_id": "s7",
+        "name": "本轮技术判断",
+        "part": "III 信号与判断",
+        "role": "Frontier Thesis / Convergence Thesis"
+      },
+      {
+        "chapter": 8,
+        "section_id": "s8",
+        "name": "信息源采集统计",
+        "part": "IV 证据",
+        "role": "8.1 源与覆盖审计 / 8.2 事件索引 / 8.3 丢弃与漏检回溯"
+      }
     ],
     "domains": [
       {
@@ -90,9 +138,18 @@
         "name": "模型与学习技术",
         "question": "Agent 的模型能力如何形成，如何高效运行",
         "level2": [
-          {"id": "A1", "name": "模型架构与表征"},
-          {"id": "A2", "name": "训练与适应"},
-          {"id": "A3", "name": "推理与部署效率"}
+          {
+            "id": "A1",
+            "name": "模型架构与表征"
+          },
+          {
+            "id": "A2",
+            "name": "训练与适应"
+          },
+          {
+            "id": "A3",
+            "name": "推理与部署效率"
+          }
         ]
       },
       {
@@ -100,10 +157,22 @@
         "name": "认知、记忆与行动机制",
         "question": "Agent 如何理解任务、选择行动、积累经验",
         "level2": [
-          {"id": "B1", "name": "推理、决策与规划"},
-          {"id": "B2", "name": "记忆、知识与上下文"},
-          {"id": "B3", "name": "工具、技能与环境行动"},
-          {"id": "B4", "name": "学习与自进化"}
+          {
+            "id": "B1",
+            "name": "推理、决策与规划"
+          },
+          {
+            "id": "B2",
+            "name": "记忆、知识与上下文"
+          },
+          {
+            "id": "B3",
+            "name": "工具、技能与环境行动"
+          },
+          {
+            "id": "B4",
+            "name": "学习与自进化"
+          }
         ]
       },
       {
@@ -111,10 +180,22 @@
         "name": "运行、协同与基础设施",
         "question": "Agent 如何持续执行，多个执行主体如何协作",
         "level2": [
-          {"id": "C1", "name": "Runtime 与持久执行"},
-          {"id": "C2", "name": "多 Agent 协同"},
-          {"id": "C3", "name": "协议与互操作"},
-          {"id": "C4", "name": "运行平台与资源管理"}
+          {
+            "id": "C1",
+            "name": "Runtime 与持久执行"
+          },
+          {
+            "id": "C2",
+            "name": "多 Agent 协同"
+          },
+          {
+            "id": "C3",
+            "name": "协议与互操作"
+          },
+          {
+            "id": "C4",
+            "name": "运行平台与资源管理"
+          }
         ]
       },
       {
@@ -122,9 +203,18 @@
         "name": "可靠性、评测与治理",
         "question": "怎样知道任务做对了，以及怎样约束执行",
         "level2": [
-          {"id": "D1", "name": "评测与结果验证"},
-          {"id": "D2", "name": "可观测与运维"},
-          {"id": "D3", "name": "安全、身份与治理"}
+          {
+            "id": "D1",
+            "name": "评测与结果验证"
+          },
+          {
+            "id": "D2",
+            "name": "可观测与运维"
+          },
+          {
+            "id": "D3",
+            "name": "安全、身份与治理"
+          }
         ]
       },
       {
@@ -132,9 +222,18 @@
         "name": "人机交互与持续委托",
         "question": "用户如何表达目标、控制代理，并在持续服务中理解其行为",
         "level2": [
-          {"id": "E1", "name": "意图理解与用户委托"},
-          {"id": "E2", "name": "多模态与生成式交互"},
-          {"id": "E3", "name": "主动服务与连续体验"}
+          {
+            "id": "E1",
+            "name": "意图理解与用户委托"
+          },
+          {
+            "id": "E2",
+            "name": "多模态与生成式交互"
+          },
+          {
+            "id": "E3",
+            "name": "主动服务与连续体验"
+          }
         ]
       }
     ],
@@ -144,72 +243,138 @@
         "chapter": 3,
         "name": "模型架构、训练与适应",
         "coverage": "架构、数据、后训练、蒸馏、持续适应",
-        "leaves": ["A1.1", "A1.4", "A2.1", "A2.2", "A2.3"]
+        "leaves": [
+          "A1.1",
+          "A1.4",
+          "A2.1",
+          "A2.2",
+          "A2.3"
+        ]
       },
       {
         "id": "3.2",
         "chapter": 3,
         "name": "推理、决策与效率",
         "coverage": "推理预算、判断模型、解码、缓存、模型服务效率",
-        "leaves": ["A3.1", "A3.2", "A3.3", "B1.1"]
+        "leaves": [
+          "A3.1",
+          "A3.2",
+          "A3.3",
+          "B1.1"
+        ]
       },
       {
         "id": "3.3",
         "chapter": 3,
         "name": "多模态、语音与实时模型",
         "coverage": "视觉/视频/音频、原生多模态、实时模型",
-        "leaves": ["A1.2"]
+        "leaves": [
+          "A1.2"
+        ]
       },
       {
         "id": "3.4",
         "chapter": 3,
         "name": "世界、空间与动作模型",
         "coverage": "世界状态、空间推理、具身模型、动作生成",
-        "leaves": ["A1.3"]
+        "leaves": [
+          "A1.3"
+        ]
       },
       {
         "id": "4.1",
         "chapter": 4,
         "name": "任务控制、运行与基础设施",
         "coverage": "规划执行、Loop、任务状态、调度、恢复、运行平台",
-        "leaves": ["B1.2", "B1.3", "C1.1", "C1.2", "C1.3", "C4.1", "C4.2", "C4.3"]
+        "leaves": [
+          "B1.2",
+          "B1.3",
+          "C1.1",
+          "C1.2",
+          "C1.3",
+          "C4.1",
+          "C4.2",
+          "C4.3"
+        ]
       },
       {
         "id": "4.2",
         "chapter": 4,
         "name": "记忆、知识与上下文",
         "coverage": "记忆生命周期、知识组织、检索、上下文与缓存",
-        "leaves": ["B2.1", "B2.2", "B2.3", "B2.4"]
+        "leaves": [
+          "B2.1",
+          "B2.2",
+          "B2.3",
+          "B2.4"
+        ]
       },
       {
         "id": "4.3",
         "chapter": 4,
         "name": "外部环境中的行动与工具使用",
         "coverage": "工具使用、Skill、GUI/Computer Use、代码行动",
-        "leaves": ["B3.1", "B3.2", "B3.3", "C3.1"]
+        "leaves": [
+          "B3.1",
+          "B3.2",
+          "B3.3",
+          "C3.1"
+        ]
       },
       {
         "id": "4.4",
         "chapter": 4,
         "name": "多 Agent 协同与互操作",
         "coverage": "团队组织、通信、共享状态、发现与委托协议",
-        "leaves": ["C2.1", "C2.2", "C2.3", "C3.2", "C3.3"]
+        "leaves": [
+          "C2.1",
+          "C2.2",
+          "C2.3",
+          "C3.2",
+          "C3.3"
+        ]
       },
       {
         "id": "4.5",
         "chapter": 4,
         "name": "学习与系统自进化",
         "coverage": "Prompt/Skill/Tool/Workflow/团队结构的反馈改进",
-        "leaves": ["B4.1", "B4.2", "B4.3"]
+        "leaves": [
+          "B4.1",
+          "B4.2",
+          "B4.3"
+        ]
       },
       {
         "id": "4.6",
         "chapter": 4,
         "name": "评测、验证与可信治理",
         "coverage": "Benchmark、Verify、Observability、隔离、权限与审计",
-        "leaves": ["D1.1", "D1.2", "D1.3", "D2.1", "D2.2", "D2.3", "D3.1", "D3.2", "D3.3", "D3.4"],
+        "leaves": [
+          "D1.1",
+          "D1.2",
+          "D1.3",
+          "D2.1",
+          "D2.2",
+          "D2.3",
+          "D3.1",
+          "D3.2",
+          "D3.3",
+          "D3.4"
+        ],
         "annotation_required": true,
-        "annotation_labels": ["评测环境", "结果核验", "可靠性归因", "运行证据", "调试回放", "生产质量", "身份授权", "执行隔离", "内容防护", "审计治理"],
+        "annotation_labels": [
+          "评测环境",
+          "结果核验",
+          "可靠性归因",
+          "运行证据",
+          "调试回放",
+          "生产质量",
+          "身份授权",
+          "执行隔离",
+          "内容防护",
+          "审计治理"
+        ],
         "annotation_map": {
           "评测环境": "D1.1",
           "结果核验": "D1.2",
@@ -228,73 +393,467 @@
         "chapter": 4,
         "name": "交互、主动服务与持续委托",
         "coverage": "动态界面、用户委托、主动性、连续体验",
-        "leaves": ["E1.1", "E1.2", "E1.3", "E2.1", "E2.2", "E2.3", "E3.1", "E3.2", "E3.3"]
+        "leaves": [
+          "E1.1",
+          "E1.2",
+          "E1.3",
+          "E2.1",
+          "E2.2",
+          "E2.3",
+          "E3.1",
+          "E3.2",
+          "E3.3"
+        ]
       }
     ],
     "leaves": [
-      {"id": "A1.1", "name": "语言与推理模型结构", "level1": "A", "level2": "A1", "column": "3.1", "examples": "稠密/MoE、循环深度、潜在表征"},
-      {"id": "A1.2", "name": "多模态与实时模型", "level1": "A", "level2": "A1", "column": "3.3", "examples": "跨模态融合、原生 S2S、thinker–talker"},
-      {"id": "A1.3", "name": "世界、空间与动作模型", "level1": "A", "level2": "A1", "column": "3.4", "examples": "状态预测、空间表征、VLA/动作生成"},
-      {"id": "A1.4", "name": "模型内部理解与干预", "level1": "A", "level2": "A1", "column": "3.1", "examples": "表征分析、因果干预、激活引导"},
-      {"id": "A2.1", "name": "数据与训练环境", "level1": "A", "level2": "A2", "column": "3.1", "examples": "轨迹合成、课程构造、模拟环境"},
-      {"id": "A2.2", "name": "Agent 能力后训练", "level1": "A", "level2": "A2", "column": "3.1", "examples": "工具使用 SFT、长程任务 RL、过程奖励"},
-      {"id": "A2.3", "name": "专业化与持续适应", "level1": "A", "level2": "A2", "column": "3.1", "examples": "蒸馏、LoRA/适配器、持续学习与遗忘控制"},
-      {"id": "A3.1", "name": "推理时计算控制", "level1": "A", "level2": "A3", "column": "3.2", "examples": "自适应预算、动态深度、早停"},
-      {"id": "A3.2", "name": "推理解码与压缩", "level1": "A", "level2": "A3", "column": "3.2", "examples": "投机解码、量化、KV 优化"},
-      {"id": "A3.3", "name": "模型服务与资源利用", "level1": "A", "level2": "A3", "column": "3.2", "examples": "批处理、分布式推理、多模型服务调度"},
-
-      {"id": "B1.1", "name": "判断与动作选择", "level1": "B", "level2": "B1", "column": "3.2", "examples": "typed decision、置信校准、弃权与升级判断"},
-      {"id": "B1.2", "name": "任务规划与搜索", "level1": "B", "level2": "B1", "column": "4.1", "examples": "任务分解、层级规划、约束/搜索规划"},
-      {"id": "B1.3", "name": "执行反馈与重规划", "level1": "B", "level2": "B1", "column": "4.1", "examples": "进展判断、失败诊断、反思与计划修订"},
-      {"id": "B2.1", "name": "记忆表示与载体", "level1": "B", "level2": "B2", "column": "4.2", "examples": "显式记录、参数化记忆、潜在状态记忆"},
-      {"id": "B2.2", "name": "记忆生命周期", "level1": "B", "level2": "B2", "column": "4.2", "examples": "写入筛选、冲突更新、遗忘/有效期/版本"},
-      {"id": "B2.3", "name": "知识组织", "level1": "B", "level2": "B2", "column": "4.2", "examples": "知识图谱、Wiki、程序性知识图"},
-      {"id": "B2.4", "name": "检索与上下文构造", "level1": "B", "level2": "B2", "column": "4.2", "examples": "检索重排、上下文选择/压缩、缓存复用"},
-      {"id": "B3.1", "name": "工具使用", "level1": "B", "level2": "B3", "column": "4.3", "examples": "工具选择、参数生成、组合调用与错误修复"},
-      {"id": "B3.2", "name": "程序性技能", "level1": "B", "level2": "B3", "column": "4.3", "examples": "Skill 表示、检索组合、适用条件与执行"},
-      {"id": "B3.3", "name": "环境感知与行动落地", "level1": "B", "level2": "B3", "column": "4.3", "examples": "GUI grounding、Code as Action、机器人动作控制"},
-      {"id": "B4.1", "name": "可演进对象", "level1": "B", "level2": "B4", "column": "4.5", "examples": "Prompt、Skill/Tool、Loop/Workflow/团队结构"},
-      {"id": "B4.2", "name": "改进算法与反馈", "level1": "B", "level2": "B4", "column": "4.5", "examples": "文本反馈优化、奖励驱动搜索、种群演化"},
-      {"id": "B4.3", "name": "改进的保留与推广", "level1": "B", "level2": "B4", "column": "4.5", "examples": "跨任务经验迁移、模型与系统协同演进、回归验证"},
-
-      {"id": "C1.1", "name": "执行循环与任务状态", "level1": "C", "level2": "C1", "column": "4.1", "examples": "状态机、任务 DAG、终止与完成条件"},
-      {"id": "C1.2", "name": "持久化与故障恢复", "level1": "C", "level2": "C1", "column": "4.1", "examples": "Checkpoint、事件日志、重放与语义恢复"},
-      {"id": "C1.3", "name": "调度与并发控制", "level1": "C", "level2": "C1", "column": "4.1", "examples": "异步工具、后台任务、取消/中断/超时"},
-      {"id": "C2.1", "name": "组织与分工", "level1": "C", "level2": "C2", "column": "4.4", "examples": "Supervisor–Worker、层级团队、动态角色分配"},
-      {"id": "C2.2", "name": "通信与共享状态", "level1": "C", "level2": "C2", "column": "4.4", "examples": "消息/潜在通信、共享工作区、状态一致性"},
-      {"id": "C2.3", "name": "集体决策与协调", "level1": "C", "level2": "C2", "column": "4.4", "examples": "协商、辩论/投票、协作学习与信用分配"},
-      {"id": "C3.1", "name": "工具和数据连接", "level1": "C", "level2": "C3", "column": "4.3", "examples": "能力描述、工具发现、调用与通知契约"},
-      {"id": "C3.2", "name": "Agent 发现与委托", "level1": "C", "level2": "C3", "column": "4.4", "examples": "Agent Card、远程任务生命周期、产物交换"},
-      {"id": "C3.3", "name": "工作接续与语义互通", "level1": "C", "level2": "C3", "column": "4.4", "examples": "语义检查点、未完成任务交接、证据与产物血缘"},
-      {"id": "C4.1", "name": "执行环境与资源", "level1": "C", "level2": "C4", "column": "4.1", "examples": "容器/VM、浏览器/代码环境、资源配额"},
-      {"id": "C4.2", "name": "能力与服务生命周期", "level1": "C", "level2": "C4", "column": "4.1", "examples": "Registry、版本/依赖管理、发布与退役"},
-      {"id": "C4.3", "name": "端云与异构协同", "level1": "C", "level2": "C4", "column": "4.1", "examples": "执行位置选择、状态迁移、算力与能耗协同"},
-
-      {"id": "D1.1", "name": "任务与环境评测", "level1": "D", "level2": "D1", "column": "4.6", "examples": "长程任务集、交互式 benchmark、真实环境测试"},
-      {"id": "D1.2", "name": "过程和结果核验", "level1": "D", "level2": "D1", "column": "4.6", "examples": "可执行检查、形式验证、证据核验与 Judge"},
-      {"id": "D1.3", "name": "可靠性与归因", "level1": "D", "level2": "D1", "column": "4.6", "examples": "重复试验、故障注入、模型/系统/环境归因"},
-      {"id": "D2.1", "name": "运行证据采集", "level1": "D", "level2": "D2", "column": "4.6", "examples": "Trace、动作/状态日志、证据与产物关联"},
-      {"id": "D2.2", "name": "调试与回放", "level1": "D", "level2": "D2", "column": "4.6", "examples": "轨迹重放、分支比较、回归定位"},
-      {"id": "D2.3", "name": "生产质量与效率", "level1": "D", "level2": "D2", "column": "4.6", "examples": "成功率、延迟/成本、SLO 与异常诊断"},
-      {"id": "D3.1", "name": "身份与委托授权", "level1": "D", "level2": "D3", "column": "4.6", "examples": "用户/Agent 身份、最小权限、凭据隔离"},
-      {"id": "D3.2", "name": "执行隔离与动作控制", "level1": "D", "level2": "D3", "column": "4.6", "examples": "Sandbox、网络外发控制、审批/提交门槛"},
-      {"id": "D3.3", "name": "内容和供应链防护", "level1": "D", "level2": "D3", "column": "4.6", "examples": "Prompt injection、记忆污染、恶意工具/Skill"},
-      {"id": "D3.4", "name": "审计与生命周期治理", "level1": "D", "level2": "D3", "column": "4.6", "examples": "行为审计、策略管理、数据保留/删除与撤权"},
-
-      {"id": "E1.1", "name": "目标与偏好对齐", "level1": "E", "level2": "E1", "column": "4.7", "examples": "目标澄清、偏好推断、冲突目标处理"},
-      {"id": "E1.2", "name": "委托范围表达", "level1": "E", "level2": "E1", "column": "4.7", "examples": "时间/资源/动作边界、完成条件、可撤销委托"},
-      {"id": "E1.3", "name": "人与 Agent 协作", "level1": "E", "level2": "E1", "column": "4.7", "examples": "人工接管、协同编辑、反馈与纠偏"},
-      {"id": "E2.1", "name": "实时对话协同", "level1": "E", "level2": "E2", "column": "4.7", "examples": "打断、轮次管理、前台对话与后台任务同步"},
-      {"id": "E2.2", "name": "动态界面", "level1": "E", "level2": "E2", "column": "4.7", "examples": "声明式组件、数据绑定、交互动作回传"},
-      {"id": "E2.3", "name": "任务与结果呈现", "level1": "E", "level2": "E2", "column": "4.7", "examples": "进度可视化、可编辑产物、证据及验收界面"},
-      {"id": "E3.1", "name": "主动机会识别", "level1": "E", "level2": "E3", "column": "4.7", "examples": "需求预测、相关性判断、打扰预算"},
-      {"id": "E3.2", "name": "持续目标服务", "level1": "E", "level2": "E3", "column": "4.7", "examples": "周期/事件触发、目标常驻、完成条件更新"},
-      {"id": "E3.3", "name": "跨端与跨会话连续性", "level1": "E", "level2": "E3", "column": "4.7", "examples": "交互状态接续、设备切换、用户上下文连续"}
+      {
+        "id": "A1.1",
+        "name": "语言与推理模型结构",
+        "level1": "A",
+        "level2": "A1",
+        "column": "3.1",
+        "examples": "稠密/MoE、循环深度、潜在表征"
+      },
+      {
+        "id": "A1.2",
+        "name": "多模态与实时模型",
+        "level1": "A",
+        "level2": "A1",
+        "column": "3.3",
+        "examples": "跨模态融合、原生 S2S、thinker–talker"
+      },
+      {
+        "id": "A1.3",
+        "name": "世界、空间与动作模型",
+        "level1": "A",
+        "level2": "A1",
+        "column": "3.4",
+        "examples": "状态预测、空间表征、VLA/动作生成"
+      },
+      {
+        "id": "A1.4",
+        "name": "模型内部理解与干预",
+        "level1": "A",
+        "level2": "A1",
+        "column": "3.1",
+        "examples": "表征分析、因果干预、激活引导"
+      },
+      {
+        "id": "A2.1",
+        "name": "数据与训练环境",
+        "level1": "A",
+        "level2": "A2",
+        "column": "3.1",
+        "examples": "轨迹合成、课程构造、模拟环境"
+      },
+      {
+        "id": "A2.2",
+        "name": "Agent 能力后训练",
+        "level1": "A",
+        "level2": "A2",
+        "column": "3.1",
+        "examples": "工具使用 SFT、长程任务 RL、过程奖励"
+      },
+      {
+        "id": "A2.3",
+        "name": "专业化与持续适应",
+        "level1": "A",
+        "level2": "A2",
+        "column": "3.1",
+        "examples": "蒸馏、LoRA/适配器、持续学习与遗忘控制"
+      },
+      {
+        "id": "A3.1",
+        "name": "推理时计算控制",
+        "level1": "A",
+        "level2": "A3",
+        "column": "3.2",
+        "examples": "自适应预算、动态深度、早停"
+      },
+      {
+        "id": "A3.2",
+        "name": "推理解码与压缩",
+        "level1": "A",
+        "level2": "A3",
+        "column": "3.2",
+        "examples": "投机解码、量化、KV 优化"
+      },
+      {
+        "id": "A3.3",
+        "name": "模型服务与资源利用",
+        "level1": "A",
+        "level2": "A3",
+        "column": "3.2",
+        "examples": "批处理、分布式推理、多模型服务调度"
+      },
+      {
+        "id": "B1.1",
+        "name": "判断与动作选择",
+        "level1": "B",
+        "level2": "B1",
+        "column": "3.2",
+        "examples": "typed decision、置信校准、弃权与升级判断"
+      },
+      {
+        "id": "B1.2",
+        "name": "任务规划与搜索",
+        "level1": "B",
+        "level2": "B1",
+        "column": "4.1",
+        "examples": "任务分解、层级规划、约束/搜索规划"
+      },
+      {
+        "id": "B1.3",
+        "name": "执行反馈与重规划",
+        "level1": "B",
+        "level2": "B1",
+        "column": "4.1",
+        "examples": "进展判断、失败诊断、反思与计划修订"
+      },
+      {
+        "id": "B2.1",
+        "name": "记忆表示与载体",
+        "level1": "B",
+        "level2": "B2",
+        "column": "4.2",
+        "examples": "显式记录、参数化记忆、潜在状态记忆"
+      },
+      {
+        "id": "B2.2",
+        "name": "记忆生命周期",
+        "level1": "B",
+        "level2": "B2",
+        "column": "4.2",
+        "examples": "写入筛选、冲突更新、遗忘/有效期/版本"
+      },
+      {
+        "id": "B2.3",
+        "name": "知识组织",
+        "level1": "B",
+        "level2": "B2",
+        "column": "4.2",
+        "examples": "知识图谱、Wiki、程序性知识图"
+      },
+      {
+        "id": "B2.4",
+        "name": "检索与上下文构造",
+        "level1": "B",
+        "level2": "B2",
+        "column": "4.2",
+        "examples": "检索重排、上下文选择/压缩、缓存复用"
+      },
+      {
+        "id": "B3.1",
+        "name": "工具使用",
+        "level1": "B",
+        "level2": "B3",
+        "column": "4.3",
+        "examples": "工具选择、参数生成、组合调用与错误修复"
+      },
+      {
+        "id": "B3.2",
+        "name": "程序性技能",
+        "level1": "B",
+        "level2": "B3",
+        "column": "4.3",
+        "examples": "Skill 表示、检索组合、适用条件与执行"
+      },
+      {
+        "id": "B3.3",
+        "name": "环境感知与行动落地",
+        "level1": "B",
+        "level2": "B3",
+        "column": "4.3",
+        "examples": "GUI grounding、Code as Action、机器人动作控制"
+      },
+      {
+        "id": "B4.1",
+        "name": "可演进对象",
+        "level1": "B",
+        "level2": "B4",
+        "column": "4.5",
+        "examples": "Prompt、Skill/Tool、Loop/Workflow/团队结构"
+      },
+      {
+        "id": "B4.2",
+        "name": "改进算法与反馈",
+        "level1": "B",
+        "level2": "B4",
+        "column": "4.5",
+        "examples": "文本反馈优化、奖励驱动搜索、种群演化"
+      },
+      {
+        "id": "B4.3",
+        "name": "改进的保留与推广",
+        "level1": "B",
+        "level2": "B4",
+        "column": "4.5",
+        "examples": "跨任务经验迁移、模型与系统协同演进、回归验证"
+      },
+      {
+        "id": "C1.1",
+        "name": "执行循环与任务状态",
+        "level1": "C",
+        "level2": "C1",
+        "column": "4.1",
+        "examples": "状态机、任务 DAG、终止与完成条件"
+      },
+      {
+        "id": "C1.2",
+        "name": "持久化与故障恢复",
+        "level1": "C",
+        "level2": "C1",
+        "column": "4.1",
+        "examples": "Checkpoint、事件日志、重放与语义恢复"
+      },
+      {
+        "id": "C1.3",
+        "name": "调度与并发控制",
+        "level1": "C",
+        "level2": "C1",
+        "column": "4.1",
+        "examples": "异步工具、后台任务、取消/中断/超时"
+      },
+      {
+        "id": "C2.1",
+        "name": "组织与分工",
+        "level1": "C",
+        "level2": "C2",
+        "column": "4.4",
+        "examples": "Supervisor–Worker、层级团队、动态角色分配"
+      },
+      {
+        "id": "C2.2",
+        "name": "通信与共享状态",
+        "level1": "C",
+        "level2": "C2",
+        "column": "4.4",
+        "examples": "消息/潜在通信、共享工作区、状态一致性"
+      },
+      {
+        "id": "C2.3",
+        "name": "集体决策与协调",
+        "level1": "C",
+        "level2": "C2",
+        "column": "4.4",
+        "examples": "协商、辩论/投票、协作学习与信用分配"
+      },
+      {
+        "id": "C3.1",
+        "name": "工具和数据连接",
+        "level1": "C",
+        "level2": "C3",
+        "column": "4.3",
+        "examples": "能力描述、工具发现、调用与通知契约"
+      },
+      {
+        "id": "C3.2",
+        "name": "Agent 发现与委托",
+        "level1": "C",
+        "level2": "C3",
+        "column": "4.4",
+        "examples": "Agent Card、远程任务生命周期、产物交换"
+      },
+      {
+        "id": "C3.3",
+        "name": "工作接续与语义互通",
+        "level1": "C",
+        "level2": "C3",
+        "column": "4.4",
+        "examples": "语义检查点、未完成任务交接、证据与产物血缘"
+      },
+      {
+        "id": "C4.1",
+        "name": "执行环境与资源",
+        "level1": "C",
+        "level2": "C4",
+        "column": "4.1",
+        "examples": "容器/VM、浏览器/代码环境、资源配额"
+      },
+      {
+        "id": "C4.2",
+        "name": "能力与服务生命周期",
+        "level1": "C",
+        "level2": "C4",
+        "column": "4.1",
+        "examples": "Registry、版本/依赖管理、发布与退役"
+      },
+      {
+        "id": "C4.3",
+        "name": "端云与异构协同",
+        "level1": "C",
+        "level2": "C4",
+        "column": "4.1",
+        "examples": "执行位置选择、状态迁移、算力与能耗协同"
+      },
+      {
+        "id": "D1.1",
+        "name": "任务与环境评测",
+        "level1": "D",
+        "level2": "D1",
+        "column": "4.6",
+        "examples": "长程任务集、交互式 benchmark、真实环境测试"
+      },
+      {
+        "id": "D1.2",
+        "name": "过程和结果核验",
+        "level1": "D",
+        "level2": "D1",
+        "column": "4.6",
+        "examples": "可执行检查、形式验证、证据核验与 Judge"
+      },
+      {
+        "id": "D1.3",
+        "name": "可靠性与归因",
+        "level1": "D",
+        "level2": "D1",
+        "column": "4.6",
+        "examples": "重复试验、故障注入、模型/系统/环境归因"
+      },
+      {
+        "id": "D2.1",
+        "name": "运行证据采集",
+        "level1": "D",
+        "level2": "D2",
+        "column": "4.6",
+        "examples": "Trace、动作/状态日志、证据与产物关联"
+      },
+      {
+        "id": "D2.2",
+        "name": "调试与回放",
+        "level1": "D",
+        "level2": "D2",
+        "column": "4.6",
+        "examples": "轨迹重放、分支比较、回归定位"
+      },
+      {
+        "id": "D2.3",
+        "name": "生产质量与效率",
+        "level1": "D",
+        "level2": "D2",
+        "column": "4.6",
+        "examples": "成功率、延迟/成本、SLO 与异常诊断"
+      },
+      {
+        "id": "D3.1",
+        "name": "身份与委托授权",
+        "level1": "D",
+        "level2": "D3",
+        "column": "4.6",
+        "examples": "用户/Agent 身份、最小权限、凭据隔离"
+      },
+      {
+        "id": "D3.2",
+        "name": "执行隔离与动作控制",
+        "level1": "D",
+        "level2": "D3",
+        "column": "4.6",
+        "examples": "Sandbox、网络外发控制、审批/提交门槛"
+      },
+      {
+        "id": "D3.3",
+        "name": "内容和供应链防护",
+        "level1": "D",
+        "level2": "D3",
+        "column": "4.6",
+        "examples": "Prompt injection、记忆污染、恶意工具/Skill"
+      },
+      {
+        "id": "D3.4",
+        "name": "审计与生命周期治理",
+        "level1": "D",
+        "level2": "D3",
+        "column": "4.6",
+        "examples": "行为审计、策略管理、数据保留/删除与撤权"
+      },
+      {
+        "id": "E1.1",
+        "name": "目标与偏好对齐",
+        "level1": "E",
+        "level2": "E1",
+        "column": "4.7",
+        "examples": "目标澄清、偏好推断、冲突目标处理"
+      },
+      {
+        "id": "E1.2",
+        "name": "委托范围表达",
+        "level1": "E",
+        "level2": "E1",
+        "column": "4.7",
+        "examples": "时间/资源/动作边界、完成条件、可撤销委托"
+      },
+      {
+        "id": "E1.3",
+        "name": "人与 Agent 协作",
+        "level1": "E",
+        "level2": "E1",
+        "column": "4.7",
+        "examples": "人工接管、协同编辑、反馈与纠偏"
+      },
+      {
+        "id": "E2.1",
+        "name": "实时对话协同",
+        "level1": "E",
+        "level2": "E2",
+        "column": "4.7",
+        "examples": "打断、轮次管理、前台对话与后台任务同步"
+      },
+      {
+        "id": "E2.2",
+        "name": "动态界面",
+        "level1": "E",
+        "level2": "E2",
+        "column": "4.7",
+        "examples": "声明式组件、数据绑定、交互动作回传"
+      },
+      {
+        "id": "E2.3",
+        "name": "任务与结果呈现",
+        "level1": "E",
+        "level2": "E2",
+        "column": "4.7",
+        "examples": "进度可视化、可编辑产物、证据及验收界面"
+      },
+      {
+        "id": "E3.1",
+        "name": "主动机会识别",
+        "level1": "E",
+        "level2": "E3",
+        "column": "4.7",
+        "examples": "需求预测、相关性判断、打扰预算"
+      },
+      {
+        "id": "E3.2",
+        "name": "持续目标服务",
+        "level1": "E",
+        "level2": "E3",
+        "column": "4.7",
+        "examples": "周期/事件触发、目标常驻、完成条件更新"
+      },
+      {
+        "id": "E3.3",
+        "name": "跨端与跨会话连续性",
+        "level1": "E",
+        "level2": "E3",
+        "column": "4.7",
+        "examples": "交互状态接续、设备切换、用户上下文连续"
+      }
     ],
-    "change_objects": ["Model", "Harness", "运行平台", "交互·应用", "尚未披露"],
+    "change_objects": [
+      "Model",
+      "Harness",
+      "运行平台",
+      "交互·应用",
+      "尚未披露"
+    ],
     "rules": {
       "primary_path_unique": true,
-      "must_drill_level2": ["A1", "B1", "C3"],
+      "must_drill_level2": [
+        "A1",
+        "B1",
+        "C3"
+      ],
       "max_related_domains": 2,
       "unclassified_chapter": 5,
       "boundary_label": "Model–Agent Boundary",
@@ -303,7 +862,11 @@
         "1": "折叠为卡片标签",
         "gte2": "展开为独立小节"
       },
-      "empty_states": ["已扫描无入选", "扫描不完整", "未扫描"],
+      "empty_states": [
+        "已扫描无入选",
+        "扫描不完整",
+        "未扫描"
+      ],
       "meanings": {
         "已扫描无入选": "覆盖完成，当日本领域无实质技术变化",
         "扫描不完整": "采集存在缺口，需补检",
@@ -318,10 +881,22 @@
       "id": "TR-MODEL",
       "name": "Model Track",
       "sections": [
-        {"id": "s2-1", "name": "Language / Reasoning / Training & Inference"},
-        {"id": "s2-2", "name": "Multimodal / Speech / Full-duplex / Vision"},
-        {"id": "s2-3", "name": "World Model / Spatial / Embodied"},
-        {"id": "s2-4", "name": "Model–Agent Boundary"}
+        {
+          "id": "s2-1",
+          "name": "Language / Reasoning / Training & Inference"
+        },
+        {
+          "id": "s2-2",
+          "name": "Multimodal / Speech / Full-duplex / Vision"
+        },
+        {
+          "id": "s2-3",
+          "name": "World Model / Spatial / Embodied"
+        },
+        {
+          "id": "s2-4",
+          "name": "Model–Agent Boundary"
+        }
       ],
       "watch_matrix": [
         "Foundation / Reasoning",
@@ -337,23 +912,56 @@
       "id": "TR-HARNESS",
       "name": "Harness Track",
       "sections": [
-        {"id": "s3-1", "name": "Runtime / Session / Task State / Long-running"},
-        {"id": "s3-2", "name": "Memory / Knowledge / Context"},
-        {"id": "s3-3", "name": "Harness / Loop / Skill / Routine / Automation / Evolution"},
-        {"id": "s3-4", "name": "Multi-agent / AgentOS / Tool / MCP / A2A / Computer Use"},
-        {"id": "s3-5", "name": "Trusted Agent / Sandbox / Verify / Governance"}
+        {
+          "id": "s3-1",
+          "name": "Runtime / Session / Task State / Long-running"
+        },
+        {
+          "id": "s3-2",
+          "name": "Memory / Knowledge / Context"
+        },
+        {
+          "id": "s3-3",
+          "name": "Harness / Loop / Skill / Routine / Automation / Evolution"
+        },
+        {
+          "id": "s3-4",
+          "name": "Multi-agent / AgentOS / Tool / MCP / A2A / Computer Use"
+        },
+        {
+          "id": "s3-5",
+          "name": "Trusted Agent / Sandbox / Verify / Governance"
+        }
       ],
       "watch_matrix": [
-        "Agent Runtime", "Loop / Harness / Scaffold", "Session / Task State",
-        "Long-running / Persistent Agent", "Memory / Knowledge / Context Engineering",
-        "Skill / Routine / Automation", "Tool Use", "MCP / A2A", "Computer Use",
-        "Multi-Agent / Swarm / Subagent", "Agent Teams", "AgentOS / Kernel",
-        "Sandbox", "Trusted Agent", "Policy / Permission / Verify / Governance",
-        "Evaluator / Observer / Commit Gate", "Registry / Discovery", "Agent Gateway",
-        "Recovery / Checkpoint / Audit / Observability", "Artifact / Evidence / Trajectory",
-        "端云协同", "多模型 / 多 Agent 编排", "Harness / Skill / Routine Evolution",
-        "Agent 入口形态与产品形态", "对话 / 代理 / 工作区合并或拆分", "任务路由",
-        "设备脱离执行", "跨端接续"
+        "Agent Runtime",
+        "Loop / Harness / Scaffold",
+        "Session / Task State",
+        "Long-running / Persistent Agent",
+        "Memory / Knowledge / Context Engineering",
+        "Skill / Routine / Automation",
+        "Tool Use",
+        "MCP / A2A",
+        "Computer Use",
+        "Multi-Agent / Swarm / Subagent",
+        "Agent Teams",
+        "AgentOS / Kernel",
+        "Sandbox",
+        "Trusted Agent",
+        "Policy / Permission / Verify / Governance",
+        "Evaluator / Observer / Commit Gate",
+        "Registry / Discovery",
+        "Agent Gateway",
+        "Recovery / Checkpoint / Audit / Observability",
+        "Artifact / Evidence / Trajectory",
+        "端云协同",
+        "多模型 / 多 Agent 编排",
+        "Harness / Skill / Routine Evolution",
+        "Agent 入口形态与产品形态",
+        "对话 / 代理 / 工作区合并或拆分",
+        "任务路由",
+        "设备脱离执行",
+        "跨端接续"
       ],
       "task_def_ref": "line 42-44, 83"
     }
@@ -397,8 +1005,18 @@
       }
     ],
     "evaluation_dimensions": {
-      "technical_value": ["Source Authority", "Magnitude of Change", "Mechanism Novelty", "Quantitative Evidence", "Strategic Adjacency"],
-      "abstraction_specific": ["Abstraction Novelty", "Architectural Leverage", "Strategic Adjacency"],
+      "technical_value": [
+        "Source Authority",
+        "Magnitude of Change",
+        "Mechanism Novelty",
+        "Quantitative Evidence",
+        "Strategic Adjacency"
+      ],
+      "abstraction_specific": [
+        "Abstraction Novelty",
+        "Architectural Leverage",
+        "Strategic Adjacency"
+      ],
       "task_def_ref": "line 59"
     }
   },
@@ -417,14 +1035,30 @@
     }
   ],
   "evaluation_chain": {
-    "stages": ["Event", "Signal", "Pattern", "Thesis"],
-    "convergence_dimensions": [
-      "Cross-Entity", "Cross-Form", "Temporal Persistence",
-      "Adoption / Deployment", "Mechanism Consistency", "Counter-Evidence"
+    "stages": [
+      "Event",
+      "Signal",
+      "Pattern",
+      "Thesis"
     ],
-    "confidence_levels": ["High", "Medium", "Low"],
+    "convergence_dimensions": [
+      "Cross-Entity",
+      "Cross-Form",
+      "Temporal Persistence",
+      "Adoption / Deployment",
+      "Mechanism Consistency",
+      "Counter-Evidence"
+    ],
+    "confidence_levels": [
+      "High",
+      "Medium",
+      "Low"
+    ],
     "low_confidence_rule": "Low 不进入核心技术判断",
-    "thesis_types": ["Frontier Thesis", "Convergence Thesis"],
+    "thesis_types": [
+      "Frontier Thesis",
+      "Convergence Thesis"
+    ],
     "task_def_ref": "line 61-62"
   },
   "value_ranking": {
@@ -437,11 +1071,24 @@
   },
   "expert_watch": {
     "experts": [
-      "Andrej Karpathy", "Dario Amodei", "Sam Altman", "Demis Hassabis",
-      "Yann LeCun", "Ilya Sutskever", "Geoffrey Hinton", "Jensen Huang",
-      "Satya Nadella", "Mustafa Suleyman", "Jeff Dean", "Noam Brown",
-      "Aidan Gomez", "Thomas Wolf", "Yoshua Bengio", "Fei-Fei Li",
-      "Lilian Weng", "Liang Wenfeng"
+      "Andrej Karpathy",
+      "Dario Amodei",
+      "Sam Altman",
+      "Demis Hassabis",
+      "Yann LeCun",
+      "Ilya Sutskever",
+      "Geoffrey Hinton",
+      "Jensen Huang",
+      "Satya Nadella",
+      "Mustafa Suleyman",
+      "Jeff Dean",
+      "Noam Brown",
+      "Aidan Gomez",
+      "Thomas Wolf",
+      "Yoshua Bengio",
+      "Fei-Fei Li",
+      "Lilian Weng",
+      "Liang Wenfeng"
     ],
     "categories": {
       "L1": "New Statement — TARGET_WINDOW 内首次公开表达的新观点",
@@ -451,21 +1098,152 @@
     "task_def_ref": "line 64-65"
   },
   "tier1_entities": [
-    "OpenAI", "Anthropic", "Google / DeepMind", "xAI", "Meta",
-    "Microsoft", "NVIDIA", "DeepSeek", "Qwen / Alibaba",
-    "ByteDance / Seed / Doubao", "Moonshot / Kimi", "Tencent / Hunyuan",
-    "Baidu", "Zhipu", "MiniMax", "World Labs", "Runway", "Pika",
-    "Luma", "Black Forest Labs", "Stability AI"
+    "OpenAI",
+    "Anthropic",
+    "Google / DeepMind",
+    "xAI",
+    "Meta",
+    "Microsoft",
+    "NVIDIA",
+    "DeepSeek",
+    "Qwen / Alibaba",
+    "ByteDance / Seed / Doubao",
+    "Moonshot / Kimi",
+    "Tencent / Hunyuan",
+    "Baidu",
+    "Zhipu",
+    "MiniMax",
+    "World Labs",
+    "Runway",
+    "Pika",
+    "Luma",
+    "Black Forest Labs",
+    "Stability AI"
   ],
   "thesis_lifecycle": {
-    "states": ["proposed", "active", "dormant", "retired"],
-    "transitions": {
-      "proposed->active": "再次在后续 run 中出现且证据增强",
-      "active->dormant": "连续 N run 未出现新证据（N 默认 14）",
-      "dormant->active": "重新出现新证据",
-      "dormant->retired": "被 counter-evidence 否证或被新 thesis 合并",
-      "any->merged": "与另一 thesis 合并"
+    "schema_version": 2,
+    "states": [
+      "proposed",
+      "active",
+      "contested",
+      "dormant",
+      "retired",
+      "merged"
+    ],
+    "derived": "状态不存储，由 thesis_registry.py 按 links / runs / decisions 在读取时推导（references/registry-v2-design.md §7）",
+    "precedence": [
+      "merged：存在以它为 source 的 merge 决策",
+      "retired：存在 retire/supersede 决策；或 proposed 超过 proposed_ttl_runs 个 run 无第二条证据；或距最近支持证据 ≥ dormant_after_runs + retire_after_dormant_runs 个 run",
+      "contested：contested_window_days 内有 A/A+ 反证",
+      "dormant：距最近支持证据 ≥ dormant_after_runs 个 run",
+      "active：至少 1 条 A/A+ 支持证据，或至少 2 条不同事件的支持证据",
+      "proposed：其余"
+    ],
+    "dormant_after_runs": 14,
+    "retire_after_dormant_runs": 30,
+    "proposed_ttl_runs": 10,
+    "contested_window_days": 60
+  },
+  "confidence_model": {
+    "description": "置信度 = 各维度得分之和，由支持/反证 links 派生（references/registry-v2-design.md §6）。只计 supports / refines 为支持证据。",
+    "strength": {
+      "A+": 3,
+      "A": 2,
+      "B": 1,
+      "C": 0
     },
-    "note": "lifecycle 由 thesis_registry.py 维护，不由 ontology 直接约束"
+    "entities_bonus": [
+      [
+        2,
+        1
+      ],
+      [
+        3,
+        2
+      ]
+    ],
+    "forms_bonus": [
+      [
+        2,
+        1
+      ]
+    ],
+    "weeks_bonus": [
+      [
+        2,
+        1
+      ],
+      [
+        4,
+        2
+      ]
+    ],
+    "adoption_form": "deployment",
+    "adoption_bonus": 1,
+    "counter_window_days": 60,
+    "counter_penalty": {
+      "A+": 2,
+      "A": 2,
+      "B": 1,
+      "C": 1
+    },
+    "stale_days": 30,
+    "stale_penalty": 1,
+    "levels": [
+      [
+        "High",
+        6
+      ],
+      [
+        "Medium",
+        3
+      ],
+      [
+        "Low",
+        -999
+      ]
+    ],
+    "core_judgment_excludes": [
+      "Low"
+    ]
+  },
+  "thesis_rules": {
+    "id_format": "TH-%04d",
+    "max_scope_leaves": 3,
+    "candidate_min_score": 3,
+    "candidate_limit": 8,
+    "recall_weights": {
+      "same_leaf": 4,
+      "same_level2": 2,
+      "related_domain": 1,
+      "change_type_each": 1,
+      "change_type_max": 2,
+      "same_entity": 1
+    },
+    "recall_states": [
+      "proposed",
+      "active",
+      "contested",
+      "dormant"
+    ],
+    "core_judgment_states": [
+      "active",
+      "contested"
+    ],
+    "granularity": [
+      "命题是方向性、可证伪的判断，不是事件标题",
+      "范围 1–3 个叶子；超过 3 个是第 1 章跨栏目主线",
+      "预期寿命以周到月计",
+      "必须写出 consequence（'因此 C 成为新约束' 中的 C）"
+    ]
+  },
+  "evidence_forms": {
+    "paper": "论文 / 技术报告",
+    "product": "产品发布 / 产品形态变化",
+    "api": "API / 平台契约 / 生命周期变化",
+    "code": "开源仓库 / release / commit",
+    "benchmark": "评测集 / 榜单 / 评测方法",
+    "deployment": "企业部署 / 生产落地 / 采用数据",
+    "expert": "专家公开表态"
   }
 }

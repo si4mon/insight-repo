@@ -16,8 +16,9 @@ from pathlib import Path
 
 from taxonomy import TAXONOMY
 from verify_gates import (Check, check_event_annotations, check_event_paths,
-                          check_markdown, check_publish_precision,
-                          check_taxonomy_definition, check_unclassified)
+                          check_markdown, check_md_theses, check_publish_precision,
+                          check_registry, check_taxonomy_definition, check_traceability,
+                          check_unclassified)
 
 
 def _card(ev: str, extra: str = "", decl: str = "", rating: str = "B") -> str:
@@ -382,6 +383,151 @@ class MdTaxonomyGateTest(unittest.TestCase):
         c = self._run(md, **{"EV-01": {"primary_path": "C1.1"},
                              "EV-02": {"primary_path": "C1.2"}})
         self.assertEqual(_status(c, "主卡落在 primary_path 对应的栏目"), "FAIL")
+
+
+class RegistryGateTest(unittest.TestCase):
+    """registry 层门禁：召回由工具生成、本轮已入库、第 7 章引用与派生值一致。"""
+
+    RUN = "2026-10-30"
+
+    def setUp(self):
+        self._tmp = tempfile.TemporaryDirectory()
+        self.tmp = Path(self._tmp.name)
+        self.addCleanup(self._tmp.cleanup)
+        self.state = self.tmp / "state"
+        self.evdir = self.tmp / f"events_run_{self.RUN}"
+        self.evdir.mkdir()
+
+    def _write(self, eid, **kw):
+        from events import normalize_event
+        ev = {"event_title": f"事件 {eid}", "source": f"https://ex.com/{eid}", "entity": "OpenAI",
+              "first_publish_shanghai": "2026-10-30T10:00:00+08:00", "rating": "A+",
+              "primary_path": "B1.1", "change_types": ["CT-01"], "evidence_form": "product",
+              "claims": [{"claim": "c", "disposition": f"absorbed:{eid}"}], **kw}
+        ev, errs = normalize_event(ev, eid)
+        assert not errs, errs
+        (self.evdir / f"{eid}.json").write_text(json.dumps(ev, ensure_ascii=False), encoding="utf-8")
+        return ev
+
+    def _ingest(self):
+        from thesis_registry import Registry, load_events_dir
+        reg = Registry(self.state)
+        for f in sorted(self.evdir.glob("EV-*.json")):
+            ev = json.loads(f.read_text(encoding="utf-8"))
+            ev["thesis_candidates"] = reg.candidates(ev, self.RUN)
+            f.write_text(json.dumps(ev, ensure_ascii=False), encoding="utf-8")
+        with Registry(self.state) as reg:
+            reg.ingest_run(self.RUN, load_events_dir(self.evdir))
+
+    def _new(self, conf_entity=""):
+        return {"action": "new", "relation": "supports", "rationale": "r",
+                "new_thesis": {"name": "n", "statement": "s", "object": "o", "consequence": "c",
+                               "scope_leaves": ["B1.1"], "change_types": ["CT-01"]}}
+
+    def _registry(self):
+        c = Check()
+        check_registry(c, self.evdir, self.state, self.RUN)
+        return c
+
+    def test_ingested_run_passes(self):
+        self._write("EV-01", thesis_decision=self._new())
+        self._ingest()
+        c = self._registry()
+        self.assertEqual(c.failed, [], c.results)
+
+    def test_missing_run_fails(self):
+        self._write("EV-01", thesis_decision=self._new())
+        self._ingest()
+        c = Check()
+        check_registry(c, self.evdir, self.state, "2026-10-31")
+        self.assertEqual(_status(c, "本轮 2026-10-31 已入库"), "FAIL")
+
+    def test_event_added_after_ingest_fails(self):
+        self._write("EV-01", thesis_decision=self._new())
+        self._ingest()
+        self._write("EV-02", rating="B")
+        self.assertEqual(_status(self._registry(), "入库事件与 events 目录一致"), "FAIL")
+
+    def test_hand_written_candidates_fail(self):
+        self._write("EV-01", thesis_decision=self._new())
+        self._ingest()
+        f = self.evdir / "EV-01.json"
+        ev = json.loads(f.read_text(encoding="utf-8"))
+        ev["thesis_candidates"] = [{"id": "TH-0099"}]
+        f.write_text(json.dumps(ev, ensure_ascii=False), encoding="utf-8")
+        self.assertEqual(_status(self._registry(), "A/A+ 候选由 registry candidates 生成"), "FAIL")
+
+    def test_decision_changed_after_ingest_fails(self):
+        self._write("EV-01", rating="B", thesis_decision={"action": "none"})
+        self._ingest()
+        f = self.evdir / "EV-01.json"
+        ev = json.loads(f.read_text(encoding="utf-8"))
+        ev["thesis_decision"] = self._new()
+        f.write_text(json.dumps(ev, ensure_ascii=False), encoding="utf-8")
+        self.assertEqual(_status(self._registry(), "裁决已写入 registry"), "FAIL")
+
+    def test_unnormalized_event_fails_trace(self):
+        (self.evdir / "EV-09.json").write_text(json.dumps({"rating": "B"}), encoding="utf-8")
+        c = Check()
+        check_traceability(c, self.evdir)
+        self.assertEqual(_status(c, "事件已规范化（有 event_key）"), "FAIL")
+
+    # ---- 第 7 章 ----
+    def _md_with_ch7(self, line):
+        chapters = "".join(f"## 第{i}章\n\n正文。\n\n" for i in range(1, 7))
+        p = self.tmp / f"r-{self.RUN}.md"
+        p.write_text(f"---\ntitle: t\n---\n\n{chapters}## 本轮技术判断\n\n{line}\n\n## 信息源\n\n", encoding="utf-8")
+        return p
+
+    def _ch7(self, line):
+        c = Check()
+        check_md_theses(c, self._md_with_ch7(line), self.state, self.RUN)
+        return c
+
+    def test_ch7_matching_confidence_passes(self):
+        self._write("EV-01", thesis_decision=self._new())          # 单条 A+ → Medium
+        self._ingest()
+        c = self._ch7("- TH-0001 判断转向专用模型（Frontier，置信度 Medium）")
+        self.assertEqual(c.failed, [], c.results)
+
+    def test_ch7_wrong_confidence_fails(self):
+        self._write("EV-01", thesis_decision=self._new())
+        self._ingest()
+        self.assertEqual(_status(self._ch7("- TH-0001（置信度 High）"), "第 7 章置信度与 registry 一致"), "FAIL")
+
+    def test_ch7_low_thesis_fails(self):
+        self._write("EV-01", rating="A", thesis_decision=self._new())   # 单条 A → Low
+        self._ingest()
+        c = self._ch7("- TH-0001（置信度 Low）")
+        self.assertEqual(_status(c, "第 7 章只引用 active/contested 且非 Low 的命题"), "FAIL")
+
+    def test_ch7_contested_needs_counter_evidence(self):
+        from events import normalize_event
+        from thesis_registry import Registry
+        self._write("EV-01", thesis_decision=self._new())
+        self._ingest()
+        run2 = "2026-10-31"
+        con, _ = normalize_event({
+            "event_title": "反证", "source": "https://ex.com/counter", "entity": "Google",
+            "first_publish_shanghai": "2026-10-31T10:00:00+08:00", "rating": "A+",
+            "primary_path": "B1.1", "change_types": ["CT-01"], "evidence_form": "paper",
+            "thesis_decision": {"action": "attach", "thesis_id": "TH-0001",
+                                "relation": "contradicts", "rationale": "r"}}, "EV-01")
+        with Registry(self.state) as reg:
+            reg.ingest_run(run2, [con])
+        md = self._md_with_ch7("- TH-0001（置信度 Low）")
+        c = Check()
+        check_md_theses(c, md, self.state, run2)
+        self.assertEqual(_status(c, "contested 命题写出了反证"), "FAIL")
+        md = self._md_with_ch7("- TH-0001（置信度 Low，Google 论文给出反证）")
+        c = Check()
+        check_md_theses(c, md, self.state, run2)
+        self.assertEqual(_status(c, "contested 命题写出了反证"), "PASS")
+
+    def test_ch7_unknown_thesis_fails(self):
+        self._write("EV-01", thesis_decision=self._new())
+        self._ingest()
+        self.assertEqual(_status(self._ch7("- TH-0042（Medium）"), "第 7 章引用的命题存在"), "FAIL")
 
 
 class TaxonomyCoverageTest(unittest.TestCase):

@@ -12,7 +12,8 @@ Gate 校验器：把"必须满足的条件"变成机器可判的 pass/fail。
   - 采集层：覆盖 gate（每个必须实体×面是否读到内容）、补检任务是否清空
   - 文档层：Markdown 源的结构、时间窗口一致性、8.2 事件时刻落在窗口内；
             渲染出的 HTML 只做轻量存在性断言
-  - 追溯层：thesis convergence 是否被记录、丢弃日志是否完整
+  - 追溯层：事件已规范化、A/A+ 有 claims
+  - registry 层：召回由工具生成、本轮已入库、第 7 章引用与 registry 派生值一致
 
 用法：
   python verify_gates.py --report raw_2026-10-23/collect_report.json
@@ -22,6 +23,7 @@ Gate 校验器：把"必须满足的条件"变成机器可判的 pass/fail。
 """
 import argparse
 import json
+import os
 import re
 import sys
 from datetime import datetime, timedelta, timezone
@@ -942,47 +944,109 @@ def _tokens(s: str) -> set[str]:
 
 # ---------- 追溯层 ----------
 def check_traceability(c: Check, events_dir: Path | None):
-    """检查 P2/P3 的留痕：convergence 查询是否执行、丢弃日志是否完整。"""
-    if not events_dir or not events_dir.exists():
-        c.warn("trace", "未提供 events 目录", "跳过 convergence / 丢弃日志检查")
+    """P2 留痕：事件已经过 events.py normalize（有 event_key），A/A+ 有 claim inventory。"""
+    events = _load_events(events_dir)
+    if not events:
+        c.warn("trace", "未提供 events 目录", "跳过事件留痕检查")
+        return
+    no_key = [e for e, ev in events.items() if not ev.get("event_key")]
+    c.add("trace", "事件已规范化（有 event_key）", not no_key,
+          "缺: " + ", ".join(no_key[:6]) + "（先跑 events.py normalize）" if no_key else "")
+    no_claims = [e for e, ev in events.items()
+                 if ev.get("rating") in ("A", "A+") and not ev.get("claims")]
+    c.add("trace", "A/A+ 事件有 claim inventory", not no_claims,
+          "缺失: " + ", ".join(no_claims[:6]))
+
+
+def _open_registry(state_dir: Path | None):
+    from thesis_registry import Registry, RegistryError
+    path = (state_dir or Path("state")) / "thesis_registry.json"
+    if not path.exists():
+        return None, f"{path} 不存在"
+    try:
+        return Registry(path.parent), ""
+    except RegistryError as e:
+        return None, str(e)
+
+
+def check_registry(c: Check, events_dir: Path | None, state_dir: Path | None, run_date: str):
+    """P3/P4 留痕：召回由工具生成、A/A+ 有裁决、本轮已整批入库且与事件目录一致。"""
+    events = _load_events(events_dir)
+    if not events:
+        return
+    reg, err = _open_registry(state_dir)
+    c.add("registry", "registry 可读", reg is not None, err)
+    if reg is None:
+        return
+    run = next((r for r in reg.runs if r["run_date"] == run_date), None)
+    c.add("registry", f"本轮 {run_date} 已入库", run is not None,
+          "先跑 thesis_registry.py ingest" if run is None else "")
+    if run is None:
         return
 
-    files = sorted(events_dir.glob("*.json"))
-    c.add("trace", "存在 event 文件", bool(files), f"{len(files)} files")
-    if not files:
-        return
+    keys = {ev.get("event_key") for ev in events.values() if ev.get("event_key")}
+    extra, missing = sorted(set(run["event_keys"]) - keys), sorted(keys - set(run["event_keys"]))
+    c.add("registry", "入库事件与 events 目录一致", not extra and not missing,
+          (f"目录里没有: {extra[:3]} " if extra else "") + (f"未入库: {missing[:3]}" if missing else ""))
 
-    # 覆盖率检查必须建立在"8.2 声明了什么"之上，而不是"目录里有什么文件"。
-    # 旧实现只遍历已存在的 EV 文件，于是缺 11 个事件文件的 run 也能全绿。
-    missing_conv = []
-    missing_discard = []
-    for f in files:
-        try:
-            ev = json.loads(f.read_text(encoding="utf-8"))
-        except Exception:
-            c.add("trace", f"{f.name} 可解析", False, "JSON 解析失败")
+    drift, undecided, unlinked = [], [], []
+    linked = {l["event_key"] for l in reg.data["links"]}
+    for eid, ev in sorted(events.items()):
+        strong = ev.get("rating") in ("A", "A+")
+        if strong:
+            got = ev.get("thesis_candidates")
+            want = [x["id"] for x in reg.candidates(ev, run_date)]
+            if got is None or [x.get("id") for x in got] != want:
+                drift.append(f"{eid}: 写的是 {[x.get('id') for x in got or []]}，应为 {want}")
+            if (ev.get("thesis_decision") or {}).get("action") not in ("attach", "new"):
+                undecided.append(eid)
+        action = (ev.get("thesis_decision") or {}).get("action")
+        if action in ("attach", "new") and ev.get("event_key") not in linked:
+            unlinked.append(eid)
+    c.add("registry", "A/A+ 候选由 registry candidates 生成", not drift, "; ".join(drift[:3]))
+    c.add("registry", "A/A+ 事件有 attach/new 裁决", not undecided, ", ".join(undecided[:6]))
+    c.add("registry", "裁决已写入 registry", not unlinked,
+          ", ".join(unlinked[:6]) + "（改过裁决后需重跑 ingest）" if unlinked else "")
+
+
+_TH_RE = re.compile(r"TH-\d{4}")
+
+
+def check_md_theses(c: Check, md_path: Path | None, state_dir: Path | None, run_date: str):
+    """第 7 章只能引用核心状态（active / contested）且置信度不为 Low 的命题，
+    置信度文字与 registry 派生值一致，contested 必须写出反证。"""
+    if not md_path or not md_path.exists():
+        return
+    text = md_path.read_text(encoding="utf-8", errors="ignore")
+    h2 = [(t, off) for lv, t, off in _md_sections(text) if lv == 2]
+    if len(h2) < 7:
+        return                 # 八章缺失由 check_markdown 报
+    ch7 = _md_section_body(text, h2[6][1])
+    cited = [(m.group(0), line) for line in ch7.splitlines() for m in _TH_RE.finditer(line)]
+    if not cited:
+        c.warn("registry", "第 7 章未引用 TH 编号", "本轮无核心技术判断时可忽略")
+        return
+    reg, err = _open_registry(state_dir)
+    if reg is None:
+        c.add("registry", "第 7 章引用可核对", False, err)
+        return
+    unknown, not_core, wrong_conf, no_counter = [], [], [], []
+    for tid, line in cited:
+        if tid not in reg.data["theses"]:
+            unknown.append(tid)
             continue
-
-        # A/A+ 事件必须记录 convergence 查询结果
-        if ev.get("rating") in ("A", "A+"):
-            hits = ev.get("convergence_hits")
-            if hits is None:
-                missing_conv.append(f.name)
-            elif hits == [] and ev.get("convergence_checked") is not True:
-                missing_conv.append(f.name)
-
-        # 每个 A/A+ 事件必须有 claim inventory（逐条论点处置）
-        if ev.get("rating") in ("A", "A+"):
-            claims = ev.get("claims")
-            if not claims:
-                missing_discard.append(f.name)
-
-    c.add("trace", "A/A+ 事件已执行 convergence 查询并留痕",
-          not missing_conv,
-          "未留痕: " + ", ".join(missing_conv[:6]))
-    c.add("trace", "A/A+ 事件有 claim inventory",
-          not missing_discard,
-          "缺失: " + ", ".join(missing_discard[:6]))
+        v = reg.view(tid, run_date)
+        if v["state"] not in ("active", "contested") or v["confidence"] == "Low":
+            not_core.append(f"{tid}（{v['state']} / {v['confidence']}）")
+        if v["confidence"] not in line:
+            wrong_conf.append(f"{tid} 应写 {v['confidence']}")
+        if v["state"] == "contested" and "反证" not in line:
+            no_counter.append(tid)
+    c.add("registry", "第 7 章引用的命题存在", not unknown, ", ".join(unknown[:6]))
+    c.add("registry", "第 7 章只引用 active/contested 且非 Low 的命题", not not_core,
+          "; ".join(not_core[:4]))
+    c.add("registry", "第 7 章置信度与 registry 一致", not wrong_conf, "; ".join(wrong_conf[:4]))
+    c.add("registry", "contested 命题写出了反证", not no_counter, ", ".join(no_counter[:6]))
 
 
 def main():
@@ -992,6 +1056,7 @@ def main():
     ap.add_argument("--events", default="", help="events_run_<date>/ 目录")
     ap.add_argument("--gap-tasks", default="", help="gap_tasks.json")
     ap.add_argument("--raw-dir", default="", help="raw_<date>/ 目录（自动推导其它参数）")
+    ap.add_argument("--state", default="", help="registry 状态目录（默认 $TECH_BRIEFING_STATE 或 ./state）")
     ap.add_argument("--json-out", default="", help="结果写成 JSON")
     args = ap.parse_args()
 
@@ -999,6 +1064,9 @@ def main():
     md_path = Path(args.md) if args.md else None
     events_dir = Path(args.events) if args.events else None
     gap_path = Path(args.gap_tasks) if args.gap_tasks else None
+    state_dir = Path(args.state or os.environ.get("TECH_BRIEFING_STATE") or "state")
+    run_date = events_dir.name[len("events_run_"):] if events_dir and \
+        events_dir.name.startswith("events_run_") else ""
 
     if args.raw_dir:
         rd = Path(args.raw_dir)
@@ -1014,6 +1082,7 @@ def main():
 
     if report_path and report_path.exists():
         report = json.loads(report_path.read_text(encoding="utf-8"))
+        run_date = (report.get("target_window", {}).get("start") or "")[:10] or run_date
         check_source_coverage_definition(c, report)
         check_collection(c, report, gap_path)
         pool_path = (Path(report_path).parent / "candidate_pool.json"
@@ -1034,6 +1103,11 @@ def main():
         c.add("collection", "采集报告存在", False, str(report_path))
 
     check_traceability(c, events_dir)
+    if run_date:
+        check_registry(c, events_dir, state_dir, run_date)
+        check_md_theses(c, md_path, state_dir, run_date)
+    elif events_dir:
+        c.add("registry", "能确定本轮 run_date", False, "用 --report 或 events_run_<date>/ 目录名")
 
     c.print()
 
