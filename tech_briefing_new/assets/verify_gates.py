@@ -257,6 +257,19 @@ def check_source_coverage_definition(c: Check, report: dict | None = None):
     c.add("coverage", "无静默实体×面（有源或已登记不可达）", not silent,
           f"{len(silent)} 个未登记: " + ", ".join(silent[:8]))
 
+    # 不可达登记必须写补偿方式，并且未过复探期限（过期即强制重新探测该面）
+    run_day = ((report or {}).get("target_window", {}).get("start") or "")[:10]
+    no_comp, expired = [], []
+    for u in src_reg.UNCOVERABLE:
+        key = f"{u['entity']}/{u['surface']}"
+        if not (u.get("compensate") and u.get("search_terms") and u.get("recheck_by")):
+            no_comp.append(key)
+        elif run_day and u["recheck_by"] < run_day:
+            expired.append(f"{key}（{u['recheck_by']}）")
+    c.add("coverage", "不可达登记写明了补偿方式与复探期限", not no_comp, ", ".join(no_comp[:6]))
+    c.add("coverage", "不可达登记未过复探期限", not expired,
+          "需重新探测并更新 sources.py: " + ", ".join(expired[:6]))
+
     if report is not None:
         # 报告里的实体是否覆盖了 tier1：不要求源成功，但要求"被尝试过"。
         # 已登记 UNCOVERABLE 且确实没有任何源的实体豁免——它们会在 8.1 里
@@ -488,28 +501,41 @@ def _md_card_event(title: str, body: str) -> str:
     return mm.group(1) if mm else ""
 
 
-def _md_is_aa_card(body: str) -> bool:
-    """判定一张卡是否承担四节深拆义务。规则与旧 HTML eyebrow 豁免一致：
-    Top N / Active Event / Convergence / 非 Frontier 都豁免。
+_RATINGS = ("A+", "A", "B", "C")
 
-    MD 卡片把评级标记写在正文第一行（如 **A+ · Frontier · EV-02**），
-    需先去掉 markdown 强调标记再判首词，否则 **A 会被当成首词。
+
+def _md_card_marker(body: str) -> str:
+    """卡片标记区：body 前 200 字符里含 EV 编号的 **...** 段（去掉强调符号）。"""
+    for seg in re.findall(r'\*\*([^*]+)\*\*', body[:200]):
+        if EV_ID_RE.search(seg):
+            return seg.strip()
+    return ""
+
+
+def _marker_rating(marker: str) -> str:
+    first = re.split(r'[\s·|/]+', marker.strip())[0] if marker.strip() else ""
+    return first if first in _RATINGS else ""
+
+
+def _deep_dive_required(card: dict, events: dict, ws) -> bool:
+    """深拆义务以事件 JSON 为准，不看卡片自报的文字（卡片写 B 或写 Convergence 都豁免不了）。
+
+    承担义务：A / A+ 事件的主卡（分类栏目里的卡，或章 2 声明了归属的卡）。
+    豁免：聚合卡（标记里有 ≥2 个 EV）、Active Event（首发早于 WINDOW_START 的背景事件）。
+    没有事件文件时退回标记行的评级。
     """
-    head = body[:600]
-    # 去 markdown 强调标记，让 "A+" / "A" 能被首词匹配
-    flat = re.sub(r'[*_`]', '', head).strip()
-    if "Top " in flat:
+    marker = _md_card_marker(card["body"])
+    if len(set(EV_ID_RE.findall(marker))) >= 2:
         return False
-    if "Active Event" in flat:
+    ev = events.get(card["eid"])
+    if ev is None:
+        return _marker_rating(marker) in ("A", "A+")
+    if ev.get("rating") not in ("A", "A+"):
         return False
-    if "Convergence" in flat:
+    fp = _iso(ev.get("first_publish_shanghai", ""))
+    if ws is not None and fp is not None and fp < ws:
         return False
-    if "Frontier" not in flat:
-        return False
-    if not re.search(r'\bA\+?\b', flat):
-        return False
-    first = flat.split()[0].rstrip("·").strip() if flat else ""
-    return first in ("A+", "A")
+    return True
 
 
 # 卡片在标记行里声明主栏目：**A · Frontier · EV-07 · 归属 4.5**
@@ -711,30 +737,45 @@ def check_markdown(c: Check, md_path: Path, report: dict,
               ("缺截断措辞" if not has_marker else "")
               + (" 未列源: " + ", ".join(missing[:6]) if missing else ""))
 
-    # A/A+ 主卡四维深拆：四级标题是卡，五级标题是深拆节
-    aa_cards = []
-    for i, (level, title, off) in enumerate(secs):
-        if level != 4:
-            continue
-        body = _md_section_body(text, off)
-        eid = _md_card_event(title, body)
-        if not eid:
-            continue
-        if _md_is_aa_card(body):
-            aa_cards.append((title, eid, body))
-
+    # A/A+ 主卡四维深拆：义务由事件 JSON 决定；五级标题是深拆节
+    events = _load_events(events_dir)
+    ws = _iso(report.get("target_window", {}).get("start", "")) if report else None
+    lay = _md_layout(text)
+    main_cards = [cd for cards in lay["columns"].values() for cd in cards] + \
+                 [cd for cd in lay["focus"] if cd["decl"]]
+    duty = [cd for cd in main_cards if _deep_dive_required(cd, events, ws)]
     missing_sec = []
-    for title, eid, body in aa_cards:
-        # 五级标题里找四节
-        h5s = [t for (lv, t, _) in _md_sections(body) if lv == 5]
-        h5_text = " ".join(h5s)
+    for cd in duty:
+        h5_text = " ".join(t for (lv, t, _) in _md_sections(cd["body"]) if lv == 5)
         for req in _REQUIRED_DEEP_SECTIONS:
             if req not in h5_text:
-                missing_sec.append(f"{eid} {title[:24]}: 缺「{req}」")
+                missing_sec.append(f"{cd['eid']}: 缺「{req}」")
     c.add("md", "A/A+ 主卡含四维深拆（挑战/机制/效果/对比）",
           not missing_sec,
-          "; ".join(missing_sec[:4]) if missing_sec
-          else f"{len(aa_cards)} 张 A/A+ 主卡")
+          "; ".join(missing_sec[:4]) if missing_sec else f"{len(duty)} 张 A/A+ 主卡")
+
+    # 卡片标记里的评级必须等于事件 JSON：否则写个 B 就能躲掉深拆
+    if events:
+        wrong = []
+        for lv, title, off in _md_sections(text):
+            if lv != 4:
+                continue
+            body = _md_section_body(text, off)
+            marker = _md_card_marker(body)
+            ids = set(EV_ID_RE.findall(marker))
+            if len(ids) != 1:
+                continue
+            eid = ids.pop()
+            want = (events.get(eid) or {}).get("rating")
+            got = _marker_rating(marker)
+            if want and got != want:
+                wrong.append(f"{eid}: 卡片写 {got or '无评级'}，JSON 为 {want}")
+        c.add("md", "卡片评级与事件 JSON 一致", not wrong, "; ".join(wrong[:4]))
+
+    # 图片必须是本地文件：渲染时内嵌成 data URI，页面才自包含
+    remote = re.findall(r'!\[[^\]]*\]\((https?://[^)\s]+)', text)
+    c.add("md", "图片均为本地文件（渲染时内嵌）", not remote,
+          "远程图片: " + ", ".join(remote[:3]))
 
     _check_md_columns(c, text, events_dir)
 
@@ -848,9 +889,12 @@ def check_md_event_index(c: Check, md_path: Path, report: dict,
                 id_mismatch.append(
                     f"{eid}: MD「{row['text'][:40]}」↔ JSON「"
                     f"{(ev.get('event_title') or '')[:40]}」")
-            if ev.get("rating") and ev["rating"] not in row["text"]:
-                id_mismatch.append(
-                    f"{eid}: 评级不一致 MD 无 {ev['rating']} ↔ JSON={ev['rating']}")
+            if ev.get("rating"):
+                cells = [x.strip() for x in row["text"].strip().strip("|").split("|")]
+                tokens = {t for cell in cells for t in re.split(r'[\s·/,，]+', cell) if t}
+                if ev["rating"] not in tokens:
+                    id_mismatch.append(
+                        f"{eid}: 评级不一致 8.2 中无独立的「{ev['rating']}」 ↔ JSON={ev['rating']}")
             if fp is not None and row["dates"]:
                 md_times = {d.strftime("%Y-%m-%dT%H:%M") for d in row["dates"]}
                 if fp.strftime("%Y-%m-%dT%H:%M") not in md_times:
@@ -978,6 +1022,10 @@ def check_registry(c: Check, events_dir: Path | None, state_dir: Path | None, ru
     c.add("registry", "registry 可读", reg is not None, err)
     if reg is None:
         return
+    missing_days = reg.gaps(run_date)
+    if missing_days:
+        c.warn("registry", "存在漏跑的窗口",
+               f"{missing_days[:6]}：按完整流程补跑，ingest 用 --backfill（SKILL 步骤 1）")
     run = next((r for r in reg.runs if r["run_date"] == run_date), None)
     c.add("registry", f"本轮 {run_date} 已入库", run is not None,
           "先跑 thesis_registry.py ingest" if run is None else "")
@@ -1013,8 +1061,11 @@ _TH_RE = re.compile(r"TH-\d{4}")
 
 
 def check_md_theses(c: Check, md_path: Path | None, state_dir: Path | None, run_date: str):
-    """第 7 章只能引用核心状态（active / contested）且置信度不为 Low 的命题，
-    置信度文字与 registry 派生值一致，contested 必须写出反证。"""
+    """第 7 章与 registry 报告对齐：
+      - 每条判断（列表项）都写 TH 编号；整章没有编号时必须写明"本轮无核心技术判断"；
+      - registry 报告里 core_judgment 为真的命题全部出现（不能挑着写）；
+      - 引用的命题存在、为 active / contested 且非 Low，置信度文字与 registry 一致，
+        contested 必须写出反证。"""
     if not md_path or not md_path.exists():
         return
     text = md_path.read_text(encoding="utf-8", errors="ignore")
@@ -1022,14 +1073,31 @@ def check_md_theses(c: Check, md_path: Path | None, state_dir: Path | None, run_
     if len(h2) < 7:
         return                 # 八章缺失由 check_markdown 报
     ch7 = _md_section_body(text, h2[6][1])
-    cited = [(m.group(0), line) for line in ch7.splitlines() for m in _TH_RE.finditer(line)]
-    if not cited:
-        c.warn("registry", "第 7 章未引用 TH 编号", "本轮无核心技术判断时可忽略")
-        return
+    lines = [ln.strip() for ln in ch7.splitlines() if ln.strip()]
+    items = [ln for ln in lines if re.match(r'^([-*+]|\d+[.)、])\s+', ln)]
+    unmarked = [ln[:30] for ln in items if not _TH_RE.search(ln)]
+    c.add("registry", "第 7 章每条判断都标了 TH 编号", not unmarked,
+          "未标编号: " + " / ".join(unmarked[:3]))
+    cited = [(m.group(0), ln) for ln in lines for m in _TH_RE.finditer(ln)]
+
     reg, err = _open_registry(state_dir)
     if reg is None:
         c.add("registry", "第 7 章引用可核对", False, err)
         return
+    try:
+        core = [r["id"] for r in reg.report(run_date)["theses"] if r["core_judgment"]]
+    except Exception as e:           # 本轮未入库已由 check_registry 报
+        core = []
+        c.warn("registry", "无法生成本轮 registry 报告", str(e))
+    if not cited:
+        c.add("registry", "第 7 章为空时写明本轮无核心判断",
+              "本轮无核心技术判断" in ch7 and not core,
+              f"registry 有核心判断 {core[:4]} 未写" if core else "需写明「本轮无核心技术判断」")
+        return
+    cited_ids = {t for t, _ in cited}
+    missing = [t for t in core if t not in cited_ids]
+    c.add("registry", "第 7 章覆盖全部核心判断", not missing, "未写: " + ", ".join(missing[:6]))
+
     unknown, not_core, wrong_conf, no_counter = [], [], [], []
     for tid, line in cited:
         if tid not in reg.data["theses"]:

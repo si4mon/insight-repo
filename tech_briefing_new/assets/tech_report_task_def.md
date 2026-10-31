@@ -84,7 +84,7 @@ P3：issue / discussion / bug 默认仅作为旁证。
 至少写清：核心变化；机制 / 架构；为什么重要；Technical Value；Evidence Confidence；Trend Maturity / Frontier Signal；与近 3 日 / 历史路线关系；原始 / 补充来源；日期语义；Asia/Shanghai 首发时间；召回通道。必须额外写出变化类型与技术命题。若原文是产品语言，必须提供“产品表述 → 技术命题”对应。若属于 Model–Harness Boundary，必须明确哪些能力正在从 Harness → Model 内化；哪些 state / policy / authority 继续外置；是否改变 client ↔ server / model ↔ runtime 的职责边界。若属于 Realtime / Audio，必须明确 speech / reasoning / tool 的并行关系；blocking vs async；client/runtime state；turn completion 与 task completion；前台语音和后台任务是否解耦。这些要求在主卡中的落位：评级、信号、Technical Value / Evidence Confidence / Trend Maturity、首发时间、日期语义、召回通道、变化类型、技术命题（TH 编号）写在卡片元信息里；核心变化与为什么重要写进「挑战与问题」；机制 / 架构以及 Model–Harness、Realtime 的必答项写进「机制与架构」；定量写进「效果与定量」；与近 3 日 / 历史路线的关系写进「对比其他方案的价值」（Markdown 结构见 SKILL.md 步骤 4、5）。
 
 【16｜固定八章】
-1 本轮结论与技术趋势：≤3 条跨栏目主线，描述本轮结构性变化的交汇，不重复栏目内的事件论证；分事实层与推理层书写（写法见 SKILL.md 步骤 5），并给出 Dashboard（见【17】）。
+1 本轮结论与技术趋势：≤3 条跨栏目主线，描述本轮结构性变化的交汇，不重复栏目内的事件论证；分事实层与推理层书写（写法见 references/event-writing.md），并给出 Dashboard（见【17】）。
 2 今日必看：“今日必看”指本 TARGET_WINDOW 最值得看的事件，不再局限于单一自然日。按技术价值输出 Top N，不设固定数量、不按栏目配额；达标几条列几条，不为凑数降低门槛，也不为凑数把 B 级抬进焦点层。评级相同时，优先改变技术判断的事件，而非只刷新数字的事件。Top 1 深拆（架构/流程可视化 + 落地场景 + 与历史路线关系），可在此承载该事件的唯一主卡；全卡超过 5 条时，Top 1 保留深拆，其余压缩为摘要卡（标题 + 评级 + 一句话命题 + 指向分类章主卡的链接），不重复正文。
 3 模型技术热点：3.1 模型架构、训练与适应；3.2 推理、决策与效率；3.3 多模态、语音与实时模型；3.4 世界、空间与动作模型。只展开当天有入选事件的栏目（0 条不出现，1 条折叠进相邻栏目）；每个事件只在唯一主栏目写全卡。
 4 Agent 系统技术热点：4.1 任务控制、运行与基础设施；4.2 记忆、知识与上下文；4.3 外部环境中的行动与工具使用；4.4 多 Agent 协同与互操作；4.5 学习与系统自进化；4.6 评测、验证与可信治理；4.7 交互、主动服务与持续委托。
@@ -101,7 +101,7 @@ P3：issue / discussion / bug 默认仅作为旁证。
 漏检回溯 P6：每次运行对照前一次扫描窗口的注意力聚合源头条、专家讨论、当前网络热点、上一份简报，识别可能漏检项。漏检根因为封闭集合，只能取：源面未覆盖、召回通道未命中、代理拦截、解析失败、窗口覆盖不完整、抽象提升失败、价值误判、日期边界、时区换算错误、官方原文未回溯、搜索结果年份污染、动态页面未读取。并据此更新 assets/sources.py、known_vocabulary、thesis registry（retire / merge / revise 决策）；变化类型体系属于 thesis_ontology.json，由人工维护。8.3 必须使用表格呈现。
 
 【17｜HTML】
-默认交付响应式、高信息密度、专业克制的完整 HTML。**只写 Markdown 工作源**，由内置渲染引擎生成自包含页面（命令、路径与 Markdown 结构契约见 SKILL.md 步骤 5）；排版与主题由引擎模板承担，设计约束见 references/design-constraints.md。禁止手改渲染后的 .html，修改一律回到 .md 重新渲染。Dashboard（第 1 章事实层中的统计表）必须同时显示 TARGET_WINDOW、事件总数、A / A+ 数、Frontier Signal 数、Convergence Signal 数、Active Event 数，并按 `change_object` 给出分布（Model / Harness / 运行平台 / 交互·应用 / 尚未披露）—— 不再使用旧的 Model Track / Harness Track 双轨计数。Top N 使用独立重点卡（数量按技术价值，不设固定值）。Top 1 必须给架构或流程可视化（`![结论](图源)` 图片或表格，画机制不画名字；箭头带动词，跨度带尺寸线）。每张主卡必须包含：可点击原始源、Asia/Shanghai 首发时刻、日期语义、Technical Value、Evidence Confidence、Trend Maturity、变化类型、技术命题（TH 编号）；摘要卡与第 5 章持续信号卡只需评级、一句话命题与指向主卡的链接。8.1 / 8.2 / 8.3 使用表格。
+默认交付响应式、高信息密度、专业克制的完整 HTML。**只写 Markdown 工作源**，由内置渲染引擎生成自包含页面（命令、路径与 Markdown 结构契约见 SKILL.md 步骤 5）；排版与主题由引擎模板承担，设计约束见 references/design-constraints.md。禁止手改渲染后的 .html，修改一律回到 .md 重新渲染。Dashboard（第 1 章事实层中的统计表）必须同时显示 TARGET_WINDOW、事件总数、A / A+ 数、Frontier Signal 数、Convergence Signal 数、Active Event 数，并按 `change_object` 给出分布（Model / Harness / 运行平台 / 交互·应用 / 尚未披露）—— 不再使用旧的 Model Track / Harness Track 双轨计数。Top N 使用独立重点卡（数量按技术价值，不设固定值）。Top 1 必须给架构或流程可视化（本地 SVG/PNG 图片或表格，画机制不画名字；箭头带动词，跨度带尺寸线；图片要求见 SKILL.md 步骤 5）。每张主卡必须包含：可点击原始源、Asia/Shanghai 首发时刻、日期语义、Technical Value、Evidence Confidence、Trend Maturity、变化类型、技术命题（TH 编号）；摘要卡与第 5 章持续信号卡只需评级、一句话命题与指向主卡的链接。8.1 / 8.2 / 8.3 使用表格。
 
 【18｜附件交付 Gate】
 验收以脚本退出码为准，不由 LLM 读一遍 HTML 自证通过：结构、时间窗口、8.2 首发时刻归窗、Active / Historical 标注、来源链接、追溯与 registry 由 verify_gates.py 校验，渲染由 render_report.py 校验（检查项见 SKILL.md 步骤 6）。脚本覆盖不到的两项列入人工复核：title / H1 / Dashboard / 正文窗口 / 文件名的时间范围一致；不残留旧版“TARGET_DATE = 单一天”的文字或审计逻辑。交付前确认 reports/ 下渲染出的 .html 真实存在且 size > 0；客户端支持文件附件时，附上该文件并核对文件对象（文件名、大小），只有拿到真实可见的文件对象才允许标 SUCCESS。

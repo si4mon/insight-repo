@@ -30,7 +30,9 @@
  *   - footnotes: [^1] in body, [^1]: text definitions
  *   - definition lists (term + ": " line)
  *   - horizontal rule (---)
- *   - images: ![caption](url) → framed + zoomable figure
+ *   - images: ![caption](url) → framed + zoomable figure. Local paths (relative to the .md)
+ *     are inlined as data: URIs so the page stays self-contained; a missing local image
+ *     fails the render. Remote http(s) images are left as links (the gate rejects them).
  *
  * Conventions:
  *   - The first italic-only paragraph immediately after an H2 becomes a section lede.
@@ -119,7 +121,7 @@ function inline(text) {
 
   // 3. images: ![alt](url) — handled at block level for figures, but inline images become plain <img>
   text = text.replace(/!\[([^\]]*)\]\(([^)]+)\)/g, (_, alt, src) =>
-    stash(`<img src="${escapeHtml(src)}" alt="${escapeHtml(alt)}" loading="lazy">`));
+    stash(`<img src="${escapeHtml(embedImage(src))}" alt="${escapeHtml(alt)}" loading="lazy">`));
 
   // 4. links: [text](url)
   text = text.replace(/\[([^\]]+)\]\(([^)]+)\)/g, (_, t, u) => {
@@ -249,6 +251,22 @@ function renderHeading(level, text, blockId = '') {
   if (level === 1) return { html: `<h1${attrs}>${inline(text)}</h1>`, id, level };
   if (level >= 4) return { html: `<h${level}${attrs}>${inline(text)}</h${level}>`, id, level };
   return { html: `<h${level} id="${id}"${attrs}>${inline(text)}${anchor}</h${level}>`, id, level };
+}
+
+// Local images are inlined as data: URIs so the report stays self-contained when it is
+// moved or shared; anything that cannot be read is collected and fails the render.
+let IMAGE_BASE_DIR = process.cwd();
+const IMAGE_ERRORS = [];
+const IMAGE_MIME = { '.svg': 'image/svg+xml', '.png': 'image/png', '.jpg': 'image/jpeg',
+                     '.jpeg': 'image/jpeg', '.gif': 'image/gif', '.webp': 'image/webp' };
+function embedImage(src) {
+  const s = String(src).trim();
+  if (/^(https?:|data:|#)/i.test(s)) return s;
+  const file = path.resolve(IMAGE_BASE_DIR, decodeURI(s));
+  const mime = IMAGE_MIME[path.extname(file).toLowerCase()];
+  if (!mime) { IMAGE_ERRORS.push(`unsupported image type: ${s}`); return s; }
+  if (!fs.existsSync(file)) { IMAGE_ERRORS.push(`image not found: ${s} (looked in ${file})`); return s; }
+  return `data:${mime};base64,${fs.readFileSync(file).toString('base64')}`;
 }
 
 // Drop caps only suit alphabetic scripts: skip leading markup, then require A–Z.
@@ -554,7 +572,7 @@ function render(tokens) {
       const isAnchor = t.src.startsWith('#');
       const inner = isAnchor
         ? `<div class="placeholder" data-anchor="${escapeHtml(t.src)}" style="aspect-ratio: 2/1; display: flex; align-items: center; justify-content: center; color: var(--text-faint); font-family: var(--font-ui); font-size: 0.8125rem;">${escapeHtml(t.src)}</div>`
-        : `<img src="${escapeHtml(t.src)}" alt="${escapeHtml(t.caption)}" loading="lazy">`;
+        : `<img src="${escapeHtml(embedImage(t.src))}" alt="${escapeHtml(t.caption)}" loading="lazy">`;
       html += withReportComments(`<figure class="framed"${reportBlockAttr(blockId)}>
         <div class="zoomable" tabindex="0" role="button" aria-label="Open image in viewer">${inner}</div>
         ${t.caption ? `<figcaption>${inline(t.caption)}</figcaption>` : ''}
@@ -646,6 +664,7 @@ if (!fs.existsSync(inputPath)) {
 }
 
 const raw = fs.readFileSync(inputPath, 'utf8');
+IMAGE_BASE_DIR = path.dirname(inputPath);
 const { meta, body } = parseFrontmatter(raw);
 
 if (!meta.title) {
@@ -666,6 +685,11 @@ if (meta.status === undefined || meta.status === '') {
 FN_USED.clear();
 const tokens = tokenize(body);
 const { html: articleHtml, headings } = render(tokens);
+if (IMAGE_ERRORS.length) {
+  for (const e of IMAGE_ERRORS) console.error(`error: ${e}`);
+  console.error('error: local images must exist (paths are relative to the .md); nothing was written');
+  process.exit(1);
+}
 const footnotesHtml = renderFootnotes(tokens);
 const tocHtml = renderToc(headings);
 

@@ -12,7 +12,8 @@ Thesis Registry v2 —— 技术命题的证据库。设计见 references/regist
 
 CLI（全局参数 --state DIR）：
   candidates --events-dir D [--run-date R]       为每个事件写入 thesis_candidates
-  ingest     --events-dir D --run-date R [--report collect_report.json]
+  ingest     --events-dir D --run-date R [--report collect_report.json] [--backfill]
+  gaps       --until R                           列出漏跑的窗口日期（需补跑）
   report     --run-date R [--out FILE]           第 7 章输入：本轮命题的前后对比
   show TH-0001 | search 关键词 | stats
   merge --source A --target B --reason ... | retire --id X --reason ...
@@ -504,16 +505,29 @@ class Registry:
                         warnings.append(f"{a} 与 {b}: 同实体、同叶子、首发相差 < 24h，疑似同一事件")
         return errors, warnings
 
-    def ingest_run(self, run_date: str, events: list[dict], window: list[str] | None = None) -> dict:
-        """事务入库：先校验全部，任何错误整批不写；同一 run 重跑整批替换。"""
+    def ingest_run(self, run_date: str, events: list[dict], window: list[str] | None = None,
+                   backfill: bool = False) -> dict:
+        """事务入库：先校验全部，任何错误整批不写；同一 run 重跑整批替换。
+
+        backfill=True 用于补跑漏掉的窗口：run_date 必须早于最近一次 run 且 registry 中尚无此 run。
+        补跑只能挂到当时已存在的命题；与后续 run 重叠的事件保留后续裁决，不改写历史。
+        """
         if not self._locked:
             raise RegistryError("ingest 必须持锁")
         latest = self.latest_run()
-        if latest and run_date < latest:
-            raise RegistryError(f"只能入库最新 run 或重跑最近一次 run（最近一次是 {latest}）")
+        self._rollback_notes = []
+        if backfill:
+            if not latest or run_date >= latest:
+                raise RegistryError("补跑只用于早于最近一次 run 的缺失日期；最新日期直接 ingest")
+            if run_date in self.run_dates():
+                raise RegistryError(f"{run_date} 已入库；补跑不能覆盖已有 run")
+        elif latest and run_date < latest:
+            raise RegistryError(f"只能入库最新 run 或重跑最近一次 run（最近一次是 {latest}）；"
+                                f"补跑漏掉的日期用 --backfill")
 
         snapshot = json.loads(json.dumps(self.data))
-        self._rollback_run(run_date)
+        if not backfill:
+            self._rollback_run(run_date)
         errors, warnings = self.validate_batch(run_date, events)
         if errors:
             self.data = snapshot
@@ -575,6 +589,11 @@ class Registry:
             old = links_by_key.get(k)
             if old and old["thesis_id"] == tid and old["relation"] == relation:
                 continue          # 相邻窗口重复出现、裁决相同：不产生新证据
+            if old and backfill:
+                if old["decided_in"] > run_date:
+                    warnings.append(f"{ev['event_id']}: 已在 {old['decided_in']} 裁决为 "
+                                    f"{old['thesis_id']}/{old['relation']}，补跑不改写后续裁决")
+                    continue
             if old:
                 d["links"].remove(old)
             link = {"event_key": k, "thesis_id": tid, "relation": relation,
@@ -663,6 +682,21 @@ class Registry:
                             "new": sum(r["state_before"] is None for r in rows),
                             "contested": sum(r["state"] == "contested" for r in rows)}}
 
+    def gaps(self, until: str) -> list[str]:
+        """首个 run 到 until（不含）之间没有 run 的日期。窗口固定为"昨日 00:00 → 执行时刻"，
+        漏跑一天就有一段时间不在任何窗口里，只能补跑。"""
+        dates = self.run_dates()
+        if not dates:
+            return []
+        have, out = set(dates), []
+        d = date.fromisoformat(dates[0])
+        end = date.fromisoformat(until)
+        while d < end:
+            if d.isoformat() not in have:
+                out.append(d.isoformat())
+            d += timedelta(days=1)
+        return out
+
     def stats(self) -> dict:
         by_state, by_conf = {}, {}
         for tid in self.data["theses"]:
@@ -705,6 +739,9 @@ def main() -> int:
     i.add_argument("--events-dir", required=True)
     i.add_argument("--run-date", default="")
     i.add_argument("--report", default="", help="collect_report.json，用于记录窗口")
+    i.add_argument("--backfill", action="store_true", help="补跑漏掉的较早日期")
+    g = sub.add_parser("gaps", help="列出漏跑的窗口日期")
+    g.add_argument("--until", required=True, help="本轮 WINDOW_START_DATE（不含）")
     r = sub.add_parser("report", help="第 7 章输入")
     r.add_argument("--run-date", required=True)
     r.add_argument("--out", default="")
@@ -749,7 +786,8 @@ def main() -> int:
                 tw = json.loads(Path(args.report).read_text(encoding="utf-8")).get("target_window", {})
                 window = [tw.get("start", ""), tw.get("end", "")]
             with reg:
-                res = reg.ingest_run(run_date, load_events_dir(Path(args.events_dir)), window)
+                res = reg.ingest_run(run_date, load_events_dir(Path(args.events_dir)), window,
+                                     backfill=args.backfill)
             _print(res)
         elif args.cmd == "report":
             rep = reg.report(args.run_date)
@@ -762,6 +800,12 @@ def main() -> int:
             _print(reg.view(args.id))
         elif args.cmd == "search":
             _print(reg.search(args.keyword))
+        elif args.cmd == "gaps":
+            missing = reg.gaps(args.until)
+            _print({"until": args.until, "missing": missing})
+            if missing:
+                print(f"漏跑 {len(missing)} 个窗口；每个日期 D 按完整流程补跑："
+                      f"collect_sources.py --date <D+1>，ingest --backfill --run-date D", file=sys.stderr)
         elif args.cmd == "stats":
             _print(reg.stats())
         else:

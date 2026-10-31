@@ -339,7 +339,7 @@ def build_gaps(records: list[dict], required_surfaces: dict,
             cov = surfaces.get(key)
             if cov is None:
                 if (entity, surf) in unc:
-                    continue  # 已在 UNCOVERABLE 登记
+                    continue  # 已在 UNCOVERABLE 登记；整实体失明的情况在下面单独产出任务
                 gaps.append({
                     "type": "surface_missing", "blocking": True,
                     "entity": entity, "surface": surf, "source": "",
@@ -360,6 +360,25 @@ def build_gaps(records: list[dict], required_surfaces: dict,
                 "source": ",".join(cov["sources"]),
                 "verdict": "ALL_BLIND" if blocking else "PARTIAL_BLIND",
                 "suggestion": _surface_query_hint(entity, surf),
+            })
+
+    # 2b. 整实体失明：Tier-1 实体没有任何一个面读到内容（全部登记不可达或全部失明）。
+    # 登记不可达只说明"官方面看不到"，不说明"这个实体今天没动静"——必须每天用检索补。
+    # 不阻断交付，但作为 action 任务必须关闭（给出"有 N 条 / 确认 0 条"的结论）。
+    seen_ok = {k.split("/", 1)[0] for k, v in surfaces.items() if v.get("checked", 0) > 0}
+    terms = {}
+    for u in uncoverable:
+        terms.setdefault(u["entity"], []).extend(u.get("search_terms") or [u["entity"]])
+    for entity in required_surfaces:
+        if entity == "default" or entity in seen_ok:
+            continue
+        if all((entity, s_) in unc for s_ in required_surfaces[entity]):
+            gaps.append({
+                "type": "entity_blind", "blocking": False, "action_required": True,
+                "entity": entity, "surface": "company", "source": "",
+                "verdict": "ENTITY_BLIND",
+                "search_terms": terms.get(entity, [entity]),
+                "suggestion": f'"{entity}" 官方面全部不可达，按 search_terms 检索 SCAN_WINDOW 内的发布',
             })
 
     # 3. 非关键源失明（记录但不阻断）

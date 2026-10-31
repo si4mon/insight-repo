@@ -286,6 +286,59 @@ class RecallAndDecisionTest(Base):
         self.assertTrue(any("撤销" in w for w in res["warnings"]))
 
 
+class BackfillTest(Base):
+    def test_gaps_lists_missing_days(self):
+        self.ingest(R1, [])
+        self.ingest(R3, [])
+        self.assertEqual(self.reg().gaps("2026-10-31"), [R2])
+        self.assertEqual(self.reg().gaps(R2), [])
+
+    def test_plain_ingest_of_older_run_points_to_backfill(self):
+        self.ingest(R3, [])
+        with self.assertRaises(RegistryError) as cm:
+            self.ingest(R2, [])
+        self.assertIn("--backfill", str(cm.exception))
+
+    def test_backfill_inserts_missing_run(self):
+        self.ingest(R1, [ev("EV-01", "https://a.com/1", rating="B", decision=new())])
+        self.ingest(R3, [])
+        with Registry(self.state) as reg:
+            reg.ingest_run(R2, [ev("EV-01", "https://g.com/1", rating="B", entity="Google",
+                                   fp="2026-10-29T10:00:00+08:00", decision=attach("TH-0001"))],
+                           backfill=True)
+        reg = self.reg()
+        self.assertEqual(reg.run_dates(), [R1, R2, R3])
+        self.assertEqual(reg.view("TH-0001")["state"], "active")
+        self.assertEqual(reg.gaps("2026-10-31"), [])
+
+    def test_backfill_refuses_existing_or_newest_run(self):
+        self.ingest(R1, [])
+        self.ingest(R3, [])
+        for day in (R1, R3, "2026-10-31"):
+            with Registry(self.state) as reg:
+                with self.assertRaises(RegistryError):
+                    reg.ingest_run(day, [], backfill=True)
+
+    def test_backfill_cannot_attach_to_later_thesis(self):
+        self.ingest(R1, [])
+        self.ingest(R3, [ev("EV-01", "https://a.com/1", decision=new())])
+        with Registry(self.state) as reg:
+            with self.assertRaises(ValidationError):
+                reg.ingest_run(R2, [ev("EV-01", "https://b.com/1", decision=attach("TH-0001"))],
+                               backfill=True)
+
+    def test_backfill_keeps_later_decision_on_overlap(self):
+        self.ingest(R1, [ev("EV-01", "https://a.com/0", decision=new())])
+        self.ingest(R3, [ev("EV-01", "https://a.com/1", decision=attach("TH-0001"))])
+        with Registry(self.state) as reg:
+            res = reg.ingest_run(R2, [ev("EV-01", "https://a.com/1",
+                                         decision=attach("TH-0001", relation="contradicts"))],
+                                 backfill=True)
+        self.assertTrue(any("不改写后续裁决" in w for w in res["warnings"]))
+        link = next(l for l in self.reg().data["links"] if l["decided_in"] == R3)
+        self.assertEqual(link["relation"], "supports")
+
+
 class ReportTest(Base):
     def test_in_run_convergence(self):
         self.ingest(R1, [ev("EV-01", "https://a.com/1", rating="A+", decision=new("x")),

@@ -102,7 +102,10 @@ def main() -> int:
               file=sys.stderr)
         return 2
 
-    cmd = [node, str(render_js), str(src)]
+    out = src.with_suffix(".html")
+    # 显式指定输出路径：渲染器默认按"标题 slug + 日期"命名，与 .md 文件名稍有出入
+    # 就会产出另一个文件，门禁与报告库都找不到它。
+    cmd = [node, str(render_js), str(src), str(out)]
     if not args.open:
         cmd.append("--no-open")
 
@@ -113,7 +116,6 @@ def main() -> int:
               file=sys.stderr)
         return 1
 
-    out = src.with_suffix(".html")
     if not out.exists():
         print(f"渲染器退出码为 0 但没有产出文件: {out}", file=sys.stderr)
         return 2

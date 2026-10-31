@@ -512,6 +512,38 @@ def build_sources() -> list[dict]:
     return S
 
 
+# 每条 UNCOVERABLE 都必须写明补偿方式与复探期限 —— 登记一次就永久豁免，盲区就会被遗忘。
+#   compensate    该面看不到时，靠什么补（已登记的替代源 / 聚合源回溯 / 每日检索任务）
+#   search_terms  该实体的检索词（中英文名、主力产品名），gap_tasks 用它生成补检任务
+#   recheck_by    复探期限：到期后必须重新探测该面，可达就改为登记源，仍不可达就续期并更新 reason
+# 没有任何可读官方面的 Tier-1 实体，gap_tasks 每天生成一条 entity_blind 补检任务（必须关闭）。
+UNCOVERABLE_RECHECK_BY = "2026-11-30"
+_COMPENSATION = {
+    ("Anthropic", "developer"): ("已登记 platform.claude.com/docs 与 claude.com/blog", ["Claude API", "Anthropic API"]),
+    ("Anthropic", "support"): ("claude.com/blog 与聚合源回溯；8.1 标注需人工补检", ["Claude release notes"]),
+    ("Google", "developer"): ("已登记 developers.googleblog.com 与 blog.google/technology/ai", ["Gemini API"]),
+    ("Meta", "company"): ("聚合源（Techmeme / HN）与中文媒体回溯 + 每日检索任务", ["Meta AI", "Llama"]),
+    ("xAI", "company"): ("聚合源回溯 + 每日检索任务", ["xAI", "Grok"]),
+    ("DeepSeek", "company"): ("已登记 GitHub release（code 面）+ 聚合源回溯", ["DeepSeek"]),
+    ("NVIDIA", "company"): ("已登记 developer.nvidia.com/blog + 聚合源回溯", ["NVIDIA AI"]),
+    ("Moonshot", "company"): ("已登记 code 面（GitHub release）+ 中文媒体回溯", ["Kimi", "月之暗面"]),
+    ("ByteDance", "company"): ("中文媒体（机器之心 / 量子位）回溯 + 每日检索任务", ["豆包", "字节跳动 Seed", "火山引擎 大模型"]),
+    ("Tencent", "company"): ("中文媒体回溯 + 每日检索任务", ["腾讯混元", "Hunyuan"]),
+    ("Baidu", "company"): ("中文媒体回溯 + 每日检索任务", ["文心", "ERNIE"]),
+    ("Zhipu", "company"): ("中文媒体回溯 + 每日检索任务", ["智谱", "GLM"]),
+    ("Runway", "company"): ("聚合源回溯 + 每日检索任务", ["Runway Gen", "Runway AI"]),
+    ("Luma", "company"): ("聚合源回溯 + 每日检索任务", ["Luma AI", "Dream Machine"]),
+    ("Black Forest Labs", "company"): ("聚合源回溯 + 每日检索任务", ["Black Forest Labs", "FLUX"]),
+    ("Stability AI", "company"): ("快照差分（条目无日期）+ 聚合源回溯", ["Stability AI", "Stable Diffusion"]),
+    ("Microsoft", "company"): ("已登记 devblogs（developer 面）+ 聚合源回溯", ["Microsoft AI", "Copilot"]),
+}
+for _u in UNCOVERABLE:
+    _comp, _terms = _COMPENSATION[(_u["entity"], _u["surface"])]
+    _u.setdefault("compensate", _comp)
+    _u.setdefault("search_terms", _terms)
+    _u.setdefault("recheck_by", UNCOVERABLE_RECHECK_BY)
+
+
 def surface_matrix(sources: list[dict]) -> dict:
     """
     输出 实体 → surface → [source_id] 的矩阵，用于覆盖率对账。

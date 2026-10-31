@@ -16,7 +16,8 @@ from pathlib import Path
 
 from taxonomy import TAXONOMY
 from verify_gates import (Check, check_event_annotations, check_event_paths,
-                          check_markdown, check_md_theses, check_publish_precision,
+                          check_markdown, check_md_event_index, check_md_theses,
+                          check_publish_precision, check_source_coverage_definition,
                           check_registry, check_taxonomy_definition, check_traceability,
                           check_unclassified)
 
@@ -524,10 +525,113 @@ class RegistryGateTest(unittest.TestCase):
         check_md_theses(c, md, self.state, run2)
         self.assertEqual(_status(c, "contested 命题写出了反证"), "PASS")
 
+    def test_ch7_unmarked_judgment_fails(self):
+        self._write("EV-01", thesis_decision=self._new())
+        self._ingest()
+        c = self._ch7("- TH-0001（置信度 Medium）\n- 推理成本还会继续下降")
+        self.assertEqual(_status(c, "第 7 章每条判断都标了 TH 编号"), "FAIL")
+
+    def test_ch7_must_cover_all_core_judgments(self):
+        self._write("EV-01", thesis_decision=self._new())          # TH-0001 为核心判断
+        self._ingest()
+        c = self._ch7("本轮无核心技术判断。")
+        self.assertEqual(_status(c, "第 7 章为空时写明本轮无核心判断"), "FAIL")
+
+    def test_ch7_empty_statement_ok_when_no_core(self):
+        self._write("EV-01", rating="B", thesis_decision=self._new())   # 单条 B → proposed
+        self._ingest()
+        c = self._ch7("本轮无核心技术判断。")
+        self.assertEqual(_status(c, "第 7 章为空时写明本轮无核心判断"), "PASS")
+
     def test_ch7_unknown_thesis_fails(self):
         self._write("EV-01", thesis_decision=self._new())
         self._ingest()
         self.assertEqual(_status(self._ch7("- TH-0042（Medium）"), "第 7 章引用的命题存在"), "FAIL")
+
+
+class JsonDrivenDutyTest(unittest.TestCase):
+    """深拆义务与卡片评级以事件 JSON 为准，不看卡片自报的文字。"""
+
+    WIN = {"target_window": {"start": "2026-10-30T00:00:00+08:00", "end": "2026-10-31T09:00:00+08:00"}}
+    DEEP = "##### 挑战与问题\n\n正文。\n\n##### 机制与架构\n\n正文。\n\n##### 效果与定量\n\n正文。\n\n##### 对比其他方案的价值\n\n正文。\n\n"
+
+    def setUp(self):
+        self._tmp = tempfile.TemporaryDirectory()
+        self.tmp = Path(self._tmp.name)
+        self.addCleanup(self._tmp.cleanup)
+
+    def _run(self, md, **evs):
+        d = Path(tempfile.mkdtemp(dir=self.tmp))
+        p = d / "r-2026-10-30.md"
+        p.write_text(md, encoding="utf-8")
+        c = Check()
+        check_markdown(c, p, self.WIN, _events(d, **evs))
+        return c
+
+    def _ev(self, rating, fp="2026-10-30T10:00:00+08:00"):
+        return {"primary_path": "B1.1", "rating": rating, "first_publish_shanghai": fp}
+
+    def test_card_claiming_b_cannot_escape_deep_dive(self):
+        c = self._run(_md(_column("3.2", _card("EV-01", rating="B"))), **{"EV-01": self._ev("A")})
+        self.assertEqual(_status(c, "A/A+ 主卡含四维深拆（挑战/机制/效果/对比）"), "FAIL")
+        self.assertEqual(_status(c, "卡片评级与事件 JSON 一致"), "FAIL")
+
+    def test_convergence_label_does_not_exempt(self):
+        c = self._run(_md(_column("3.2", _card("EV-01", rating="A+ · Convergence"))),
+                      **{"EV-01": self._ev("A+")})
+        self.assertEqual(_status(c, "A/A+ 主卡含四维深拆（挑战/机制/效果/对比）"), "FAIL")
+
+    def test_deep_dive_present_passes(self):
+        c = self._run(_md(_column("3.2", _card("EV-01", self.DEEP, rating="A"))), **{"EV-01": self._ev("A")})
+        self.assertEqual(_status(c, "A/A+ 主卡含四维深拆（挑战/机制/效果/对比）"), "PASS")
+        self.assertEqual(_status(c, "卡片评级与事件 JSON 一致"), "PASS")
+
+    def test_active_event_is_exempt(self):
+        c = self._run(_md(_column("3.2", _card("EV-01", rating="A"))),
+                      **{"EV-01": self._ev("A", fp="2026-10-28T10:00:00+08:00")})
+        self.assertEqual(_status(c, "A/A+ 主卡含四维深拆（挑战/机制/效果/对比）"), "PASS")
+
+    def test_summary_card_in_focus_is_not_a_main_card(self):
+        md = _md(_column("3.2", _card("EV-01", self.DEEP, rating="A")), focus=_card("EV-01", rating="A"))
+        c = self._run(md, **{"EV-01": self._ev("A")})
+        self.assertEqual(_status(c, "A/A+ 主卡含四维深拆（挑战/机制/效果/对比）"), "PASS")
+
+    def test_remote_image_rejected(self):
+        c = self._run(_md(_column("3.2", _card("EV-01", "![图](https://ex.com/a.png)"))),
+                      **{"EV-01": self._ev("B")})
+        self.assertEqual(_status(c, "图片均为本地文件（渲染时内嵌）"), "FAIL")
+        c = self._run(_md(_column("3.2", _card("EV-01", "![图](figures/a.svg)"))),
+                      **{"EV-01": self._ev("B")})
+        self.assertEqual(_status(c, "图片均为本地文件（渲染时内嵌）"), "PASS")
+
+    def test_event_index_rating_is_exact(self):
+        md = ("---\ntitle: t\n---\n\n### 8.2 事件索引\n\n| EV | 事件 | 首发 |\n|---|---|---|\n"
+              "| EV-01 | Decisions 接口 Active 迁移 API | 2026-10-30 10:00 |\n")
+        p = self.tmp / "r-2026-10-30.md"
+        p.write_text(md, encoding="utf-8")
+        d = _events(self.tmp, **{"EV-01": {"event_title": "Decisions 接口", "rating": "A",
+                                           "first_publish_shanghai": "2026-10-30T10:00:00+08:00"}})
+        c = Check()
+        check_md_event_index(c, p, self.WIN, d)
+        self.assertEqual(_status(c, "EV 编号与事件内容一致"), "FAIL",
+                         "「Active」「API」里的字母 A 不能算作评级 A")
+        p.write_text(md.replace("| Decisions 接口 Active", "| A | Decisions 接口 Active"), encoding="utf-8")
+        c = Check()
+        check_md_event_index(c, p, self.WIN, d)
+        self.assertEqual(_status(c, "EV 编号与事件内容一致"), "PASS")
+
+
+class UncoverableExpiryTest(unittest.TestCase):
+    def test_expired_registration_fails(self):
+        c = Check()
+        check_source_coverage_definition(c, {"target_window": {"start": "2026-12-15T00:00:00+08:00"}})
+        self.assertEqual(_status(c, "不可达登记未过复探期限"), "FAIL")
+
+    def test_current_registration_passes(self):
+        c = Check()
+        check_source_coverage_definition(c, {"target_window": {"start": "2026-10-30T00:00:00+08:00"}})
+        self.assertEqual(_status(c, "不可达登记未过复探期限"), "PASS")
+        self.assertEqual(_status(c, "不可达登记写明了补偿方式与复探期限"), "PASS")
 
 
 class TaxonomyCoverageTest(unittest.TestCase):

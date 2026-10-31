@@ -142,6 +142,9 @@ def build_tasks(report: dict, run_date: str) -> dict:
 
         queries = [q.format(entity=entity) for q in
                    SURFACE_QUERIES.get(surface, ['"{entity}" 2026'])]
+        if g.get("type") == "entity_blind":
+            queries = [f'"{t}" 发布 OR 上线 OR 更新 OR release OR launch'
+                       for t in g.get("search_terms") or [entity]]
 
         # window_partial 不是"整面失明"，而是"某一段时间没被检索到"，
         # 检索式的目标必须是那段时间，而不是整个面。
@@ -154,6 +157,13 @@ def build_tasks(report: dict, run_date: str) -> dict:
                 f"{covered_from[:16] or '最早条目'} 之间的明确结论："
                 f"有 N 条发布（附原始 URL 与首发时刻），"
                 f"或确认该时段确实无发布（附翻页/归档检查证据）"
+            )
+        elif g.get("type") == "entity_blind":
+            sources = []
+            acceptance = (
+                f"{entity} 官方面全部不可达：用检索式覆盖 SCAN_WINDOW，给出明确结论——"
+                f"有 N 条发布（经中文媒体 / 聚合源回溯到官方原文，附原始 URL 与首发时刻），"
+                f"或确认 0 条（附检索式与检查范围）"
             )
         else:
             sources = [source]
