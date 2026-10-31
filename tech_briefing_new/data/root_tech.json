@@ -1,0 +1,1342 @@
+{
+  "schema_version": "1.0",
+  "source": "小艺业务部根技术清单_26年刷新版（2026-09-20）",
+  "scoring_unit": "根技术层（不含技术点层）",
+  "id_namespace_note": "根技术编号与 taxonomy 叶子编号存在重名（如根技术 B1.1 ≠ 叶子 B1.1）。事件 JSON 与卡片中引用根技术一律写 RT:<id>，leaves 字段只放叶子编号。",
+  "priority_note": "P0/P1/P2 为草案，按『落点是否在本部门主责层（AgentOS / 端侧 / Harness / 评测）』初筛，需人工校正后方可用于同分排序。",
+  "roots": [
+    {
+      "id": "M1.1",
+      "name": "统一多模态Tokenizer",
+      "direction": "基础大模型",
+      "group": "M1 统一多模态表征与推理",
+      "leaves_core": [
+        "A1.2"
+      ],
+      "leaves_related": [
+        "A1.1"
+      ],
+      "switch_signal": "单一tokenizer在理解与生成两端都不弱于双流方案",
+      "landing": "模型",
+      "priority": "P1"
+    },
+    {
+      "id": "M1.2",
+      "name": "理解生成统一架构",
+      "direction": "基础大模型",
+      "group": "M1 统一多模态表征与推理",
+      "leaves_core": [
+        "A1.2"
+      ],
+      "leaves_related": [
+        "A1.1"
+      ],
+      "switch_signal": "统一模型在理解基准上不低于同规模纯理解模型",
+      "landing": "模型",
+      "priority": "P0"
+    },
+    {
+      "id": "M1.3",
+      "name": "潜空间推理",
+      "direction": "基础大模型",
+      "group": "M1 统一多模态表征与推理",
+      "leaves_core": [
+        "A1.1"
+      ],
+      "leaves_related": [
+        "A1.4"
+      ],
+      "switch_signal": "潜空间推理在空间、物理任务上稳定超过文本思维链，且可监控性损失有补偿手段",
+      "landing": "模型",
+      "priority": "P1"
+    },
+    {
+      "id": "M2.1",
+      "name": "高效序列建模架构",
+      "direction": "基础大模型",
+      "group": "M2 计算形态与解码范式",
+      "leaves_core": [
+        "A1.1"
+      ],
+      "leaves_related": [
+        "A3.2"
+      ],
+      "switch_signal": "混合结构在长程智能体任务上不弱于全注意力",
+      "landing": "模型",
+      "priority": "P1"
+    },
+    {
+      "id": "M2.2",
+      "name": "稀疏专家架构",
+      "direction": "基础大模型",
+      "group": "M2 计算形态与解码范式",
+      "leaves_core": [
+        "A1.1"
+      ],
+      "leaves_related": [
+        "A3.3"
+      ],
+      "switch_signal": "超稀疏在同等激活量下持续追平更大的模型",
+      "landing": "模型",
+      "priority": "P1"
+    },
+    {
+      "id": "M2.3",
+      "name": "非串行解码范式",
+      "direction": "基础大模型",
+      "group": "M2 计算形态与解码范式",
+      "leaves_core": [
+        "A3.2"
+      ],
+      "leaves_related": [
+        "A3.3"
+      ],
+      "switch_signal": "扩散语言模型在推理与工具调用任务上追平自回归",
+      "landing": "模型；系统实现见I1.1",
+      "priority": "P1"
+    },
+    {
+      "id": "M2.4",
+      "name": "自适应推理计算分配",
+      "direction": "基础大模型",
+      "group": "M2 计算形态与解码范式",
+      "leaves_core": [
+        "A3.1"
+      ],
+      "leaves_related": [
+        "B1.1"
+      ],
+      "switch_signal": "自适应思考在同等效果下显著降低平均推理token",
+      "landing": "模型",
+      "priority": "P1"
+    },
+    {
+      "id": "M2.5",
+      "name": "低比特数值表示与量化",
+      "direction": "基础大模型",
+      "group": "M2 计算形态与解码范式",
+      "leaves_core": [
+        "A3.2"
+      ],
+      "leaves_related": [
+        "A2.3"
+      ],
+      "switch_signal": "端侧2bit在推理任务上损失可接受；FP4训练数值稳定",
+      "landing": "模型",
+      "priority": "P0"
+    },
+    {
+      "id": "M3.1",
+      "name": "端侧原生模型架构与存储分层",
+      "direction": "基础大模型",
+      "group": "M3 端侧智能的物理边界",
+      "leaves_core": [
+        "A1.1",
+        "A3.3"
+      ],
+      "leaves_related": [
+        "C4.3"
+      ],
+      "switch_signal": "端侧首要瓶颈从内存容量转为散热与带宽",
+      "landing": "模型 → 模型与芯片协同",
+      "priority": "P0"
+    },
+    {
+      "id": "M3.2",
+      "name": "模型-存储-芯片协同",
+      "direction": "基础大模型",
+      "group": "M3 端侧智能的物理边界",
+      "leaves_core": [
+        "A3.3"
+      ],
+      "leaves_related": [
+        "C4.1",
+        "C4.3"
+      ],
+      "switch_signal": "LPDDR6-PIM类近存计算进入标准与量产机型",
+      "landing": "芯片+OS",
+      "priority": "P0"
+    },
+    {
+      "id": "M4.1",
+      "name": "全双工交互时序建模",
+      "direction": "基础大模型",
+      "group": "M4 实时交互建模",
+      "leaves_core": [
+        "A1.2",
+        "E2.1"
+      ],
+      "leaves_related": [
+        "C1.3"
+      ],
+      "switch_signal": "端到端方案在误打断、误拒绝上超过级联+判决",
+      "landing": "模型",
+      "priority": "P0"
+    },
+    {
+      "id": "M4.2",
+      "name": "副语言与表现力语音",
+      "direction": "基础大模型",
+      "group": "M4 实时交互建模",
+      "leaves_core": [
+        "A1.2"
+      ],
+      "leaves_related": [
+        "E1.1"
+      ],
+      "switch_signal": "端到端模型的副语言理解超过专用分类器",
+      "landing": "模型",
+      "priority": "P1"
+    },
+    {
+      "id": "M5.1",
+      "name": "生成式世界模拟",
+      "direction": "基础大模型",
+      "group": "M5 世界模型",
+      "leaves_core": [
+        "A1.3"
+      ],
+      "leaves_related": [
+        "A2.1"
+      ],
+      "switch_signal": "在世界模型环境中训练的策略可迁移到真实环境",
+      "landing": "模型",
+      "priority": "P1"
+    },
+    {
+      "id": "M5.2",
+      "name": "数字环境世界模型",
+      "direction": "基础大模型",
+      "group": "M5 世界模型",
+      "leaves_core": [
+        "A1.3"
+      ],
+      "leaves_related": [
+        "B1.2",
+        "B3.3"
+      ],
+      "switch_signal": "后果预测进入执行链路，并带来可测的失败率下降",
+      "landing": "模型；服务H3、H6、S1.3",
+      "priority": "P0"
+    },
+    {
+      "id": "M5.3",
+      "name": "具身动作表征与Sim2Real",
+      "direction": "基础大模型",
+      "group": "M5 世界模型",
+      "leaves_core": [
+        "A1.3"
+      ],
+      "leaves_related": [
+        "B3.3",
+        "A2.1"
+      ],
+      "switch_signal": "零样本Sim2Real成功率稳定",
+      "landing": "模型（延伸方向）",
+      "priority": "P2"
+    },
+    {
+      "id": "M6.1",
+      "name": "可验证训练环境的规模化合成",
+      "direction": "基础大模型",
+      "group": "M6 学习信号",
+      "leaves_core": [
+        "A2.1"
+      ],
+      "leaves_related": [
+        "D1.1"
+      ],
+      "switch_signal": "合成环境训练的能力在真实环境上不再明显打折",
+      "landing": "模型训练配方",
+      "priority": "P0"
+    },
+    {
+      "id": "M6.2",
+      "name": "奖励建模与验证器",
+      "direction": "基础大模型",
+      "group": "M6 学习信号",
+      "leaves_core": [
+        "A2.2"
+      ],
+      "leaves_related": [
+        "D1.2"
+      ],
+      "switch_signal": "rubric与验证器奖励在开放任务上稳定且不被钻空子",
+      "landing": "模型训练配方",
+      "priority": "P1"
+    },
+    {
+      "id": "M6.3",
+      "name": "强化学习扩展规律与算法",
+      "direction": "基础大模型",
+      "group": "M6 学习信号",
+      "leaves_core": [
+        "A2.2"
+      ],
+      "leaves_related": [
+        "A2.1"
+      ],
+      "switch_signal": "能用早期曲线准确预测大规模RL结果",
+      "landing": "模型训练配方",
+      "priority": "P1"
+    },
+    {
+      "id": "M6.4",
+      "name": "智能体能力与可靠性测量",
+      "direction": "基础大模型",
+      "group": "M6 学习信号",
+      "leaves_core": [
+        "D1.1",
+        "D1.3"
+      ],
+      "leaves_related": [
+        "D2.3"
+      ],
+      "switch_signal": "评测结果与线上表现显著相关",
+      "landing": "评测体系",
+      "priority": "P0"
+    },
+    {
+      "id": "M7.1",
+      "name": "测试时训练与持续学习",
+      "direction": "基础大模型",
+      "group": "M7 持续学习",
+      "leaves_core": [
+        "A2.3"
+      ],
+      "leaves_related": [
+        "B4.3"
+      ],
+      "switch_signal": "参数级更新在开放任务上出现可靠锚点；能力保持可以度量",
+      "landing": "模型；与U3、H7跨层联动",
+      "priority": "P1"
+    },
+    {
+      "id": "M8",
+      "name": "类型化快速判断模型（快思考/System One）",
+      "direction": "基础大模型",
+      "group": "M8 类型化快速判断模型",
+      "leaves_core": [
+        "B1.1"
+      ],
+      "leaves_related": [
+        "B3.2",
+        "A3.1"
+      ],
+      "switch_signal": "当前代：免训练读logits的基线被专用模型稳定超越；下一代：基座模型单次前向直接输出可校准候选概率",
+      "landing": "Harness决策节点 → 模型",
+      "priority": "P0"
+    },
+    {
+      "id": "P1",
+      "name": "界面语义理解与grounding",
+      "direction": "系统智能体",
+      "group": "智能感知",
+      "leaves_core": [
+        "B3.3"
+      ],
+      "leaves_related": [
+        "A1.2"
+      ],
+      "switch_signal": "移动端定位接近饱和，瓶颈从「找得到元素」转向「看得懂界面状态」",
+      "landing": "Harness解析 → 模型",
+      "priority": "P0"
+    },
+    {
+      "id": "P2",
+      "name": "常开多模态流式感知",
+      "direction": "系统智能体",
+      "group": "智能感知",
+      "leaves_core": [
+        "A1.2"
+      ],
+      "leaves_related": [
+        "C4.3",
+        "E3.1"
+      ],
+      "switch_signal": "眼镜、耳机的常开功耗进入全天候区间",
+      "landing": "OS+模型 → 芯片",
+      "priority": "P0"
+    },
+    {
+      "id": "P3",
+      "name": "情境表示与预测",
+      "direction": "系统智能体",
+      "group": "智能感知",
+      "leaves_core": [
+        "E3.1"
+      ],
+      "leaves_related": [
+        "B2.3"
+      ],
+      "switch_signal": "同一情境表示被主动服务、交互端选择、隐私策略等多个下游复用",
+      "landing": "AgentOS",
+      "priority": "P0"
+    },
+    {
+      "id": "P4",
+      "name": "用户内在状态感知",
+      "direction": "系统智能体",
+      "group": "智能感知",
+      "leaves_core": [
+        "E3.1"
+      ],
+      "leaves_related": [
+        "E1.1",
+        "A1.2"
+      ],
+      "switch_signal": "可穿戴生理信号达到消费级精度，且与隐私约束取得平衡",
+      "landing": "模型+设备",
+      "priority": "P1"
+    },
+    {
+      "id": "P5",
+      "name": "主动介入决策",
+      "direction": "系统智能体",
+      "group": "智能感知",
+      "leaves_core": [
+        "E3.1"
+      ],
+      "leaves_related": [
+        "E3.2"
+      ],
+      "switch_signal": "用真实行为数据训练的「何时介入」模型显著优于提示工程",
+      "landing": "Harness → 模型",
+      "priority": "P0"
+    },
+    {
+      "id": "U1",
+      "name": "个人数据语义层",
+      "direction": "系统智能体",
+      "group": "用户个性化数据",
+      "leaves_core": [
+        "B2.3"
+      ],
+      "leaves_related": [
+        "B2.1",
+        "D3.4"
+      ],
+      "switch_signal": "语义层维护成本低于检索式方案；应用开放数据接口的比例上升",
+      "landing": "AgentOS",
+      "priority": "P0"
+    },
+    {
+      "id": "U2",
+      "name": "记忆形成与巩固",
+      "direction": "系统智能体",
+      "group": "用户个性化数据",
+      "leaves_core": [
+        "B2.2"
+      ],
+      "leaves_related": [
+        "B2.1"
+      ],
+      "switch_signal": "巩固产物，尤其是程序性知识，在后续任务中被高频复用",
+      "landing": "Harness → 模型",
+      "priority": "P1"
+    },
+    {
+      "id": "U3",
+      "name": "记忆形态与放置",
+      "direction": "系统智能体",
+      "group": "用户个性化数据",
+      "leaves_core": [
+        "B2.1"
+      ],
+      "leaves_related": [
+        "A2.3",
+        "B2.4"
+      ],
+      "switch_signal": "参数化记忆具备可靠的覆盖与删除能力",
+      "landing": "Harness → 模型",
+      "priority": "P0"
+    },
+    {
+      "id": "U4",
+      "name": "多模态情景记忆",
+      "direction": "系统智能体",
+      "group": "用户个性化数据",
+      "leaves_core": [
+        "B2.1"
+      ],
+      "leaves_related": [
+        "B2.4",
+        "A1.2"
+      ],
+      "switch_signal": "端侧常驻索引功耗可接受；视频分词器的压缩率与保真度达标",
+      "landing": "模型+AgentOS",
+      "priority": "P1"
+    },
+    {
+      "id": "U5",
+      "name": "记忆调用策略",
+      "direction": "系统智能体",
+      "group": "用户个性化数据",
+      "leaves_core": [
+        "B2.4"
+      ],
+      "leaves_related": [
+        "B1.1"
+      ],
+      "switch_signal": "记忆误用率可度量且持续下降",
+      "landing": "Harness → 模型",
+      "priority": "P1"
+    },
+    {
+      "id": "U6",
+      "name": "记忆治理",
+      "direction": "系统智能体",
+      "group": "用户个性化数据",
+      "leaves_core": [
+        "B2.2"
+      ],
+      "leaves_related": [
+        "D3.4"
+      ],
+      "switch_signal": "参数化记忆的删除可以被验证",
+      "landing": "AgentOS",
+      "priority": "P0"
+    },
+    {
+      "id": "H1",
+      "name": "任务状态主权",
+      "direction": "系统智能体",
+      "group": "系统Agent Harness",
+      "leaves_core": [
+        "C1.1",
+        "C1.2"
+      ],
+      "leaves_related": [
+        "C4.3"
+      ],
+      "switch_signal": "长程失败的主因从「状态丢失」转为「判断错误」",
+      "landing": "Harness → AgentOS",
+      "priority": "P0"
+    },
+    {
+      "id": "H2",
+      "name": "上下文生命周期管理",
+      "direction": "系统智能体",
+      "group": "系统Agent Harness",
+      "leaves_core": [
+        "B2.4"
+      ],
+      "leaves_related": [
+        "B2.2"
+      ],
+      "switch_signal": "学习式压缩稳定优于启发式；压缩后约束违规率降到零",
+      "landing": "Harness → 模型",
+      "priority": "P0"
+    },
+    {
+      "id": "H3",
+      "name": "规划与重规划",
+      "direction": "系统智能体",
+      "group": "系统Agent Harness",
+      "leaves_core": [
+        "B1.2",
+        "B1.3"
+      ],
+      "leaves_related": [
+        "C2.1"
+      ],
+      "switch_signal": "前瞻模拟在真实任务上带来可测增益",
+      "landing": "Harness → 模型",
+      "priority": "P1"
+    },
+    {
+      "id": "H4",
+      "name": "统一行动空间",
+      "direction": "系统智能体",
+      "group": "系统Agent Harness",
+      "leaves_core": [
+        "B3.3",
+        "C3.1"
+      ],
+      "leaves_related": [
+        "B3.1"
+      ],
+      "switch_signal": "头部应用开放可调用接口的比例；GUI路径的平台与应用政策收紧程度",
+      "landing": "Harness → AgentOS（协议）",
+      "priority": "P0"
+    },
+    {
+      "id": "H5",
+      "name": "技能体系",
+      "direction": "系统智能体",
+      "group": "系统Agent Harness",
+      "leaves_core": [
+        "B3.2"
+      ],
+      "leaves_related": [
+        "B3.1",
+        "C4.2"
+      ],
+      "switch_signal": "技能选择准确率不再随库规模下降",
+      "landing": "高频技能 → 模型；技能治理 → AgentOS",
+      "priority": "P0"
+    },
+    {
+      "id": "H6",
+      "name": "执行验证",
+      "direction": "系统智能体",
+      "group": "系统Agent Harness",
+      "leaves_core": [
+        "D1.2"
+      ],
+      "leaves_related": [
+        "B1.3"
+      ],
+      "switch_signal": "虚报完成率可控；数字环境世界模型进入执行链路",
+      "landing": "Harness → 模型",
+      "priority": "P0"
+    },
+    {
+      "id": "H7",
+      "name": "Harness自演化",
+      "direction": "系统智能体",
+      "group": "系统Agent Harness",
+      "leaves_core": [
+        "B4.1",
+        "B4.3"
+      ],
+      "leaves_related": [
+        "B4.2"
+      ],
+      "switch_signal": "开放场景中出现可靠的改进锚点",
+      "landing": "Harness元层",
+      "priority": "P1"
+    },
+    {
+      "id": "H8",
+      "name": "智能体运行时与资源调度",
+      "direction": "系统智能体",
+      "group": "系统Agent Harness",
+      "leaves_core": [
+        "C1.3",
+        "C4.1"
+      ],
+      "leaves_related": [
+        "C4.3"
+      ],
+      "switch_signal": "长时后台智能体能在手机功耗约束下稳定运行",
+      "landing": "AgentOS",
+      "priority": "P0"
+    },
+    {
+      "id": "H9",
+      "name": "分布式协同与委派",
+      "direction": "系统智能体",
+      "group": "系统Agent Harness",
+      "leaves_core": [
+        "C3.2",
+        "C2.1"
+      ],
+      "leaves_related": [
+        "C3.3",
+        "C4.3",
+        "C2.2",
+        "C2.3",
+        "E3.3"
+      ],
+      "switch_signal": "跨厂商智能体协议形成事实标准",
+      "landing": "AgentOS",
+      "priority": "P0"
+    },
+    {
+      "id": "H10",
+      "name": "生成式交互界面",
+      "direction": "系统智能体",
+      "group": "系统Agent Harness",
+      "leaves_core": [
+        "E2.2"
+      ],
+      "leaves_related": [
+        "E2.3"
+      ],
+      "switch_signal": "生成界面的完成效率与一致性不低于人工设计界面",
+      "landing": "AgentOS（交互框架）",
+      "priority": "P1"
+    },
+    {
+      "id": "B1.1",
+      "name": "个人媒体语料的增量表征与组合检索",
+      "direction": "领域智能体",
+      "group": "B1 个人内容理解",
+      "leaves_core": [
+        "B2.4",
+        "B2.1"
+      ],
+      "leaves_related": [
+        "A1.2"
+      ],
+      "switch_signal": "组合式、指代式查询命中率达到可用",
+      "landing": "模型+AgentOS；依赖U1、U4",
+      "priority": "P1"
+    },
+    {
+      "id": "B1.2",
+      "name": "个体化开放集实体识别与指代",
+      "direction": "领域智能体",
+      "group": "B1 个人内容理解",
+      "leaves_core": [
+        "A1.2"
+      ],
+      "leaves_related": [
+        "B2.3"
+      ],
+      "switch_signal": "少样本、跨模态身份绑定的准确率达到可用",
+      "landing": "模型+AgentOS",
+      "priority": "P1"
+    },
+    {
+      "id": "B1.3",
+      "name": "长时序媒体结构化理解",
+      "direction": "领域智能体",
+      "group": "B1 个人内容理解",
+      "leaves_core": [
+        "A1.2"
+      ],
+      "leaves_related": [
+        "B2.1"
+      ],
+      "switch_signal": "自动提取的叙事结构可直接驱动剪辑",
+      "landing": "模型",
+      "priority": "P2"
+    },
+    {
+      "id": "B2.1",
+      "name": "个体化审美与偏好奖励模型",
+      "direction": "领域智能体",
+      "group": "B2 主观质量与偏好建模",
+      "leaves_core": [
+        "E1.1"
+      ],
+      "leaves_related": [
+        "A2.2"
+      ],
+      "switch_signal": "偏好模型可直接用作RL奖励而不被钻空子",
+      "landing": "模型",
+      "priority": "P1"
+    },
+    {
+      "id": "B2.2",
+      "name": "对话式与生成式推荐",
+      "direction": "领域智能体",
+      "group": "B2 主观质量与偏好建模",
+      "leaves_core": [
+        "E1.1"
+      ],
+      "leaves_related": [
+        "E2.3"
+      ],
+      "switch_signal": "生成式推荐在长尾需求上优于两段式",
+      "landing": "模型",
+      "priority": "P2"
+    },
+    {
+      "id": "B3.1",
+      "name": "创作意图到操作程序",
+      "direction": "领域智能体",
+      "group": "B3 可控创作与编辑",
+      "leaves_core": [
+        "E1.1"
+      ],
+      "leaves_related": [
+        "B3.3"
+      ],
+      "switch_signal": "意图编译的结果无需手工微调即可接受",
+      "landing": "Harness → 模型",
+      "priority": "P2"
+    },
+    {
+      "id": "B3.2",
+      "name": "保身份与结构的可控编辑生成",
+      "direction": "领域智能体",
+      "group": "B3 可控创作与编辑",
+      "leaves_core": [
+        "A1.2"
+      ],
+      "leaves_related": [],
+      "switch_signal": "生成式编辑的一致性达到可替代手工操作",
+      "landing": "模型",
+      "priority": "P2"
+    },
+    {
+      "id": "B3.3",
+      "name": "跨模态时序对齐与编排",
+      "direction": "领域智能体",
+      "group": "B3 可控创作与编辑",
+      "leaves_core": [
+        "C2.1"
+      ],
+      "leaves_related": [
+        "A1.2"
+      ],
+      "switch_signal": "自动成片接受率达到可用",
+      "landing": "Harness（多智能体编排）",
+      "priority": "P2"
+    },
+    {
+      "id": "B3.4",
+      "name": "内容权属感知",
+      "direction": "领域智能体",
+      "group": "B3 可控创作与编辑",
+      "leaves_core": [
+        "D3.4"
+      ],
+      "leaves_related": [
+        "D2.1"
+      ],
+      "switch_signal": "跨平台授权接口与来源凭证形成标准",
+      "landing": "AgentOS+生态",
+      "priority": "P2"
+    },
+    {
+      "id": "B4.1",
+      "name": "领域知识物化",
+      "direction": "领域智能体",
+      "group": "B4 领域能力组装",
+      "leaves_core": [
+        "B2.3",
+        "B2.1"
+      ],
+      "leaves_related": [
+        "A2.3"
+      ],
+      "switch_signal": "「可维护性」（而不只是可写入性）有可靠方案",
+      "landing": "Harness → 模型",
+      "priority": "P1"
+    },
+    {
+      "id": "B4.2",
+      "name": "领域规格与形式化约束",
+      "direction": "领域智能体",
+      "group": "B4 领域能力组装",
+      "leaves_core": [
+        "D1.2"
+      ],
+      "leaves_related": [
+        "D3.2"
+      ],
+      "switch_signal": "形式化校验的效用损失可接受",
+      "landing": "AgentOS",
+      "priority": "P1"
+    },
+    {
+      "id": "B4.3",
+      "name": "领域Harness编译与按需供给",
+      "direction": "领域智能体",
+      "group": "B4 领域能力组装",
+      "leaves_core": [
+        "B3.2"
+      ],
+      "leaves_related": [
+        "C4.2"
+      ],
+      "switch_signal": "模型换代时领域harness的重写比例显著下降",
+      "landing": "Harness（上移且变薄）",
+      "priority": "P1"
+    },
+    {
+      "id": "B5.1",
+      "name": "多源证据综合与可信度判定",
+      "direction": "领域智能体",
+      "group": "B5 任务型领域智能体",
+      "leaves_core": [
+        "B2.4",
+        "D1.2"
+      ],
+      "leaves_related": [
+        "B3.1"
+      ],
+      "switch_signal": "观点质量评测（rubric）与专家判断一致",
+      "landing": "模型+Harness",
+      "priority": "P2"
+    },
+    {
+      "id": "B5.2",
+      "name": "仓库级程序理解与自动验证",
+      "direction": "领域智能体",
+      "group": "B5 任务型领域智能体",
+      "leaves_core": [
+        "B3.3",
+        "D1.2"
+      ],
+      "leaves_related": [
+        "B3.1"
+      ],
+      "switch_signal": "项目级开发闭环在真实仓库中稳定",
+      "landing": "模型+Harness",
+      "priority": "P2"
+    },
+    {
+      "id": "I1.1",
+      "name": "分离式推理与MoE服务",
+      "direction": "AI Infra",
+      "group": "I1 面向智能体负载的推理系统",
+      "leaves_core": [
+        "A3.3"
+      ],
+      "leaves_related": [
+        "A3.2"
+      ],
+      "switch_signal": "智能体负载成为主流后，首token时延与吞吐不再是主要成本指标",
+      "landing": "推理系统",
+      "priority": "P1"
+    },
+    {
+      "id": "I1.2",
+      "name": "会话级KV缓存与分层存储",
+      "direction": "AI Infra",
+      "group": "I1 面向智能体负载的推理系统",
+      "leaves_core": [
+        "A3.3",
+        "B2.4"
+      ],
+      "leaves_related": [
+        "A3.2"
+      ],
+      "switch_signal": "KV命中率取代吞吐，成为主成本指标",
+      "landing": "推理系统",
+      "priority": "P1"
+    },
+    {
+      "id": "I1.3",
+      "name": "细粒度算力复用与调度",
+      "direction": "AI Infra",
+      "group": "I1 面向智能体负载的推理系统",
+      "leaves_core": [
+        "A3.3"
+      ],
+      "leaves_related": [
+        "C4.1"
+      ],
+      "switch_signal": "静态分配造成的资源浪费被兑现为实际收益",
+      "landing": "推理系统",
+      "priority": "P2"
+    },
+    {
+      "id": "I2.1",
+      "name": "异步强化学习系统",
+      "direction": "AI Infra",
+      "group": "I2 执行与训练基座",
+      "leaves_core": [
+        "A2.1"
+      ],
+      "leaves_related": [
+        "A2.2"
+      ],
+      "switch_signal": "RL迭代周期从周级进入天级",
+      "landing": "训练系统",
+      "priority": "P1"
+    },
+    {
+      "id": "I2.2",
+      "name": "智能体沙箱与可重放执行",
+      "direction": "AI Infra",
+      "group": "I2 执行与训练基座",
+      "leaves_core": [
+        "C4.1",
+        "D3.2"
+      ],
+      "leaves_related": [
+        "D2.2"
+      ],
+      "switch_signal": "训练rollout与线上执行共用同一执行面",
+      "landing": "基础设施",
+      "priority": "P1"
+    },
+    {
+      "id": "I2.3",
+      "name": "训推一体存算",
+      "direction": "AI Infra",
+      "group": "I2 执行与训练基座",
+      "leaves_core": [
+        "A3.3"
+      ],
+      "leaves_related": [
+        "C4.1"
+      ],
+      "switch_signal": "训推一体在超节点上兑现资源收益",
+      "landing": "基础设施",
+      "priority": "P2"
+    },
+    {
+      "id": "I3.1",
+      "name": "能力感知路由与预算分层",
+      "direction": "AI Infra",
+      "group": "I3 端云协同计算",
+      "leaves_core": [
+        "C4.3"
+      ],
+      "leaves_related": [
+        "B1.1",
+        "A3.1"
+      ],
+      "switch_signal": "路由错误（该上云未上云、该端侧处理却上云）可控",
+      "landing": "AgentOS+云",
+      "priority": "P0"
+    },
+    {
+      "id": "I3.2",
+      "name": "端云协同解码与分割推理",
+      "direction": "AI Infra",
+      "group": "I3 端云协同计算",
+      "leaves_core": [
+        "C4.3",
+        "A3.2"
+      ],
+      "leaves_related": [
+        "A3.3"
+      ],
+      "switch_signal": "端云协同投机从论文走向产品",
+      "landing": "推理系统（端+云）",
+      "priority": "P0"
+    },
+    {
+      "id": "I3.3",
+      "name": "端云任务状态迁移",
+      "direction": "AI Infra",
+      "group": "I3 端云协同计算",
+      "leaves_core": [
+        "C4.3",
+        "C1.2"
+      ],
+      "leaves_related": [
+        "C3.3"
+      ],
+      "switch_signal": "跨端云的长程任务可中断、可续做",
+      "landing": "AgentOS+云",
+      "priority": "P0"
+    },
+    {
+      "id": "I4.1",
+      "name": "AI自动生成与优化算子",
+      "direction": "AI Infra",
+      "group": "I4 AI构建算力栈",
+      "leaves_core": [
+        "A3.3"
+      ],
+      "leaves_related": [
+        "B3.3"
+      ],
+      "switch_signal": "自动生成算子性能稳定超过人工",
+      "landing": "基础软件",
+      "priority": "P1"
+    },
+    {
+      "id": "S1.1",
+      "name": "信息流控制式注入防御",
+      "direction": "AI安全",
+      "group": "S1 智能体行为约束",
+      "leaves_core": [
+        "D3.3"
+      ],
+      "leaves_related": [
+        "D3.2"
+      ],
+      "switch_signal": "自适应攻击下外置约束仍然成立；可证明约束的效用损失可接受",
+      "landing": "AgentOS",
+      "priority": "P0"
+    },
+    {
+      "id": "S1.2",
+      "name": "任务级动态授权",
+      "direction": "AI安全",
+      "group": "S1 智能体行为约束",
+      "leaves_core": [
+        "D3.1"
+      ],
+      "leaves_related": [
+        "E1.2"
+      ],
+      "switch_signal": "任务级授权成为平台默认机制",
+      "landing": "AgentOS",
+      "priority": "P0"
+    },
+    {
+      "id": "S1.3",
+      "name": "意图一致性判定与可信确认通道",
+      "direction": "AI安全",
+      "group": "S1 智能体行为约束",
+      "leaves_core": [
+        "D3.2",
+        "E1.2"
+      ],
+      "leaves_related": [
+        "E1.3"
+      ],
+      "switch_signal": "分级确认下误放行率与确认次数同时下降",
+      "landing": "AgentOS（只有平台能提供）",
+      "priority": "P0"
+    },
+    {
+      "id": "S1.4",
+      "name": "长时运行遏制",
+      "direction": "AI安全",
+      "group": "S1 智能体行为约束",
+      "leaves_core": [
+        "D3.2",
+        "C1.3"
+      ],
+      "leaves_related": [
+        "C1.2"
+      ],
+      "switch_signal": "长时后台智能体大规模上线",
+      "landing": "AgentOS",
+      "priority": "P0"
+    },
+    {
+      "id": "S2.1",
+      "name": "智能体身份与委托凭证",
+      "direction": "AI安全",
+      "group": "S2 智能体生态信任",
+      "leaves_core": [
+        "D3.1"
+      ],
+      "leaves_related": [
+        "C3.2"
+      ],
+      "switch_signal": "智能体身份标准落地并被主要服务方采纳（标准窗口期）",
+      "landing": "AgentOS+标准",
+      "priority": "P0"
+    },
+    {
+      "id": "S2.2",
+      "name": "智能体供应链语义安全",
+      "direction": "AI安全",
+      "group": "S2 智能体生态信任",
+      "leaves_core": [
+        "D3.3"
+      ],
+      "leaves_related": [
+        "C4.2",
+        "B3.2"
+      ],
+      "switch_signal": "语义级审查成为技能市场准入标准",
+      "landing": "AgentOS+生态",
+      "priority": "P0"
+    },
+    {
+      "id": "S2.3",
+      "name": "端侧第三方智能体操作治理",
+      "direction": "AI安全",
+      "group": "S2 智能体生态信任",
+      "leaves_core": [
+        "D3.1",
+        "C3.1"
+      ],
+      "leaves_related": [
+        "B3.3"
+      ],
+      "switch_signal": "应用侧声明协议成为平台规范",
+      "landing": "AgentOS（只有平台能做）",
+      "priority": "P0"
+    },
+    {
+      "id": "S2.4",
+      "name": "可追责执行记录",
+      "direction": "AI安全",
+      "group": "S2 智能体生态信任",
+      "leaves_core": [
+        "D2.1",
+        "D3.4"
+      ],
+      "leaves_related": [
+        "D2.2"
+      ],
+      "switch_signal": "智能体执行结果进入责任认定场景（支付、法律）",
+      "landing": "AgentOS",
+      "priority": "P1"
+    },
+    {
+      "id": "S3.1",
+      "name": "跨应用情境完整性执行",
+      "direction": "AI安全",
+      "group": "S3 数据流动与隐私",
+      "leaves_core": [
+        "D3.4",
+        "D3.1"
+      ],
+      "leaves_related": [
+        "B2.4"
+      ],
+      "switch_signal": "无攻击者情况下的过度分享率显著下降",
+      "landing": "AgentOS",
+      "priority": "P0"
+    },
+    {
+      "id": "S3.2",
+      "name": "端云隐私分级与可验证隐私计算",
+      "direction": "AI安全",
+      "group": "S3 数据流动与隐私",
+      "leaves_core": [
+        "D3.4",
+        "C4.3"
+      ],
+      "leaves_related": [
+        "D3.1"
+      ],
+      "switch_signal": "隐私承诺从政策声明变为技术可证明",
+      "landing": "AgentOS+云",
+      "priority": "P0"
+    },
+    {
+      "id": "S3.3",
+      "name": "记忆完整性与可证明遗忘",
+      "direction": "AI安全",
+      "group": "S3 数据流动与隐私",
+      "leaves_core": [
+        "D3.3",
+        "B2.2"
+      ],
+      "leaves_related": [
+        "D3.4"
+      ],
+      "switch_signal": "参数化记忆上线前具备可验证的删除路径",
+      "landing": "AgentOS+模型",
+      "priority": "P1"
+    },
+    {
+      "id": "S4.1",
+      "name": "表征级监控",
+      "direction": "AI安全",
+      "group": "S4 可观测与可控",
+      "leaves_core": [
+        "A1.4"
+      ],
+      "leaves_related": [
+        "D2.1"
+      ],
+      "switch_signal": "探针在长上下文、多轮等分布外场景保持可靠",
+      "landing": "模型（端侧可低成本部署）",
+      "priority": "P0"
+    },
+    {
+      "id": "S4.2",
+      "name": "思维链与行为监控",
+      "direction": "AI安全",
+      "group": "S4 可观测与可控",
+      "leaves_core": [
+        "D2.1",
+        "A1.4"
+      ],
+      "leaves_related": [
+        "D1.3"
+      ],
+      "switch_signal": "潜空间推理进入产品，原有CoT监控失效",
+      "landing": "模型+AgentOS",
+      "priority": "P1"
+    },
+    {
+      "id": "S4.3",
+      "name": "不可信智能体控制协议",
+      "direction": "AI安全",
+      "group": "S4 可观测与可控",
+      "leaves_core": [
+        "D3.2"
+      ],
+      "leaves_related": [
+        "D1.2"
+      ],
+      "switch_signal": "智能体能力在关键任务上超过受信监控模型",
+      "landing": "AgentOS",
+      "priority": "P1"
+    },
+    {
+      "id": "S4.4",
+      "name": "智能体演化完整性",
+      "direction": "AI安全",
+      "group": "S4 可观测与可控",
+      "leaves_core": [
+        "D3.4",
+        "B4.3"
+      ],
+      "leaves_related": [
+        "D3.3"
+      ],
+      "switch_signal": "自演化机制进入产品",
+      "landing": "AgentOS+硬件信任根",
+      "priority": "P0"
+    },
+    {
+      "id": "S4.5",
+      "name": "可解释性驱动的定位与修复",
+      "direction": "AI安全",
+      "group": "S4 可观测与可控",
+      "leaves_core": [
+        "A1.4",
+        "D1.3"
+      ],
+      "leaves_related": [
+        "D2.2"
+      ],
+      "switch_signal": "可解释性定位直接指导一次训练修复并被验证",
+      "landing": "模型研发流程",
+      "priority": "P1"
+    }
+  ],
+  "candidates": [
+    {
+      "id": "B6.1",
+      "name": "实时感知-控制决策（相机）",
+      "direction": "领域智能体",
+      "group": "B6 其他系统领域智能体（候选）",
+      "leaves_core": [
+        "B3.3"
+      ],
+      "leaves_related": [
+        "A1.2"
+      ],
+      "switch_signal": "毫秒级感知-控制闭环出现可跟踪的技术对象与度量",
+      "landing": "模型+设备",
+      "priority": "观察"
+    },
+    {
+      "id": "B6.2",
+      "name": "代理表达的身份声明与授权（电话/短信/邮件）",
+      "direction": "领域智能体",
+      "group": "B6 其他系统领域智能体（候选）",
+      "leaves_core": [
+        "E1.2"
+      ],
+      "leaves_related": [
+        "D3.1"
+      ],
+      "switch_signal": "代用户表达的身份边界形成平台规则（与S1.3、S2.1联动）",
+      "landing": "AgentOS",
+      "priority": "观察"
+    },
+    {
+      "id": "B6.3",
+      "name": "系统配置的语义化与安全变更",
+      "direction": "领域智能体",
+      "group": "B6 其他系统领域智能体（候选）",
+      "leaves_core": [
+        "C4.2"
+      ],
+      "leaves_related": [
+        "D3.2"
+      ],
+      "switch_signal": "配置依赖与回滚成为独立的技术问题",
+      "landing": "AgentOS",
+      "priority": "观察"
+    },
+    {
+      "id": "B6.4",
+      "name": "连续生理信号建模",
+      "direction": "领域智能体",
+      "group": "B6 其他系统领域智能体（候选）",
+      "leaves_core": [
+        "A1.2"
+      ],
+      "leaves_related": [
+        "E3.1"
+      ],
+      "switch_signal": "连续生理信号的理解在合规约束下形成独立度量",
+      "landing": "模型+设备",
+      "priority": "观察"
+    }
+  ]
+}

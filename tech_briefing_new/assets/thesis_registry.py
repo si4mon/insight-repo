@@ -40,6 +40,35 @@ CHANGE_TYPES = {ct["id"] for ct in ONTOLOGY["change_types"]}
 SH_TZ = timezone(timedelta(hours=8))
 
 SUPPORT = ("supports", "refines")
+
+_EI = CM.get("entity_independence") or {}
+_NON_ORG = set(_EI.get("non_org_entities") or ())
+_COLLECTIVE = set(_EI.get("collective_forms") or ())
+_SLOT = _EI.get("collective_slot") or "学术证据"
+
+
+def independent_entities(sup) -> list[str]:
+    """归并后的独立组织列表，用于 entities_bonus 与 Convergence 判定。
+
+    两条规则：
+      - 占位性取值（arXiv、学术界、未披露…）不构成组织；
+      - 论文/预印本/评测这类集体形态的证据，整体只占一个实体位——不同作者团队
+        的两篇 arXiv 论文不是两个实体。TH-0002 当初靠两篇论文拿到 Medium，
+        就是因为缺这条。
+    """
+    orgs: list[str] = []
+    collective: list[str] = []
+    for _, e in sup:
+        ent = str(e.get("entity") or "").strip()
+        if not ent or ent in _NON_ORG:
+            continue
+        if str(e.get("evidence_form") or "") in _COLLECTIVE:
+            collective.append(ent)
+        elif ent not in orgs:
+            orgs.append(ent)
+    if any(c not in orgs for c in collective):
+        orgs.append(_SLOT)
+    return orgs
 RELATIONS = ("supports", "contradicts", "refines")
 ACTIONS = ("attach", "new", "none")
 STRONG = ("A+", "A")
@@ -253,16 +282,19 @@ class Registry:
 
         ref = _to_date(as_of)
         entities = sorted({e["entity"] for _, e in sup if e.get("entity")})
+        counted = independent_entities(sup)
         forms = {e.get("evidence_form") for _, e in sup if e.get("evidence_form")}
         weeks = {_to_date(e["first_publish"]).isocalendar()[:2] for _, e in sup
                  if _to_date(e["first_publish"])}
 
         bd = {"strength": max((CM["strength"].get(e["rating"], 0) for _, e in sup), default=0),
-              "entities": _bonus(len(entities), CM["entities_bonus"]),
+              "entities": _bonus(len(counted), CM["entities_bonus"]),
               "forms": _bonus(len(forms), CM["forms_bonus"]),
               "persistence": _bonus(len(weeks), CM["weeks_bonus"]),
               "adoption": CM["adoption_bonus"] if CM["adoption_form"] in forms else 0,
               "counter": 0, "stale": 0}
+        # 把归并后的实体位写进 breakdown：否则"为什么两篇论文只算一个实体"不可见
+        bd_entities_counted = counted
         recent_con = [e for _, e in con
                       if _to_date(e["first_publish"]) and
                       (ref - _to_date(e["first_publish"])).days <= CM["counter_window_days"]]
@@ -314,8 +346,10 @@ class Registry:
 
         return {**base, "state": state, "state_reason": reason, "confidence": confidence,
                 "score": score, "breakdown": bd,
-                "type": "Convergence Thesis" if len(entities) >= 2 else "Frontier Thesis",
-                "entities": entities, "runs_since_support": since_support,
+                "type": ("Convergence Thesis" if len(counted) >= 2
+                         else "Frontier Thesis"),
+                "entities": entities, "entities_counted": bd_entities_counted,
+                "runs_since_support": since_support,
                 "support": brief(sup), "contradicts": brief(con)}
 
     # ---------- 召回 ----------
@@ -444,6 +478,26 @@ class Registry:
                 errors.append(f"{eid}: relation={relation} 不在 {RELATIONS}")
             if not (dec.get("rationale") or "").strip():
                 errors.append(f"{eid}: 缺 rationale")
+
+            # 关系要可复核：裁决必须指出事件的哪一条 claim 承载了这个关系。
+            # 只写一句 rationale 时，"这两篇论文互相支持"之类的说法无法被检查；
+            # 指到 claim 之后，复核者能直接去看那一条写的是什么。
+            claims = [c for c in (ev.get("claims") or []) if isinstance(c, dict)]
+            vc = dec.get("via_claim")
+            if not claims:
+                pass          # 无 claim 的事件（聚合卡）不要求
+            elif vc is None or vc == "":
+                errors.append(f"{eid}: 缺 via_claim —— 要写明哪一条 claim "
+                              f"承载 {relation} 关系（0..{len(claims) - 1} 或 claim 原文）")
+            elif isinstance(vc, int):
+                if not 0 <= vc < len(claims):
+                    errors.append(f"{eid}: via_claim={vc} 越界（共 {len(claims)} 条 claim）")
+            elif isinstance(vc, str):
+                if not any(str(c.get("claim") or "").strip() == vc.strip()
+                           for c in claims):
+                    errors.append(f"{eid}: via_claim 文本与任何 claim 都不一致")
+            else:
+                errors.append(f"{eid}: via_claim 应为序号或 claim 原文，实际 {type(vc).__name__}")
 
             cands = {c["id"] for c in self.candidates(ev, run_date)}
             if action == "attach":
@@ -597,7 +651,8 @@ class Registry:
             if old:
                 d["links"].remove(old)
             link = {"event_key": k, "thesis_id": tid, "relation": relation,
-                    "decided_in": run_date, "rationale": dec.get("rationale", "")}
+                    "decided_in": run_date, "rationale": dec.get("rationale", ""),
+                    "via_claim": dec.get("via_claim", "")}
             d["links"].append(link)
             links_by_key[k] = link
             attached.append({"event_id": ev["event_id"], "thesis_id": tid, "relation": relation})

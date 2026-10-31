@@ -553,6 +553,84 @@ def _extract_sitemap(body: bytes):
 
 
 # ---------- 总入口 ----------
+_ARXIV_BATCH = re.compile(
+    r'<h3>\s*(?:\w{3}),\s*(\d{1,2}\s+\w{3}\s+\d{4})[^<]*</h3>(.*?)(?=<h3>|\Z)',
+    re.S | re.I)
+_ARXIV_ID = re.compile(r'href\s*=\s*"/abs/(\d{4}\.\d{4,5})"', re.I)
+_ARXIV_TITLE = re.compile(
+    r"<div class='list-title mathjax'>\s*<span[^>]*>Title:</span>\s*(.*?)\s*</div>", re.S)
+_ARXIV_TYPE = re.compile(r'\(\s*(cross-list|replaced?|replace-cross)\b', re.I)
+
+
+def _extract_gh_releases(body: bytes, source_url: str = "") -> list:
+    """解析 api.github.com/repos/<org>/<repo>/releases。
+
+    published_at 是秒级且带时区，可直接归窗；releases 页的 HTML 不带年份，
+    抓下来只能当线索，不能当结论。草稿版（draft）不算已发布。
+    """
+    data = json.loads(body.decode("utf-8", "ignore"))
+    if not isinstance(data, list):
+        return []
+    out = []
+    for r in data:
+        if not isinstance(r, dict) or r.get("draft"):
+            continue
+        pub = r.get("published_at") or r.get("created_at")
+        if not pub:
+            continue
+        tag = r.get("tag_name") or ""
+        out.append({
+            "uid": str(r.get("id") or tag),
+            "title": (r.get("name") or tag or "release").strip(),
+            "url": r.get("html_url") or source_url,
+            "published": pub.replace("Z", "+00:00"),
+            "date_precision": "second",
+            "prerelease": bool(r.get("prerelease")),
+            "tag": tag,
+            "snippet": (r.get("body") or "")[:300],
+        })
+    return out
+
+
+def _extract_arxiv_listing(body: bytes, source_url: str = "") -> list:
+    """解析 arXiv 的 /list/<cat>/pastweek 归档页。
+
+    周末 RSS 返回合法但空的 feed，整批论文会被漏掉（实测 cs.CL/LG/MA/RO 共 709 篇）。
+    归档页按 <h3>Fri, 30 Oct 2026</h3> 分批，每批就是一次公告。
+
+    published 一律写该批次的公告时刻（上海 12:00，对应美东前一日 20:00 的公告），
+    精度 batch —— 不用论文的提交时刻：论文在公告前不可见，"首次公开"只能是公告时刻，
+    否则同一批次内会按提交先后产生随机的归窗边界（task_def §9）。
+    cross-list 与 replaced 条目不是本轮新论文，标 announce_type 供下游过滤。
+    """
+    html_text = body.decode("utf-8", "ignore")
+    out, seen = [], set()
+    for date_str, seg in _ARXIV_BATCH.findall(html_text):
+        try:
+            d = datetime.strptime(date_str.strip(), "%d %b %Y").date()
+        except ValueError:
+            continue
+        published = f"{d.isoformat()}T12:00:00+08:00"
+        ids = _ARXIV_ID.findall(seg)
+        titles = [re.sub(r"\s+", " ", re.sub(r"<[^>]+>", "", t)).strip()
+                  for t in _ARXIV_TITLE.findall(seg)]
+        types = _ARXIV_TYPE.findall(seg)
+        for n, aid in enumerate(ids):
+            if aid in seen:
+                continue
+            seen.add(aid)
+            out.append({
+                "uid": aid,
+                "title": html.unescape(titles[n]) if n < len(titles) else aid,
+                "url": f"https://arxiv.org/abs/{aid}",
+                "published": published,
+                "date_precision": "batch",
+                "announce_type": (types[n].lower() if n < len(types) else "new"),
+                "snippet": f"arXiv 公告批次 {d.isoformat()}",
+            })
+    return out
+
+
 def extract_items(body: bytes, mode: str, source_url: str = "", json_mode: str = "") -> dict:
     """
     返回 {status, items, error}。
@@ -591,6 +669,14 @@ def extract_items(body: bytes, mode: str, source_url: str = "", json_mode: str =
             arts = _extract_html_articles(body, source_url)
             cards = _extract_html_cards(body, source_url)
             items = arts if len(arts) >= len(cards) else cards
+        elif mode == "github_releases":
+            items = _extract_gh_releases(body, source_url)
+            return {"status": "ok" if items else "empty", "items": items,
+                    "error": "", "structure_ok": body.lstrip()[:1] in (b"[", b"{")}
+        elif mode == "arxiv_listing":
+            items = _extract_arxiv_listing(body, source_url)
+            return {"status": "ok" if items else "empty", "items": items,
+                    "error": "", "structure_ok": b"<h3>" in body or bool(items)}
         elif mode == "sitemap":
             items = _extract_sitemap(body)
             return {"status": "ok" if items else "empty", "items": items, "error": ""}

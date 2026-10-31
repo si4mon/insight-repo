@@ -50,23 +50,30 @@ $SKILL_DIR/
 │   ├── tech_report_task_def.md   规则源：做什么与判断标准
 │   ├── thesis_ontology.json      骨架：变化类型、评级、置信度模型、taxonomy（人工维护）
 │   ├── sources.py / extract.py / coverage.py / collect_sources.py   采集与覆盖对账
-│   ├── build_pool.py / gap_tasks.py   候选池与补检任务
+│   ├── freeze_window.py          冻结 TARGET_WINDOW（window.json，一次冻结全程传参）
+│   ├── build_pool.py / gap_tasks.py / must_review.py   候选池、补检任务、分层必审清单
 │   ├── events.py / thesis_registry.py / taxonomy.py   事件规范化、命题库、分类
-│   ├── verify_gates.py           门禁（校验 .md 工作源）
-│   ├── render_report.py + report_engine/   MD → 自包含 HTML（纯 Node）
+│   ├── scoring.py / root_tech.py   五维评分与评级派生、根技术计分（战略相关度）
+│   ├── claim_evidence.py         claim 绑定快照原文片段（sha256 + quote 精确匹配）
+│   ├── report_stats.py           统计派生（Dashboard / 8.2 / Top N 的唯一来源）
+│   ├── verify_gates.py           门禁（校验 .md 工作源，并写 .gate_summary.json）
+│   ├── render_report.py + report_engine/   MD → 自包含 HTML（纯 Node，拒绝未过门禁的稿子）
+│   ├── testlib.py                测试共用装置
 │   └── test_*.py                 单测
 ├── references/              按需读取：changelog / gate-checks / gap-playbook / pool-triage /
-│                            event-writing / date-precision / design-constraints / design-rationale /
+│                            must-review / rating-anchors / root-tech-scoring / event-writing /
+│                            date-precision / design-constraints / design-rationale /
 │                            registry-v2-design / chapter-structure-design
-└── data/                    只读资料（四层技术地图、分类规则说明）
+└── data/                    只读资料（四层技术地图、分类规则说明、根技术清单 root_tech.json、
+                             必审词表 review_terms.json）
 ```
 
 **工作目录**（`$WORKDIR`，执行 skill 时的当前目录）存放运行时产物：
 
 | 路径 | 内容 | 日期含义 |
 |---|---|---|
-| `raw_<date>/` | 原始字节、`items_<source>.json`、`collect_report.json`、`gap_tasks.json`、`candidate_pool.json` | 脚本运行的**今天** |
-| `events_run_<date>/` | `EV-xx.json`、`thesis_report.json`（第 7 章输入） | **WINDOW_START_DATE** |
+| `raw_<date>/` | 原始字节（即 claim 级证据的快照）、`items_<source>.json`、`collect_report.json`、`gap_tasks.json`、`candidate_pool.json`、`must_review.json`、`must_review_trace.json` | 脚本运行的**今天** |
+| `events_run_<date>/` | `EV-xx.json`、`thesis_report.json`（第 7 章输入）、`pairwise.json`（成对排序裁定） | **WINDOW_START_DATE** |
 | `reports/` | `<标题 slug>-<date>.md`（唯一手写产物）、同名 `.html`、`figures/`、报告库 `index.json` / `index.html` | **WINDOW_START_DATE** |
 | `snapshots/` | 跨 run 的官方面快照，用于差分 | — |
 | `state/` | registry 状态 `thesis_registry.json` 与审计日志；可用 `TECH_BRIEFING_STATE` 指向共享目录 | — |
@@ -194,6 +201,16 @@ cd "$WORKDIR" && python "$ASSETS/build_pool.py" --raw-dir raw_<date>
 合并 `items_<source>.json`、按（源, uid）去重、归窗，产出 `candidate_pool.json` 与 `pool_out_of_window.json`。
 不要手工拼候选池。
 
+**必审清单**（候选池 2000+ 条无法逐条台账，分层必审是可执行的折中）：
+```bash
+python "$ASSETS/must_review.py" --raw-dir raw_<date> \
+  --out raw_<date>/must_review.json --trace-out raw_<date>/must_review_trace.json
+```
+清单内每一条都必须在 `must_review_trace.json` 里给出处置（`selected` / `merged` /
+`chapter5` / `discarded`），`discarded` 的理由取 task_def §16.1 的封闭集合。清单外的条目
+按池筛规则统计留痕，不要求逐条。分层规则、阈值与词表维护见 `references/must-review.md`。
+**清单只决定要不要留痕，不决定评级**：清单外的条目仍可评 A。
+
 | 条目 | `window_match` | 处置 |
 |---|---|---|
 | 有准确时刻且在窗口内 | `exact` | 确定事件 |
@@ -231,6 +248,32 @@ Active Event / Historical Context。
 
 ### 4. P2-P4 抽象提升、聚类收敛、价值门控排序
 
+**评级由分数派生，不手写。** 模型给五维分与证据，`scoring.py` 按固定规则派生评级；
+不同意派生结果就去改某一维的分并写证据，不要直接改 `rating`（门禁会比对两者）。
+正反例锚定与维度判据见 `references/rating-anchors.md`，战略相关度的判据见
+`references/root-tech-scoring.md`。
+
+**Top N 次序做成对比较。** 模型在"这两条谁更改变技术判断"上比在绝对打分上稳定：
+```bash
+python - <<'EOF'
+import json, pathlib, scoring
+d = pathlib.Path("events_run_<WINDOW_START_DATE>")
+evs = [json.loads(f.read_text()) for f in sorted(d.glob("EV-*.json"))]
+print(scoring.pair_candidates(evs))     # 分差 ≤1 的相邻对，逐对裁定
+EOF
+```
+把裁定写进 `events_run_<date>/pairwise.json`：
+`{"decisions":[{"pair":["EV-03","EV-05"],"winner":"EV-05","why":"…"}]}`。
+门禁要求每一对都有 `winner` 与 `why`。
+
+**claim 级证据**。A/A+ 的每条 claim 绑到快照里的原文片段：
+```bash
+python "$ASSETS/claim_evidence.py" --hash raw_<date>/<源文件>        # 取 sha256
+python "$ASSETS/claim_evidence.py" --events events_run_<date> --roots raw_<date> src
+```
+`quote` 对不上快照，说明那句话不是从原文来的——这是"抓了原文却凭印象写机制"唯一能
+被机器抓到的地方。
+
 **事件集只从本窗口候选池生成**：重跑时重新生成，覆盖面不应少于上次；不要读已有 `events_run_<date>/`
 决定"哪些还在"。编号 EV-01..EV-NN 在本轮内连续即可。
 
@@ -243,14 +286,17 @@ Active Event / Historical Context。
 | `event_title` | 一句话技术变化，不是产品口号 |
 | `source` / `entity` / `key_data` | 原始来源、实体、关键定量；同一事件换了 URL 时加 `canonical_source` |
 | `first_publish_shanghai` / `date_precision` | +08 时刻；`second`/`day`/`batch`/`none`，`day` 必须写 `date_precision_note`（见 `references/date-precision.md`） |
-| `rating` / `signal` | 评级（task_def §10）与信号；命题置信度由 registry 派生，事件里不写 |
+| `scoring` | 五维评分，各 0–2 并附证据：`source_authority` / `magnitude` / `mechanism_novelty` / `quantitative_evidence` / `strategic_adjacency`。**评级由它派生，不手写** |
+| `event_class` | `technical` / `funding` / `market` / `regulatory` / `opinion`；后四类受硬上限（上限 C，写出技术命题且有机制证据时放宽到 B） |
+| `root_tech` | 命中的根技术（带 `RT:` 前缀）：`{id, relation, direction, signal_quote, why}`。`strategic_adjacency` 由它派生 |
+| `rating` / `signal` | `rating` 由 `scoring` 派生（`events.py normalize` 自动填 `rating_basis`），只在与派生值一致时才可显式写；信号照旧；命题置信度由 registry 派生，事件里不写 |
 | `change_types` | `CT-01..CT-09` |
 | `primary_path` / `related_domains` | 主技术路径（通常到叶子，`A1`/`B1`/`C3` 必须下钻）；关联域 ≤2 |
 | `change_object` | `Model` / `Harness` / `运行平台` / `交互·应用` / `尚未披露` |
 | `annotation` | 仅 4.6 事件：取 `taxonomy.py resolve <primary_path>` 输出的 `annotation` |
 | `evidence_form` | `paper` / `product` / `api` / `code` / `benchmark` / `deployment` / `expert` |
-| `claims` | 逐条论点处置：`absorbed:<本事件 EV>` / `separated:<EV>` / `discarded:<理由>` |
-| `thesis_decision` | 归属裁决（P3），A/A+ 必填 |
+| `claims` | 逐条论点处置：`absorbed:<本事件 EV>` / `separated:<EV>` / `discarded:<理由>`。**A/A+ 的每条 claim 还要带 `evidence: {snapshot, snapshot_sha256, quote}`**，`quote` 必须能在快照里精确匹配到 |
+| `thesis_decision` | 归属裁决（P3），A/A+ 必填；还要写 `via_claim`（序号或 claim 原文），指出哪一条 claim 承载这个关系 |
 
 不写已废弃的 `tracks` / `sections`。写完必须规范化（补 `event_key`、统一枚举、校验必填；有错时一个
 文件都不改写）：
@@ -317,11 +363,24 @@ python "$ASSETS/thesis_registry.py" report --run-date <WINDOW_START_DATE> \
 "第 1 章写法""视觉约束"。八章与各章内容要求见 task_def §16；栏目编号与名称查
 `taxonomy.py chapter 3|4`。所有简报落在 `reports/`（报告库根目录，理由见 `references/design-rationale.md`）。
 
+**统计全部由脚本生成，不手写。** 事件总数、A+/A 计数、Dashboard 各项、8.2 索引表、
+第 2 章 Top N 必须由同一份 `events_run_<date>/` 派生：
+```bash
+python "$ASSETS/report_stats.py" --events events_run_<WINDOW_START_DATE> \
+  --report raw_<date>/collect_report.json --markdown
+```
+把输出抄进正文。门禁会用同一个脚本复算一遍比对（手写统计必然漂移：有一次自报 15 个
+事件、索引只列 14 行，自报 A+/A 为 1/5、实际 1/6）。
+
+**第 1 章主线每条至少引用 2 个 8.2 里的 EV**，且引用的 EV 评级不低于 B。一个事件撑不起
+"主线"这个词——那是单个事件，写在卡片里就够了。
+
 ```bash
 # 1) 写 reports/<标题 slug>-<WINDOW_START_DATE>.md；frontmatter 必须含 title / date / status / summary
-# 2) 渲染：输出同名 .html 并更新报告库索引
+# 2) 先过门禁（见第 6 步）；渲染器拒绝渲染没有门禁摘要的 .md
+# 3) 渲染：输出同名 .html 并更新报告库索引
 python "$ASSETS/render_report.py" --md "reports/<标题 slug>-<WINDOW_START_DATE>.md"
-# 3) 浏览器打开 .html 肉眼复核；有问题改 .md，重跑第 2 步
+# 4) 浏览器打开 .html 肉眼复核；有问题改 .md，重跑第 2–3 步（改过 .md 必须重跑门禁）
 ```
 
 <HARD-GATE>
@@ -370,8 +429,17 @@ python "$ASSETS/verify_gates.py" --raw-dir raw_<date> \
   --events events_run_<WINDOW_START_DATE>/ --state state/ --json-out verify_result.json
 python "$ASSETS/render_report.py" --md "reports/<标题 slug>-<WINDOW_START_DATE>.md"
 ```
+`--raw-dir` 会自动推出 `must_review.json`、`must_review_trace.json` 与快照根目录
+（`raw_<date>/` 与 `src/`）；单独给路径时用 `--must-review` / `--must-review-trace` /
+`--snapshot-roots`。
+
 任一退出码非 0 都要修正后重跑。门禁逐层检查项见 `references/gate-checks.md`；它只查事实与结构，
 不查排版。
+
+**门禁摘要**：`verify_gates.py` 跑完会在 `.md` 旁边写 `.gate_summary.json`（通过数、失败项、
+脚本 commit、时间）。`render_report.py` 拒绝渲染没有摘要、摘要有失败项、或 `.md` 在门禁之后
+被改过的稿子——HTML 是实际被阅读转发的那一份，它一旦存在就没人再去追门禁。
+只排查渲染器本身时可加 `--skip-gate-check`，那样的产物不得当成稿。
 
 **6b. 人工复核**（机器判不了的部分）：
 
@@ -379,8 +447,10 @@ python "$ASSETS/render_report.py" --md "reports/<标题 slug>-<WINDOW_START_DATE
 |---|---|
 | 机制新颖性 | 是否真的改变了技术命题，而非只刷新数字 |
 | 归类与裁决 | `primary_path` 与机制对得上；attach / new 是否真是同一 / 不同命题；反驳性证据是否如实裁决为 `contradicts`（置信度由裁决派生，裁决错了它就错） |
-| 证据 | 来源数量、独立性、定量数据 |
-| 章 1 主线 | 是否真的跨栏目 |
+| 证据 | 定量数据是否可核；**独立首发源由脚本归并后计数**（聚合源与转载不计），人工只看归并结果对不对 |
+| 五维评分 | 每一维的分与证据是否对得上锚例（`references/rating-anchors.md`）；`event_class` 是否诚实 |
+| 根技术命中 | `signal_quote` 是否真是该根技术的切换信号；否证与支持是否分清（`direction`） |
+| 章 1 主线 | 是否真的跨栏目；引用的 2 个以上 EV 是否真的支撑这条主线 |
 | 窗口文字 | title / H1 / Dashboard / 正文 / 文件名的时间范围一致；无残留"TARGET_DATE = 单一天"（task_def §18） |
 
 **6c. 8.1 与 8.3**（数据直接来自 `candidate_pool.json`、`pool_out_of_window.json`、`gap_tasks.json`、

@@ -43,6 +43,8 @@ def source_verdict(rec: dict, diff: dict | None = None) -> str:
     这对无 pubDate 的 RSS（如 Google Developers Blog）和趋势型源（HF Trending）
     至关重要：它们无法用日期归窗，但 snapshot 差分能证明"有变化"。
     """
+    if rec.get("extract") == "internal_error":
+        return "INTERNAL_ERROR"
     if rec.get("transport") != "ok":
         return "TRANSPORT_FAIL"
     ext = rec.get("extract")
@@ -63,7 +65,9 @@ def source_verdict(rec: dict, diff: dict | None = None) -> str:
     if ext == "skipped":
         return "SKIPPED"
     if rec.get("items_in_window", 0) > 0:
-        return "OK_IN_WINDOW"
+        # 归档回退补回来的批次要能被看见：8.1 里"靠回退才拿到"和"主通道正常"
+        # 是两种不同的覆盖状况，合并成 OK_IN_WINDOW 会掩盖主通道的故障。
+        return "OK_BATCH_FROM_ARCHIVE" if rec.get("from_archive") else "OK_IN_WINDOW"
     if rec.get("items_with_date", 0) == 0:
         if diff and diff.get("new_count", 0) > 0 and not diff.get("is_first_run"):
             return "OK_NEW_VIA_DIFF"
@@ -78,6 +82,8 @@ VERDICT_LABEL = {
     "OK_NO_DATES":      "有内容但无可解析日期（差分未发现新增）",
     "EMPTY":            "结构不可识别或空响应（真失明）",
     "OK_EMPTY":         "源结构正常但当天 0 条（非失明）",
+    "OK_BATCH_FROM_ARCHIVE": "主通道 0 条，改读归档页后取到窗口内批次",
+    "INTERNAL_ERROR":   "采集器自身异常（代码缺陷），不是源不可达",
     "PARSE_FAILED":     "内容形态与声明模式不符",
     "PROXY_BLOCKED":    "代理拦截页",
     "TRANSPORT_FAIL":   "传输失败",
@@ -89,7 +95,8 @@ VERDICT_LABEL = {
 #   前两者内容是拿到的，只是无法归窗（前者首轮出现，后续靠 snapshot 差分
 #   升级为 OK_NEW_VIA_DIFF）；OK_EMPTY 是源结构正常、当天确实没有内容
 #   （arXiv 周末、发布稀疏的厂商 blog），把这类算失明会产生假缺口。
-BLIND_VERDICTS = {"TRANSPORT_FAIL", "PROXY_BLOCKED", "PARSE_FAILED", "EMPTY"}
+BLIND_VERDICTS = {"TRANSPORT_FAIL", "PROXY_BLOCKED", "PARSE_FAILED", "EMPTY",
+                  "INTERNAL_ERROR"}
 
 
 def window_coverage(rec: dict, window_start: str, window_end: str) -> dict:
@@ -251,7 +258,7 @@ def track_coverage(records: list[dict]) -> dict:
                                "items_in_window": 0, "items_in_window_fuzzy": 0})
         d["sources"] += 1
         v = r.get("verdict", "")
-        if v in ("OK_IN_WINDOW", "OK_NEW_VIA_DIFF"):
+        if v in ("OK_IN_WINDOW", "OK_NEW_VIA_DIFF", "OK_BATCH_FROM_ARCHIVE"):
             d["ok_in_window"] += 1
         if v in BLIND_VERDICTS:
             d["blind"] += 1
@@ -270,7 +277,7 @@ def surface_coverage(records: list[dict]) -> dict:
                                  "items_in_window_fuzzy": 0})
         d["sources"].append(r.get("id"))
         v = r.get("verdict", "")
-        if v in ("OK_IN_WINDOW", "OK_NEW_VIA_DIFF"):
+        if v in ("OK_IN_WINDOW", "OK_NEW_VIA_DIFF", "OK_BATCH_FROM_ARCHIVE"):
             d["ok_in_window"] += 1
         # "读过"与"读到新内容"必须分开：OK_OUT_OF_WINDOW 表示源被成功读取、
         # 只是窗口内无新增，这不是失明。把两者混同会让"已检查无更新"

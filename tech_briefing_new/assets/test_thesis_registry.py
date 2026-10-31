@@ -367,5 +367,112 @@ class ReportTest(Base):
         self.assertEqual(self.reg().report(R2)["theses"], [])
 
 
+
+class EntityIndependenceTest(Base):
+    """跨实体收敛的实体必须是独立组织。
+
+    2026-10-30 的 TH-0002 由两篇不同团队的论文撑起 Medium —— 两篇论文不是两个
+    实体，这里把那条路堵掉。
+    """
+
+    def test_two_papers_count_as_one_entity_slot(self):
+        from thesis_registry import independent_entities
+        sup = [({}, {"entity": "清华大学", "evidence_form": "paper"}),
+               ({}, {"entity": "斯坦福", "evidence_form": "preprint"})]
+        self.assertEqual(independent_entities(sup), ["学术证据"])
+
+    def test_paper_plus_deployment_are_two_entities(self):
+        from thesis_registry import independent_entities
+        sup = [({}, {"entity": "清华大学", "evidence_form": "paper"}),
+               ({}, {"entity": "Anthropic", "evidence_form": "deployment"})]
+        self.assertEqual(independent_entities(sup), ["Anthropic", "学术证据"])
+
+    def test_same_org_paper_and_deployment_is_one_entity(self):
+        from thesis_registry import independent_entities
+        sup = [({}, {"entity": "Anthropic", "evidence_form": "paper"}),
+               ({}, {"entity": "Anthropic", "evidence_form": "deployment"})]
+        self.assertEqual(independent_entities(sup), ["Anthropic"])
+
+    def test_placeholder_entity_is_not_an_organization(self):
+        from thesis_registry import independent_entities
+        self.assertEqual(
+            independent_entities([({}, {"entity": "arXiv", "evidence_form": "paper"}),
+                                  ({}, {"entity": "未披露", "evidence_form": "product"})]),
+            [])
+
+    def test_two_papers_do_not_reach_convergence_or_medium(self):
+        d = _days(0, 1)
+        self.ingest(d[0], [
+            ev("EV-01", rating="A", entity="清华大学", form="paper",
+               src="https://arxiv.org/abs/2610.00001", decision=new("t")),
+            ev("EV-02", rating="A", entity="斯坦福", form="paper",
+               src="https://arxiv.org/abs/2610.00002",
+               decision=attach("NEW:t")),
+        ])
+        v = self.reg().view("TH-0001", d[0])
+        self.assertEqual(v["entities_counted"], ["学术证据"])
+        self.assertEqual(v["breakdown"]["entities"], 0,
+                         "两篇论文拿不到跨实体加分")
+        self.assertEqual(v["type"], "Frontier Thesis")
+        self.assertEqual(v["confidence"], "Low")
+
+    def test_paper_plus_independent_deployment_does_converge(self):
+        d = _days(0, 1)
+        self.ingest(d[0], [
+            ev("EV-01", rating="A", entity="清华大学", form="paper",
+               src="https://arxiv.org/abs/2610.00001", decision=new("t")),
+            ev("EV-02", rating="A", entity="Anthropic", form="deployment",
+               src="https://anthropic.com/x", decision=attach("NEW:t")),
+        ])
+        v = self.reg().view("TH-0001", d[0])
+        self.assertEqual(v["type"], "Convergence Thesis")
+        self.assertGreaterEqual(v["breakdown"]["entities"], 1)
+
+
+class ViaClaimTest(Base):
+    """关系要可复核：裁决必须指到承载该关系的那条 claim。"""
+
+    def _ev_with_claims(self, decision):
+        e = ev("EV-01", "https://ex.com/a", decision=decision)
+        e["claims"] = [{"claim": "第一条", "disposition": "absorbed:EV-01"},
+                       {"claim": "第二条", "disposition": "absorbed:EV-01"}]
+        return e
+
+    def _errs(self, decision):
+        d = _days(0, 1)
+        with Registry(self.state) as reg:
+            errs, _ = reg.validate_batch(d[0], [self._ev_with_claims(decision)])
+        return " ".join(errs)
+
+    def test_missing_via_claim_rejected(self):
+        self.assertIn("缺 via_claim", self._errs(new("t")))
+
+    def test_index_within_range_accepted(self):
+        self.assertNotIn("via_claim", self._errs({**new("t"), "via_claim": 1}))
+
+    def test_out_of_range_index_rejected(self):
+        self.assertIn("越界", self._errs({**new("t"), "via_claim": 5}))
+
+    def test_quoted_claim_text_accepted(self):
+        self.assertNotIn("via_claim", self._errs({**new("t"), "via_claim": "第二条"}))
+
+    def test_claim_text_not_in_event_rejected(self):
+        self.assertIn("与任何 claim 都不一致",
+                      self._errs({**new("t"), "via_claim": "我编的一条"}))
+
+    def test_event_without_claims_is_exempt(self):
+        """聚合卡没有 claim 列表，不要求 via_claim。"""
+        d = _days(0, 1)
+        with Registry(self.state) as reg:
+            errs, _ = reg.validate_batch(d[0], [ev("EV-01", "https://ex.com/a", decision=new("t"))])
+        self.assertNotIn("via_claim", " ".join(errs))
+
+    def test_via_claim_is_persisted_on_the_link(self):
+        d = _days(0, 1)
+        self.ingest(d[0], [self._ev_with_claims({**new("t"), "via_claim": 1})])
+        links = self.reg().data["links"]
+        self.assertEqual([l["via_claim"] for l in links], [1])
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

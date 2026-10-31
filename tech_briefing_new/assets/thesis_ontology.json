@@ -1115,7 +1115,30 @@
     ],
     "core_judgment_excludes": [
       "Low"
-    ]
+    ],
+    "entity_independence": {
+      "description": "跨实体收敛的「实体」必须是独立组织。两个不同作者团队的 arXiv 论文不构成两个实体——2026-10-30 的 TH-0002 由两篇论文撑起 Medium，就是缺这条的后果。",
+      "non_org_entities": [
+        "arXiv",
+        "学术界",
+        "学术团队",
+        "研究社区",
+        "研究者",
+        "开源社区",
+        "社区",
+        "多家",
+        "未披露",
+        "匿名",
+        "不详"
+      ],
+      "collective_forms": [
+        "paper",
+        "preprint",
+        "benchmark"
+      ],
+      "collective_slot": "学术证据"
+    },
+    "forms_bonus_note": "forms 按去重后的 evidence_form 计，所以同为 paper 的第二条支持证据对 forms 的贡献本就是 0，比半权折减更严。同类型折减因此落在 entity_independence 上，不再另加系数。"
   },
   "thesis_rules": {
     "id_format": "TH-%04d",

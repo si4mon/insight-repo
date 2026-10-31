@@ -25,6 +25,7 @@ from pathlib import Path
 from urllib.parse import urlsplit
 
 sys.path.insert(0, str(Path(__file__).parent))
+import scoring  # noqa: E402
 from taxonomy import TAXONOMY, TaxonomyError  # noqa: E402
 
 ONTOLOGY = json.loads((Path(__file__).parent / "thesis_ontology.json").read_text(encoding="utf-8"))
@@ -33,8 +34,9 @@ CHANGE_TYPES = tuple(ct["id"] for ct in ONTOLOGY["change_types"])
 RATINGS = ("A+", "A", "B", "C")
 DATE_PRECISIONS = ("second", "day", "batch", "none")
 
+# rating 不在必填里：它由 scoring 派生（见 scoring.py）。必填的是评分块本身。
 REQUIRED = ("event_title", "source", "entity", "first_publish_shanghai",
-            "rating", "primary_path", "change_types", "evidence_form")
+            "scoring", "primary_path", "change_types", "evidence_form")
 
 _ARXIV = re.compile(r'arxiv\.org/(?:abs|pdf|html)/(\d{4}\.\d{4,5})(?:v\d+)?', re.I)
 _GH_RELEASE = re.compile(r'github\.com/([^/\s]+)/([^/\s]+)/releases/tag/([^/?#\s]+)', re.I)
@@ -113,9 +115,84 @@ def normalize_event(ev: dict, event_id: str) -> tuple[dict, list[str]]:
         except ValueError:
             errors.append(f"{event_id}: first_publish_shanghai={fp} 不是 ISO 时间")
 
+    errors += _normalize_timestamps(out, event_id)
+
+    # 评分块：有 scoring 就必须自洽（含评级可派生）；没有 scoring 且已写 rating，
+    # 说明评级是手给的——这正是跨模型方差的来源，所以直接报错。
+    if out.get("scoring"):
+        out.setdefault("independent_sources", scoring.independent_sources(
+            [str(out.get("source") or ""), str(out.get("canonical_source") or "")]
+            + [str(c.get("url")) for c in (out.get("claims") or [])
+               if isinstance(c, dict) and c.get("url")]
+            + [str(u) for u in (out.get("corroborating_urls") or [])]))
+        errors += scoring.validate(out)
+        if not out.get("rating"):
+            r, why = scoring.derive_rating(
+                out["scoring"], out.get("event_class") or "technical",
+                bool(str(out.get("product_to_thesis") or "").strip()))
+            out["rating"], out["rating_basis"] = r, why
+    elif out.get("rating"):
+        errors.append(f"{event_id}: 写了 rating 却没有 scoring 块；"
+                      f"评级必须由五维评分派生，见 references/rating-anchors.md")
+
     if out.get("source"):
         out["event_key"] = event_key(out)
     return out, errors
+
+
+# 每类源用哪个时刻作为「首次公开」。改这张表就能改归窗口径，
+# 不需要回去重写事件 —— 三类时刻都已入库。
+FIRST_PUBLISH_RULE = {
+    "arxiv":     "announced",   # 论文公告前不可见，提交时刻不是首次公开
+    "github":    "announced",   # release 的 published_at
+    "default":   "announced",
+}
+TS_KINDS = ("submitted", "announced", "refreshed")
+
+
+def _tz_offset_hours(iso: str):
+    try:
+        dt = datetime.fromisoformat(str(iso))
+    except (ValueError, TypeError):
+        return None
+    return None if dt.tzinfo is None else dt.utcoffset().total_seconds() / 3600
+
+
+def _normalize_timestamps(out: dict, event_id: str) -> list[str]:
+    """三类时刻分开保存，first_publish_shanghai 由规则派生。
+
+    提交 / 公告 / 修订三个时刻各有用处，入库时只留一个就把信息丢了：
+    arXiv 的「提交时刻还是公告批次」之争、GitHub 的 tag 名日期与 published_at
+    之差、媒体转载日与原文首发日，都需要在事后还能重新判定。
+    存全了之后，归窗口径变成 FIRST_PUBLISH_RULE 里可切换的一行，
+    而不是写事件时的有损选择。
+    """
+    ts = out.get("timestamps")
+    if not isinstance(ts, dict):
+        return []
+    errs = []
+    for k in list(ts):
+        if k in ("source_tz", "note"):
+            continue
+        if k not in TS_KINDS:
+            errs.append(f"{event_id}: timestamps.{k} 不在 {TS_KINDS}")
+            continue
+        if ts[k] and _tz_offset_hours(ts[k]) is None:
+            errs.append(f"{event_id}: timestamps.{k}={ts[k]} 必须是带时区的 ISO 时间")
+    kind = FIRST_PUBLISH_RULE.get(out.get("source_kind", ""), FIRST_PUBLISH_RULE["default"])
+    want = ts.get(kind) or ts.get("announced") or ts.get("submitted")
+    fp = out.get("first_publish_shanghai")
+    if want and fp:
+        a, b = _tz_offset_hours(want), _tz_offset_hours(fp)
+        if a is not None and b is not None:
+            if b != 8.0:
+                errs.append(f"{event_id}: first_publish_shanghai 必须是 +08:00，实为 UTC{b:+g}")
+            elif abs((datetime.fromisoformat(str(want))
+                      - datetime.fromisoformat(str(fp))).total_seconds()) > 60:
+                errs.append(
+                    f"{event_id}: first_publish_shanghai={fp} 与 timestamps.{kind}={want} "
+                    f"换算后不一致（按 {kind} 口径派生）")
+    return errs
 
 
 def normalize_dir(events_dir: Path) -> tuple[int, list[str]]:

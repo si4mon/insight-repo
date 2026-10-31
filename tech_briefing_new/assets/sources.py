@@ -249,7 +249,10 @@ def build_sources() -> list[dict]:
             surface="code", layer="sdk-release", channel="G_official_surface",
             mode="atom",
             urls=[(f"https://github.com/openai/{sdk}/releases.atom",
-                   f"gh_openai_{sdk}.atom")])
+                   f"gh_openai_{sdk}.atom"),
+                   # API 通道：published_at 秒级带时区，atom 被拦时仍可归窗
+                   (f"https://api.github.com/repos/openai/{sdk}/releases?per_page=30",
+                    f"gh_openai_{sdk}_api.json", "github_releases")])
 
     add(id="openai_platform_docs", entity="OpenAI", surface="developer",
         layer="platform-docs-index", channel="G_official_surface",
@@ -293,7 +296,10 @@ def build_sources() -> list[dict]:
             surface="code", layer="sdk-release", channel="G_official_surface",
             mode="atom",
             urls=[(f"https://github.com/anthropics/{sdk}/releases.atom",
-                   f"gh_anthropic_{sdk}.atom")])
+                   f"gh_anthropic_{sdk}.atom"),
+                   # API 通道：published_at 秒级带时区，atom 被拦时仍可归窗
+                   (f"https://api.github.com/repos/anthropics/{sdk}/releases?per_page=30",
+                    f"gh_anthropic_{sdk}_api.json", "github_releases")])
 
     # anthropic.com 保留为"探测性源"：不设 critical，且拦截页会被显式标记，
     # 这样 8.1 能持续显示"该面仍被拦截"，而不是静默成功。
@@ -327,7 +333,10 @@ def build_sources() -> list[dict]:
     add(id="google_genai_sdk", entity="Google", surface="code",
         layer="sdk-release", channel="G_official_surface", mode="atom",
         urls=[("https://github.com/googleapis/python-genai/releases.atom",
-               "gh_python_genai.atom")])
+               "gh_python_genai.atom"),
+               # API 通道：published_at 秒级带时区，atom 被拦时仍可归窗
+               ("https://api.github.com/repos/googleapis/python-genai/releases?per_page=30",
+                "gh_python_genai_api.json", "github_releases")])
 
     # ==========================================================
     # NVIDIA —— 此前完全缺失，遗漏 3 的直接原因
@@ -360,14 +369,20 @@ def build_sources() -> list[dict]:
     add(id="qwen_code", entity="Qwen", surface="code",
         layer="qwen-github-release", channel="G_official_surface", mode="atom",
         required=False,
-        urls=[("https://github.com/QwenLM/Qwen3/releases.atom", "gh_qwen3.atom")])
+        urls=[("https://github.com/QwenLM/Qwen3/releases.atom", "gh_qwen3.atom"),
+              # API 通道：published_at 秒级带时区，atom 被拦时仍可归窗
+              ("https://api.github.com/repos/QwenLM/Qwen3/releases?per_page=30",
+               "gh_qwen3_api.json", "github_releases")])
 
     # DeepSeek 公司面：deepseek.com 首页无日期结构，用 GitHub release 作代码面兜底
     add(id="deepseek_code", entity="DeepSeek", surface="code",
         layer="deepseek-github-release", channel="G_official_surface", mode="atom",
         required=False,
         urls=[("https://github.com/deepseek-ai/DeepSeek-V3/releases.atom",
-               "gh_deepseek.atom")])
+               "gh_deepseek.atom"),
+               # API 通道：published_at 秒级带时区，atom 被拦时仍可归窗
+               ("https://api.github.com/repos/deepseek-ai/DeepSeek-V3/releases?per_page=30",
+                "gh_deepseek_api.json", "github_releases")])
 
     add(id="mistral_news", entity="Mistral", surface="company",
         layer="mistral-news", channel="A_entity", mode="rss",
@@ -393,12 +408,18 @@ def build_sources() -> list[dict]:
     add(id="moonshot_kimi_code", entity="Moonshot", surface="code",
         layer="kimi-code-release", channel="G_official_surface", mode="atom",
         urls=[("https://github.com/MoonshotAI/kimi-code/releases.atom",
-               "gh_moonshot_kimi_code.atom")])
+               "gh_moonshot_kimi_code.atom"),
+               # API 通道：published_at 秒级带时区，atom 被拦时仍可归窗
+               ("https://api.github.com/repos/MoonshotAI/kimi-code/releases?per_page=30",
+                "gh_moonshot_kimi_code_api.json", "github_releases")])
     add(id="moonshot_checkpoint_engine", entity="Moonshot", surface="code",
         layer="checkpoint-engine-release", channel="G_official_surface", mode="atom",
         required=False,
         urls=[("https://github.com/MoonshotAI/checkpoint-engine/releases.atom",
-               "gh_moonshot_checkpoint.atom")])
+               "gh_moonshot_checkpoint.atom"),
+               # API 通道：published_at 秒级带时区，atom 被拦时仍可归窗
+               ("https://api.github.com/repos/MoonshotAI/checkpoint-engine/releases?per_page=30",
+                "gh_moonshot_checkpoint_api.json", "github_releases")])
 
     # Microsoft：devblogs RSS 可达（116KB/10 条），是 Agent 相关一手内容的主要来源
     add(id="msft_devblogs", entity="Microsoft", surface="developer",
@@ -426,7 +447,14 @@ def build_sources() -> list[dict]:
             daily_batch=True,
             skip_weekends=True,
             urls=[(f"https://export.arxiv.org/rss/{cat}",
-                   f"arxiv_{cat.replace('.', '_')}.xml")])
+                   f"arxiv_{cat.replace('.', '_')}.xml")],
+            # 周末 RSS 返回合法但空的 feed，当天的批次会整批漏掉
+            # （2026-10-31 实测 cs.CL/LG/MA/RO 共 709 篇未进候选池）。
+            # extract=empty 时自动改读归档页，判定记 OK_BATCH_FROM_ARCHIVE。
+            archive_fallback={
+                "url": f"https://arxiv.org/list/{cat}/pastweek?skip=0&show=2000",
+                "file": f"arxiv_{cat.replace('.', '_')}_pastweek.html",
+                "mode": "arxiv_listing"})
 
     # ==========================================================
     # C. 聚合源

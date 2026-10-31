@@ -55,6 +55,39 @@ def same_path(a: Path, b: Path) -> bool:
         return False
 
 
+def gate_blocker(src: Path) -> str:
+    """没过门禁的稿子不许渲染。
+
+    否则「手写统计、没跑过门禁」的 Markdown 也能产出一份看起来成稿的 HTML，
+    而 HTML 是实际被阅读和转发的那一份——它一旦存在，就没人再去追门禁。
+    返回空串表示放行，否则返回给人看的阻断原因。
+    """
+    gs = src.parent / ".gate_summary.json"
+    hint = (f"  先跑: python3 verify_gates.py --md {src.name} ...\n"
+            f"  只排查渲染器本身时可加 --skip-gate-check，产物不得当成稿。")
+    if not gs.exists():
+        return f"没有门禁摘要 {gs.name}，拒绝渲染。\n{hint}"
+    try:
+        data = json.loads(gs.read_text(encoding="utf-8"))
+    except Exception as e:
+        return f"门禁摘要无法解析（{e}），拒绝渲染。\n{hint}"
+
+    if data.get("md") != src.name:
+        return (f"门禁摘要对应的是 {data.get('md')!r}，不是 {src.name!r}，拒绝渲染。\n{hint}")
+    failed = data.get("failed") or []
+    if failed:
+        return ("门禁未通过，拒绝渲染。失败项：\n  - "
+                + "\n  - ".join(str(x) for x in failed[:8])
+                + f"\n修完重跑门禁。")
+    # 门禁跑在旧稿上同样不算过：.md 改过就要重跑
+    try:
+        if src.stat().st_mtime > gs.stat().st_mtime + 1:
+            return (f"{src.name} 在门禁之后被改过，门禁结果已失效，拒绝渲染。\n{hint}")
+    except OSError:
+        pass
+    return ""
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description="把简报 Markdown 渲染成自包含 HTML")
     ap.add_argument("--md", default="", help="简报 Markdown 源文件（应位于 reports/ 下）")
@@ -62,6 +95,8 @@ def main() -> int:
     ap.add_argument("--check", action="store_true", help="只报告引擎与 node 是否可用")
     ap.add_argument("--allow-outside", action="store_true",
                     help="允许源文件不在 reports/ 下（破坏报告库索引一致性，仅用于排查）")
+    ap.add_argument("--skip-gate-check", action="store_true",
+                    help="跳过门禁摘要校验（只用于排查渲染器自身问题，产物不得当成稿）")
     args = ap.parse_args()
 
     eng = engine_dir()
@@ -100,6 +135,11 @@ def main() -> int:
               f"  实际位置: {src.resolve()}\n"
               f"把 .md 移到 reports/ 后重跑；确需在别处渲染加 --allow-outside。",
               file=sys.stderr)
+        return 2
+
+    gate_err = "" if args.skip_gate_check else gate_blocker(src)
+    if gate_err:
+        print(gate_err, file=sys.stderr)
         return 2
 
     out = src.with_suffix(".html")

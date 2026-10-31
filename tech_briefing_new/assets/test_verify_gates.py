@@ -15,7 +15,8 @@ import unittest
 from pathlib import Path
 
 from taxonomy import TAXONOMY
-from verify_gates import (Check, check_event_annotations, check_event_paths,
+import testlib
+from verify_gates import (check_ch1_mainlines, Check, check_event_annotations, check_event_paths,
                           check_markdown, check_md_event_index, check_md_theses,
                           check_publish_precision, check_source_coverage_definition,
                           check_registry, check_taxonomy_definition, check_traceability,
@@ -405,6 +406,7 @@ class RegistryGateTest(unittest.TestCase):
               "first_publish_shanghai": "2026-10-30T10:00:00+08:00", "rating": "A+",
               "primary_path": "B1.1", "change_types": ["CT-01"], "evidence_form": "product",
               "claims": [{"claim": "c", "disposition": f"absorbed:{eid}"}], **kw}
+        testlib.decorate(ev)
         ev, errs = normalize_event(ev, eid)
         assert not errs, errs
         (self.evdir / f"{eid}.json").write_text(json.dumps(ev, ensure_ascii=False), encoding="utf-8")
@@ -422,6 +424,7 @@ class RegistryGateTest(unittest.TestCase):
 
     def _new(self, conf_entity=""):
         return {"action": "new", "relation": "supports", "rationale": "r",
+                "via_claim": 0,
                 "new_thesis": {"name": "n", "statement": "s", "object": "o", "consequence": "c",
                                "scope_leaves": ["B1.1"], "change_types": ["CT-01"]}}
 
@@ -513,7 +516,8 @@ class RegistryGateTest(unittest.TestCase):
             "first_publish_shanghai": "2026-10-31T10:00:00+08:00", "rating": "A+",
             "primary_path": "B1.1", "change_types": ["CT-01"], "evidence_form": "paper",
             "thesis_decision": {"action": "attach", "thesis_id": "TH-0001",
-                                "relation": "contradicts", "rationale": "r"}}, "EV-01")
+                                "relation": "contradicts", "rationale": "r",
+                                "via_claim": 0}}, "EV-01")
         with Registry(self.state) as reg:
             reg.ingest_run(run2, [con])
         md = self._md_with_ch7("- TH-0001（置信度 Low）")
@@ -646,6 +650,77 @@ class TaxonomyCoverageTest(unittest.TestCase):
         check_markdown(c, p, {})
         self.assertEqual(_status(c, "栏目编号均属 11 个栏目"), "PASS")
         self.assertEqual(_status(c, "空栏目不出现在正文"), "PASS")
+
+
+
+class Ch1MainlineTest(unittest.TestCase):
+    """第 1 章主线必须由技术事件支撑：一个事件撑不起「主线」这个词。"""
+
+    def setUp(self):
+        self._tmp = tempfile.TemporaryDirectory()
+        self.tmp = Path(self._tmp.name)
+        self.addCleanup(self._tmp.cleanup)
+
+    def _run(self, ch1_body, ratings=None):
+        md = self.tmp / "r.md"
+        md.write_text(f"## 本轮结论与技术趋势\n\n{ch1_body}\n\n## 今日必看\n\n正文。\n",
+                      encoding="utf-8")
+        evdir = self.tmp / "events_run_2026-10-30"
+        evdir.mkdir(exist_ok=True)
+        for eid, r in (ratings or {}).items():
+            (evdir / f"{eid}.json").write_text(
+                json.dumps({"event_id": eid, "rating": r}), encoding="utf-8")
+        c = Check()
+        check_ch1_mainlines(c, md, evdir)
+        return {x["name"]: (x["status"], x["detail"]) for x in c.results}
+
+    TWO = ("1. **主线甲。** 证据见 EV-01 与 EV-02。\n"
+           "2. **主线乙。** 证据见 EV-03 与 EV-04。")
+    RT = {"EV-01": "A", "EV-02": "A", "EV-03": "B", "EV-04": "A+"}
+
+    def test_two_citations_each_passes(self):
+        r = self._run(self.TWO, self.RT)
+        self.assertEqual({v[0] for v in r.values()}, {"PASS"})
+
+    def test_single_citation_fails(self):
+        r = self._run("1. **主线甲。** 只有 EV-01。", self.RT)
+        self.assertEqual(r["第 1 章主线各引用 ≥2 个 EV"][0], "FAIL")
+
+    def test_repeated_same_id_is_still_one(self):
+        r = self._run("1. **主线甲。** EV-01 与 EV-01。", self.RT)
+        self.assertEqual(r["第 1 章主线各引用 ≥2 个 EV"][0], "FAIL")
+
+    def test_dangling_ev_fails(self):
+        r = self._run("1. **主线甲。** EV-01 与 EV-77。", self.RT)
+        self.assertEqual(r["第 1 章引用的 EV 都存在"][0], "FAIL")
+
+    def test_c_rated_evidence_fails(self):
+        r = self._run("1. **主线甲。** EV-01 与 EV-05。",
+                      {**self.RT, "EV-05": "C"})
+        self.assertEqual(r["第 1 章引用的 EV 评级不低于 B"][0], "FAIL")
+
+    def test_chapter_without_mainlines_fails(self):
+        r = self._run("本轮没什么可说的。", self.RT)
+        self.assertEqual(r["第 1 章有主线"][0], "FAIL")
+
+    def test_bullet_mainlines_also_counted(self):
+        r = self._run("- **主线甲。** EV-01 与 EV-02。\n- **主线乙。** EV-03 与 EV-04。",
+                      self.RT)
+        self.assertEqual(r["第 1 章主线各引用 ≥2 个 EV"][0], "PASS")
+
+    def test_later_chapters_are_not_scanned(self):
+        """第 2 章的卡片不是主线，不应被当成主线来查引用数。"""
+        md = self.tmp / "r.md"
+        md.write_text("## 本轮结论与技术趋势\n\n1. **主线甲。** EV-01 与 EV-02。\n\n"
+                      "## 今日必看\n\n1. **某张卡。** 只提 EV-03。\n", encoding="utf-8")
+        evdir = self.tmp / "events_run_2026-10-30"
+        evdir.mkdir(exist_ok=True)
+        for eid, r in self.RT.items():
+            (evdir / f"{eid}.json").write_text(
+                json.dumps({"event_id": eid, "rating": r}), encoding="utf-8")
+        c = Check()
+        check_ch1_mainlines(c, md, evdir)
+        self.assertEqual({x["status"] for x in c.results}, {"PASS"})
 
 
 if __name__ == "__main__":

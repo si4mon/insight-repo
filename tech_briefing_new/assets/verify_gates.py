@@ -410,6 +410,174 @@ def check_event_annotations(c: Check, events_dir: Path | None):
           "; ".join(mismatch[:5]))
 
 
+_RATING_OK = ("A+", "A", "B")
+_MAINLINE = re.compile(r'^\s*(?:\d+\.|[-*])\s+\*\*')
+
+
+def check_ch1_mainlines(c: Check, md_path: Path | None, events_dir: Path | None):
+    """第 1 章的主线必须由技术事件支撑：每条至少引用 2 个 8.2 里的 EV。
+
+    一条只靠感觉写出来的主线，读者无法回到证据；要求两个 EV，是因为一个事件
+    撑不起"主线"这个词——那是单个事件，写在卡片里就够了。
+    """
+    if not (md_path and md_path.exists()):
+        return
+    text = md_path.read_text(encoding="utf-8", errors="ignore")
+    m = re.search(r'^##\s+\S[^\n]*$', text, re.M)
+    if not m:
+        return
+    seg = text[m.end():]
+    nxt = re.search(r'^##\s+', seg, re.M)
+    ch1 = seg[:nxt.start()] if nxt else seg
+
+    lines = [ln for ln in ch1.splitlines() if _MAINLINE.match(ln)]
+    if not lines:
+        c.add("md", "第 1 章有主线", False,
+              "第 1 章没找到主线条目（形如「1. **…**」）")
+        return
+
+    events = _load_events(events_dir)
+    thin, missing, weak = [], [], []
+    for ln in lines:
+        ids = sorted(set(EV_ID_RE.findall(ln)))
+        head = re.sub(r'\*+', '', ln).strip()[:28]
+        if len(ids) < 2:
+            thin.append(f"「{head}…」只引用 {len(ids)} 个 EV")
+            continue
+        for i in ids:
+            if events and i not in events:
+                missing.append(f"{head}…→{i}")
+            elif events and events[i].get("rating") not in _RATING_OK:
+                weak.append(f"{head}…→{i}({events[i].get('rating')})")
+
+    c.add("md", "第 1 章主线各引用 ≥2 个 EV", not thin, "; ".join(thin[:4]))
+    c.add("md", "第 1 章引用的 EV 都存在", not missing, "; ".join(missing[:4]))
+    c.add("md", "第 1 章引用的 EV 评级不低于 B", not weak, "; ".join(weak[:4]))
+
+
+def check_claim_evidence(c: Check, events_dir: Path | None, roots: list):
+    """A/A+ 事件的每条 claim 必须绑定到快照里的原文片段。"""
+    events = _load_events(events_dir)
+    if not events:
+        return
+    try:
+        import claim_evidence as cev
+    except Exception as e:
+        c.warn("trace", "claim 绑定原文片段", f"claim_evidence 不可用 {e}")
+        return
+    roots = [Path(r) for r in roots if r]
+    if not roots:
+        c.warn("trace", "claim 绑定原文片段", "未提供快照根目录，跳过比对")
+        return
+    errs, n = [], 0
+    for eid, ev in sorted(events.items()):
+        ev = {**ev, "event_id": ev.get("event_id") or eid}
+        if cev.required_for(ev):
+            n += 1
+        errs += cev.verify(ev, roots)
+    c.add("trace", "A/A+ 的 claim 绑定到快照原文片段", not errs,
+          (f"{n} 个事件需绑定；" if n else "") + "; ".join(errs[:4]))
+
+
+def check_root_tech_list(c: Check):
+    """根技术清单自身的定义检查。
+
+    战略相关度整维都挂在这份清单上，清单坏了整维就失效，所以每轮先查它。
+    """
+    try:
+        import root_tech as rt
+        data = rt.load()
+    except Exception as e:
+        c.add("taxonomy", "根技术清单可加载", False, str(e))
+        return
+    roots = data.get("roots") or []
+    c.add("taxonomy", "根技术清单可加载", bool(roots),
+          f"{len(roots)} 项根技术 + {len(data.get('candidates') or [])} 项候选根")
+
+    ids = [r.get("id") for r in roots]
+    dup = sorted({i for i in ids if ids.count(i) > 1})
+    c.add("taxonomy", "根技术编号唯一", not dup, f"重复: {dup[:5]}")
+
+    no_signal = [r["id"] for r in roots if not str(r.get("switch_signal") or "").strip()]
+    c.add("taxonomy", "每项根技术都有切换信号", not no_signal,
+          f"缺切换信号: {no_signal[:5]}（切换信号是计 2 分的唯一判据）")
+
+    bad_leaf = []
+    for r in roots:
+        for leaf in list(r.get("leaves_core") or []) + list(r.get("leaves_related") or []):
+            try:
+                TAXONOMY.resolve(leaf)
+            except TaxonomyError:
+                bad_leaf.append(f"{r['id']}→{leaf}")
+    c.add("taxonomy", "根技术叶子落点在分类表内", not bad_leaf,
+          "; ".join(bad_leaf[:5]))
+
+    # 编号与叶子重名是已知事实（11 处），所以带 RT: 前缀是硬要求。
+    # 这里断言前缀常量没被改掉，否则重名就会静默混用。
+    c.add("taxonomy", "根技术编号带 RT: 前缀", rt.PREFIX == "RT:",
+          f"PREFIX={rt.PREFIX!r}")
+
+
+def check_scoring(c: Check, events_dir: Path | None, pairwise_path: Path | None):
+    """评级必须由五维评分派生，且评分块自洽。
+
+    2026-10-30 回测：一份报告把 OpenAI 融资缩水、Intel 暴跌、S&P 下调 Meta 评为
+    A/B，与 Cursor 投毒并列。手给评级时没有任何机制能拦住这一类，所以评级改为
+    由分数派生，这里核对事件产物是否遵守。
+    """
+    events = _load_events(events_dir)
+    if not events:
+        return
+    try:
+        import scoring
+    except Exception as e:
+        c.warn("trace", "评级可由评分派生", f"scoring 模块不可用 {e}")
+        return
+
+    errs, no_block = [], []
+    for eid, ev in sorted(events.items()):
+        ev = {**ev, "event_id": ev.get("event_id") or eid}
+        if not ev.get("scoring"):
+            no_block.append(eid)
+            continue
+        errs += scoring.validate(ev)
+
+    c.add("trace", "事件都有五维评分块", not no_block,
+          f"缺评分块: {', '.join(no_block[:6])}")
+    c.add("trace", "评级可由评分派生且评分自洽", not errs, "; ".join(errs[:4]))
+
+    # 非技术类事件的硬上限：这里只核对类别声明是否存在，上限由 derive_rating 施加
+    unclassed = [eid for eid, ev in sorted(events.items())
+                 if ev.get("scoring") and not ev.get("event_class")]
+    if unclassed:
+        c.warn("trace", "事件声明了 event_class",
+                f"未声明（按 technical 处理，不受硬上限约束）: "
+                f"{', '.join(unclassed[:6])}")
+
+    # 成对比较：分差 ≤1 的相邻对必须有裁定，否则 Top N 的次序仍是绝对分直排
+    evs = [{**ev, "event_id": eid} for eid, ev in sorted(events.items())
+           if ev.get("scoring")]
+    pairs = scoring.pair_candidates(evs)
+    if not pairs:
+        return
+    decided = set()
+    if pairwise_path and pairwise_path.exists():
+        try:
+            data = json.loads(pairwise_path.read_text(encoding="utf-8"))
+            for d in data.get("decisions") or []:
+                pr = d.get("pair") or []
+                if len(pr) == 2 and d.get("winner") in pr and \
+                        str(d.get("why") or "").strip():
+                    decided.add(frozenset(pr))
+        except Exception as e:
+            c.add("trace", "成对比较可解析", False, f"{e}")
+            return
+    missing = [f"{a}/{b}" for a, b in pairs if frozenset((a, b)) not in decided]
+    c.add("trace", "分数接近的候选已做成对比较", not missing,
+          f"{len(missing)} 对未裁定: " + ", ".join(missing[:5])
+          + ("（写进 pairwise.json，每对要有 winner 与 why）" if missing else ""))
+
+
 # ---------- Markdown 通道 ----------
 #
 # MD 路线（render_report.py + report_engine）下，HTML 是机械渲染的副本，
@@ -780,6 +948,277 @@ def check_markdown(c: Check, md_path: Path, report: dict,
     _check_md_columns(c, text, events_dir)
 
 
+_URL_SHAPES = [
+    # (名称, URL 形态, 从 URL 取可校验的数值/日期, 校验函数说明)
+    ("HN item", re.compile(r'news\.ycombinator\.com/item\?id=(\d+)', re.I), "hn_id"),
+    ("arXiv abs", re.compile(r'arxiv\.org/(?:abs|pdf|html)/(\d{2})(\d{2})\.\d{4,5}', re.I),
+     "arxiv_ym"),
+    ("GitHub release", re.compile(
+        r'github\.com/[^/\s]+/[^/\s]+/releases/tag/([^/?#\s]+)', re.I), "gh_tag"),
+]
+
+
+def _hn_id_range(events: dict) -> tuple[int, int]:
+    """本轮候选里出现过的 HN item id 区间。HN 的 id 单调递增，
+    区间外的 id 一定不是本窗口的条目。"""
+    ids = []
+    for ev in events.values():
+        for u in _event_urls(ev):
+            m = _URL_SHAPES[0][1].search(u)
+            if m:
+                ids.append(int(m.group(1)))
+    return (min(ids), max(ids)) if ids else (0, 0)
+
+
+def _event_urls(ev: dict) -> list:
+    out = [str(ev.get("source") or ""), str(ev.get("canonical_source") or "")]
+    for c in ev.get("claims") or []:
+        if isinstance(c, dict) and c.get("url"):
+            out.append(str(c["url"]))
+    return [u for u in out if u.startswith("http")]
+
+
+_NUM = re.compile(r'(\d+)')
+
+
+def check_must_review(c: Check, mr_path: Path | None, trace_path: Path | None,
+                     events_dir: Path | None):
+    """必审清单内每一条都要有处置留痕。
+
+    候选池 2000+ 条无法逐条台账，但"分层必审"的那一层必须逐条可查，否则漏检
+    就查不出来：2026-10-30 回测里三份报告各自漏掉不同事件（Glance、Masked
+    Erosion、Claude Code 2.1.314），都不是判断分歧，而是根本没进视野。
+    """
+    if not (mr_path and mr_path.exists()):
+        c.add("collection", "必审清单已生成", False,
+              "缺少 must_review.json，先跑 must_review.py")
+        return
+    try:
+        mr = json.loads(mr_path.read_text(encoding="utf-8"))
+    except Exception as e:
+        c.add("collection", "必审清单已生成", False, f"解析失败 {e}")
+        return
+    items = mr.get("items") or []
+    c.add("collection", "必审清单已生成", bool(items),
+          f"{len(items)} 条 / {mr.get('by_tier')}")
+
+    if not (trace_path and trace_path.exists()):
+        c.add("collection", "必审清单逐条留痕", False,
+              f"缺少 {trace_path.name if trace_path else 'must_review_trace.json'}，"
+              f"用 must_review.py --trace-out 生成后逐条填写")
+        return
+    try:
+        tr = json.loads(trace_path.read_text(encoding="utf-8"))
+    except Exception as e:
+        c.add("collection", "必审清单逐条留痕", False, f"台账解析失败 {e}")
+        return
+    disp = tr.get("dispositions") or {}
+
+    try:
+        import must_review as mrmod
+        legal_disp = set(mrmod.DISPOSITIONS)
+        legal_reason = set(mrmod.DISCARD_REASONS)
+    except Exception:
+        legal_disp = {"selected", "merged", "chapter5", "discarded"}
+        legal_reason = set()
+
+    ev_ids, ev_urls = set(), {}
+    if events_dir and events_dir.exists():
+        for f in sorted(events_dir.glob("EV-*.json")):
+            try:
+                ev = json.loads(f.read_text(encoding="utf-8"))
+            except Exception:
+                continue
+            ev_ids.add(f.stem)
+            for u in _event_urls(ev):
+                ev_urls[u] = f.stem
+
+    missing, illegal, bad_ev, bad_reason, misfiled = [], [], [], [], []
+    for it in items:
+        uid = it.get("uid") or ""
+        e = disp.get(uid)
+        label = (it.get("title") or uid)[:40]
+        if not e or not (e.get("disposition") or "").strip():
+            missing.append(label)
+            continue
+        d = e["disposition"].strip()
+        if d not in legal_disp:
+            illegal.append(f"{label}={d}")
+            continue
+        if d in ("selected", "merged"):
+            if not EV_ID_RE.fullmatch(str(e.get("ev") or "")) or \
+                    (ev_ids and e["ev"] not in ev_ids):
+                bad_ev.append(f"{label}→{e.get('ev')!r}")
+        elif d == "discarded":
+            if legal_reason and (e.get("reason") or "").strip() not in legal_reason:
+                bad_reason.append(f"{label}={e.get('reason')!r}")
+        elif d == "chapter5" and not (e.get("reason") or "").strip():
+            bad_reason.append(f"{label}=第5章未写归属")
+
+        # 反向核对：清单条目的链接已出现在某个事件里，处置却不是入选/并入，
+        # 说明台账填错了（事件确实写了，台账说丢弃）。
+        hit = ev_urls.get(it.get("url") or "")
+        if hit and d not in ("selected", "merged"):
+            misfiled.append(f"{label}已写入 {hit} 但台账记 {d}")
+
+    c.add("collection", "必审清单逐条留痕", not missing,
+          f"{len(missing)} 条未填: " + "; ".join(missing[:4]) if missing else
+          f"{len(items)} 条全部留痕")
+    c.add("collection", "处置取值合法", not illegal, "; ".join(illegal[:4]))
+    c.add("collection", "入选/并入指向存在的 EV", not bad_ev, "; ".join(bad_ev[:4]))
+    c.add("collection", "丢弃理由取自封闭集合", not bad_reason,
+          "; ".join(bad_reason[:4]))
+    c.add("collection", "台账与事件产物不矛盾", not misfiled, "; ".join(misfiled[:3]))
+
+
+def _script_commit() -> str:
+    """记录跑门禁时的脚本版本，便于回溯一份报告是用哪一版校验的。"""
+    try:
+        import subprocess
+        return subprocess.run(["git", "-C", str(Path(__file__).parent),
+                               "rev-parse", "--short", "HEAD"],
+                              capture_output=True, text=True, timeout=5).stdout.strip() or "?"
+    except Exception:
+        return "?"
+
+
+def check_stats_recomputable(c: Check, md_path: Path | None, report: dict,
+                             events_dir: Path | None):
+    """Dashboard 与 8.2 的数字必须能由事件目录复算。
+
+    手写统计一定会漂移：2026-10-31 的一次运行自报 15 个事件、索引只有 14 行，
+    自报 A+/A 为 1/5、实际 1/6。这里用 report_stats 复算一遍逐项比对。
+    """
+    if not (md_path and md_path.exists() and events_dir and events_dir.exists()):
+        return
+    try:
+        import report_stats
+        st = report_stats.compute(report_stats.load_events(events_dir), report)
+    except Exception as e:
+        c.warn("md", "统计可复算", f"复算失败 {e}")
+        return
+
+    text = md_path.read_text(encoding="utf-8", errors="ignore")
+    bad = []
+
+    # 事件总数：Dashboard 里「事件总数 | N」
+    m = re.search(r'事件总数[^|\n]*\|\s*(\d+)', text)
+    if m and int(m.group(1)) != st["events_total"]:
+        bad.append(f"事件总数 正文 {m.group(1)} ≠ 事实源 {st['events_total']}")
+
+    # A+/A 计数
+    m = re.search(r'A\+\s*/\s*A[^|\n]*\|\s*(\d+)\s*/\s*(\d+)', text)
+    if m:
+        want = (st["by_rating"]["A+"], st["by_rating"]["A"])
+        got = (int(m.group(1)), int(m.group(2)))
+        if got != want:
+            bad.append(f"A+/A 正文 {got[0]}/{got[1]} ≠ 事实源 {want[0]}/{want[1]}")
+
+    # 8.2 的 EV 行数
+    m82 = re.search(r'^(#{2,4})\s*8\.2\b[^\n]*$', text, re.M)
+    if m82:
+        seg = text[m82.end():]
+        nxt = re.search(rf'^#{{1,{len(m82.group(1))}}}\s+', seg, re.M)
+        seg = seg[:nxt.start()] if nxt else seg
+        n_rows = len({m.group(0) for ln in seg.splitlines()
+                      if ln.strip().startswith("|")
+                      for m in [EV_ID_RE.search(ln)] if m})
+        if n_rows != st["events_total"]:
+            bad.append(f"8.2 索引 {n_rows} 行 ≠ 事件数 {st['events_total']}")
+
+    c.add("md", "统计可由事件目录复算", not bad, "; ".join(bad[:4]))
+
+
+def check_window_consistency(c: Check, report: dict, report_path: Path | None):
+    """窗口只能冻结一次：采集报告里的窗口必须与 window.json 完全一致。
+
+    各脚本各自再算一遍会产生秒级漂移（实测 22 秒），让产物之间的口径对不上。
+    同时核对 SCAN_WINDOW 确实比归属窗口早，证明缓冲区真的生效了
+    —— 旧实现把 scan_start 算出来写进报告，却从未传给采集逻辑。
+    """
+    tw = report.get("target_window") or {}
+    ws, we = tw.get("start", ""), tw.get("end", "")
+    sw = report.get("scan_window") or {}
+    ss = sw.get("start", "") or report.get("scan_start", "")
+
+    wj = (report_path.parent / "window.json") if report_path else None
+    if wj and wj.exists():
+        try:
+            win = json.loads(wj.read_text(encoding="utf-8"))
+            same = (win.get("window_start") == ws and win.get("window_end") == we
+                    and win.get("scan_start") == ss)
+            c.add("collection", "采集窗口与 window.json 一致", same,
+                  f"window.json={win.get('window_start')}→{win.get('window_end')} "
+                  f"报告={ws}→{we}")
+        except Exception as e:
+            c.add("collection", "采集窗口与 window.json 一致", False, f"读取失败 {e}")
+
+    a_, b_ = _iso(ss), _iso(ws)
+    if a_ and b_:
+        hours = (b_ - a_).total_seconds() / 3600
+        c.add("collection", "扫描窗口早于归属窗口（缓冲区生效）", hours >= 1,
+              f"SCAN_START 比 WINDOW_START 早 {hours:.1f} 小时")
+
+
+def check_link_identity(c: Check, report: dict, events_dir: Path | None,
+                        pool_path: Path | None = None):
+    """链接身份：URL 指向的对象必须确实属于本窗口。
+
+    只看域名是不够的。2026-10-31 实测，一份报告引用了四个形如
+    news.ycombinator.com/item?id=4213xxxx 的链接，域名、路径都对，
+    但那是 2024 年量级的 id —— 本窗口真实区间从 50291424 起。
+    对三类结构化 URL 做区间/日期校验，能把这类编造直接拦下。
+    """
+    if not events_dir or not events_dir.exists():
+        return
+    events = {}
+    for f in sorted(events_dir.glob("EV-*.json")):
+        try:
+            events[f.stem] = json.loads(f.read_text(encoding="utf-8"))
+        except Exception:
+            continue
+    if not events:
+        return
+
+    ws = _iso((report.get("target_window") or {}).get("start", ""))
+    we = _iso((report.get("target_window") or {}).get("end", ""))
+
+    # HN id 区间以候选池为准；没有候选池时退回事件自身，只能做弱校验
+    lo = hi = 0
+    if pool_path and pool_path.exists():
+        try:
+            pool = json.loads(pool_path.read_text(encoding="utf-8"))
+            rows = pool.get("items", pool) if isinstance(pool, dict) else pool
+            ids = [int(m.group(1)) for r in rows
+                   for m in [_URL_SHAPES[0][1].search(str(r.get("url", "")))] if m]
+            if ids:
+                lo, hi = min(ids), max(ids)
+        except Exception:
+            pass
+    if not lo:
+        lo, hi = _hn_id_range(events)
+
+    bad = []
+    for eid, ev in sorted(events.items()):
+        for u in _event_urls(ev):
+            m = _URL_SHAPES[0][1].search(u)
+            if m and lo:
+                v = int(m.group(1))
+                # 放宽一个数量级的余量，只拦明显不同年代的 id
+                if v < lo * 0.9 or v > hi * 1.1:
+                    bad.append(f"{eid}: HN id {v} 在本轮区间 [{lo},{hi}] 之外")
+                continue
+            m = _URL_SHAPES[1][1].search(u)
+            if m and ws:
+                yy, mm = int(m.group(1)), int(m.group(2))
+                if not (1 <= mm <= 12):
+                    bad.append(f"{eid}: arXiv id 月份非法 {m.group(0)}")
+                elif abs((2000 + yy) * 12 + mm - (ws.year * 12 + ws.month)) > 2:
+                    bad.append(f"{eid}: arXiv id {m.group(0)} 的年月距窗口超过 2 个月")
+                continue
+    c.add("trace", "来源链接的对象编号落在本轮区间内", not bad, "; ".join(bad[:4]))
+
+
 def check_md_event_index(c: Check, md_path: Path, report: dict,
                          events_dir: Path | None = None):
     """8.2 Event Index 校验：解析 MD 表格行，与 EV JSON 逐条对账。"""
@@ -1125,6 +1564,11 @@ def main():
     ap.add_argument("--gap-tasks", default="", help="gap_tasks.json")
     ap.add_argument("--raw-dir", default="", help="raw_<date>/ 目录（自动推导其它参数）")
     ap.add_argument("--state", default="", help="registry 状态目录（默认 $TECH_BRIEFING_STATE 或 ./state）")
+    ap.add_argument("--snapshot-roots", nargs="*", default=[],
+                    help="快照根目录（claim 级证据比对用，如 raw_<date> src）")
+    ap.add_argument("--must-review", default="", help="must_review.json")
+    ap.add_argument("--must-review-trace", default="",
+                    help="must_review_trace.json（逐条处置台账）")
     ap.add_argument("--json-out", default="", help="结果写成 JSON")
     args = ap.parse_args()
 
@@ -1136,17 +1580,30 @@ def main():
     run_date = events_dir.name[len("events_run_"):] if events_dir and \
         events_dir.name.startswith("events_run_") else ""
 
+    mr_path = Path(args.must_review) if args.must_review else None
+    trace_path = Path(args.must_review_trace) if args.must_review_trace else None
+
     if args.raw_dir:
         rd = Path(args.raw_dir)
         report_path = report_path or rd / "collect_report.json"
         gap_path = gap_path or rd / "gap_tasks.json"
+        mr_path = mr_path or rd / "must_review.json"
+        trace_path = trace_path or rd / "must_review_trace.json"
+        if not args.snapshot_roots:
+            # raw_<date>/ 本身就是快照目录；src/ 是补检时手工抓的页面
+            args.snapshot_roots = [str(rd)] + \
+                ([str(rd.parent / "src")] if (rd.parent / "src").exists() else [])
 
     c = Check()
     check_taxonomy_definition(c)
+    check_root_tech_list(c)
     check_event_paths(c, events_dir)
     check_event_annotations(c, events_dir)
     check_unclassified(c, events_dir)
     check_publish_precision(c, events_dir)
+    check_scoring(c, events_dir,
+                  (events_dir / "pairwise.json") if events_dir else None)
+    check_claim_evidence(c, events_dir, args.snapshot_roots)
 
     if report_path and report_path.exists():
         report = json.loads(report_path.read_text(encoding="utf-8"))
@@ -1156,10 +1613,15 @@ def main():
         pool_path = (Path(report_path).parent / "candidate_pool.json"
                      if report_path else None)
         check_pool_retains_undated(c, report, pool_path)
+        check_link_identity(c, report, events_dir, pool_path)
+        check_window_consistency(c, report, report_path)
+        check_must_review(c, mr_path, trace_path, events_dir)
         if md_path:
             # MD 路线：HTML 是机械渲染副本，门禁校验 MD 源；HTML 只做轻量断言
             check_markdown(c, md_path, report, events_dir)
             check_md_event_index(c, md_path, report, events_dir)
+            check_stats_recomputable(c, md_path, report, events_dir)
+            check_ch1_mainlines(c, md_path, events_dir)
             html_sibling = md_path.with_suffix(".html")
             if html_sibling.exists():
                 check_html_lightweight(c, html_sibling, report)
@@ -1178,6 +1640,20 @@ def main():
         c.add("registry", "能确定本轮 run_date", False, "用 --report 或 events_run_<date>/ 目录名")
 
     c.print()
+
+    # 门禁摘要写到 .md 旁边：渲染器据此拒绝渲染未过门禁的稿子，
+    # 让「没跑门禁的报告」无法产出 final 状态的 HTML。
+    if md_path:
+        summary = {
+            "passed": sum(1 for r in c.results if r["status"] == "PASS"),
+            "warned": sum(1 for r in c.results if r["status"] == "WARN"),
+            "failed": [r["name"] for r in c.results if r["status"] == "FAIL"],
+            "checked_at": datetime.now(SH_TZ).isoformat(timespec="seconds"),
+            "script_commit": _script_commit(),
+            "md": md_path.name,
+        }
+        (md_path.parent / ".gate_summary.json").write_text(
+            json.dumps(summary, ensure_ascii=False, indent=2), encoding="utf-8")
 
     if args.json_out:
         Path(args.json_out).write_text(

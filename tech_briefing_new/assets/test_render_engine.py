@@ -7,6 +7,9 @@
 """
 import re
 import shutil
+import json
+import os
+import time
 import subprocess
 import sys
 import tempfile
@@ -73,14 +76,65 @@ class RenderEngineTest(unittest.TestCase):
         self.assertEqual(r.returncode, 0, r.stderr)
         self.assertIn('src="https://example.com/a.png"', html)
 
+    def _draft(self, name="any-name-2026-10-30.md"):
+        src = self.dir / name
+        src.write_text(_md("## 章\n\n正文。", title="完全不同的标题"), encoding="utf-8")
+        return src
+
+    def _gate_ok(self, src, failed=()):
+        (src.parent / ".gate_summary.json").write_text(
+            json.dumps({"md": src.name, "passed": 1, "failed": list(failed)}),
+            encoding="utf-8")
+
+    def _wrap(self, src, *extra):
+        return subprocess.run(
+            [sys.executable, str(HERE / "render_report.py"), "--md", str(src), *extra],
+            capture_output=True, text=True, cwd=self.dir.parent)
+
     def test_wrapper_output_matches_md_name(self):
         # 渲染器默认按"标题 slug + 日期"命名；wrapper 必须显式指定与 .md 同名的输出
-        src = self.dir / "any-name-2026-10-30.md"
-        src.write_text(_md("## 章\n\n正文。", title="完全不同的标题"), encoding="utf-8")
-        r = subprocess.run([sys.executable, str(HERE / "render_report.py"), "--md", str(src)],
-                           capture_output=True, text=True, cwd=self.dir.parent)
+        src = self._draft()
+        self._gate_ok(src)
+        r = self._wrap(src)
         self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
         self.assertTrue(src.with_suffix(".html").exists())
+
+    def test_refuses_without_gate_summary(self):
+        """没过门禁的稿子不许渲染：HTML 是被阅读转发的那一份，它一出现就没人再追门禁。"""
+        src = self._draft()
+        r = self._wrap(src)
+        self.assertEqual(r.returncode, 2)
+        self.assertIn("没有门禁摘要", r.stderr)
+        self.assertFalse(src.with_suffix(".html").exists())
+
+    def test_refuses_when_gates_failed(self):
+        src = self._draft()
+        self._gate_ok(src, failed=["统计可由事件目录复算"])
+        r = self._wrap(src)
+        self.assertEqual(r.returncode, 2)
+        self.assertIn("门禁未通过", r.stderr)
+        self.assertFalse(src.with_suffix(".html").exists())
+
+    def test_refuses_when_md_changed_after_gates(self):
+        src = self._draft()
+        self._gate_ok(src)
+        os.utime(src, (time.time() + 60, time.time() + 60))
+        r = self._wrap(src)
+        self.assertEqual(r.returncode, 2)
+        self.assertIn("门禁之后被改过", r.stderr)
+
+    def test_refuses_summary_for_another_md(self):
+        src = self._draft()
+        (src.parent / ".gate_summary.json").write_text(
+            json.dumps({"md": "other.md", "failed": []}), encoding="utf-8")
+        r = self._wrap(src)
+        self.assertEqual(r.returncode, 2)
+        self.assertIn("不是", r.stderr)
+
+    def test_skip_gate_check_is_an_explicit_escape_hatch(self):
+        src = self._draft()
+        r = self._wrap(src, "--skip-gate-check")
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
 
 
 if __name__ == "__main__":

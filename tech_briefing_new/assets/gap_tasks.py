@@ -212,18 +212,100 @@ def build_tasks(report: dict, run_date: str) -> dict:
     }
 
 
+# 缺口的四种结论。"查过了"不等于"证明了 0 条"——把这两件事合并成一个
+# done 状态，就会出现用无年份的 releases 页写「确认 0 条」这种伪零结果
+# （2026-10-31 实测 GAP-01/02/04 三例）。
+RESOLUTIONS = {
+    # 结论            是否结案   含义
+    "confirmed_zero":      (True,  "同一通道给出的最新条目早于窗口起点，可判 0 条"),
+    "found_n":             (True,  "找到 N 条，附 URL 与首发时刻"),
+    "partial_compensated": (True,  "换通道覆盖了部分时段，其余时段未证明"),
+    "unknown":             (False, "查过但无法证明，保持 open"),
+}
+
+
+class GapEvidenceError(ValueError):
+    pass
+
+
+def _require(ev: dict, *keys) -> list:
+    return [k for k in keys if not str(ev.get(k, "")).strip()]
+
+
+def validate_resolution(resolution: str, evidence: dict, window_start: str) -> list:
+    """按结论类型校验证据字段。返回问题列表，空表示可以结案。
+
+    关键一条：confirmed_zero 要求 latest_item_time 必须由**同一通道**给出，
+    且早于 window_start。不按日期过滤的 WebSearch、无年份的 releases 页
+    都给不出这个时间，只能落到 unknown。
+    """
+    if resolution not in RESOLUTIONS:
+        return [f"resolution={resolution} 不在 {sorted(RESOLUTIONS)}"]
+    problems = _require(evidence, "channel", "range_checked")
+    problems = [f"缺证据字段 {k}" for k in problems]
+
+    if resolution == "confirmed_zero":
+        lt = str(evidence.get("latest_item_time", "")).strip()
+        if not lt:
+            problems.append(
+                "confirmed_zero 必须给 latest_item_time（该通道最新条目的时刻）；"
+                "给不出就只能写 unknown")
+        else:
+            try:
+                if datetime.fromisoformat(lt) >= datetime.fromisoformat(window_start):
+                    problems.append(
+                        f"latest_item_time={lt} 不早于窗口起点 {window_start}，"
+                        f"不能判 0 条")
+            except ValueError:
+                problems.append(f"latest_item_time={lt} 不是带时区的 ISO 时间")
+    elif resolution == "found_n":
+        if not evidence.get("findings"):
+            problems.append("found_n 必须给 findings（每条含 url 与 first_publish）")
+        else:
+            for i, f in enumerate(evidence["findings"]):
+                if not (f.get("url") and f.get("first_publish")):
+                    problems.append(f"findings[{i}] 缺 url 或 first_publish")
+    elif resolution == "partial_compensated":
+        if not str(evidence.get("uncovered_range", "")).strip():
+            problems.append("partial_compensated 必须写 uncovered_range（未覆盖时段）")
+    return problems
+
+
 def mark_done(bundle: dict, task_id: str, note: str,
-              findings: list | None = None) -> dict:
+              findings: list | None = None,
+              resolution: str = "", evidence: dict | None = None) -> dict:
+    """标记补检结论。resolution 为空时沿用旧的二值行为（仅兼容历史调用）。"""
+    evidence = dict(evidence or {})
+    if findings:
+        evidence.setdefault("findings", findings)
+    ws = (bundle.get("target_window") or {}).get("start", "")
+
     for t in bundle["tasks"]:
-        if t["id"] == task_id:
+        if t["id"] != task_id:
+            continue
+        if resolution:
+            problems = validate_resolution(resolution, evidence, ws)
+            if problems:
+                raise GapEvidenceError(
+                    f"{task_id} 证据不足，不能结案：\n  - " + "\n  - ".join(problems))
+            closes = RESOLUTIONS[resolution][0]
+            t["resolution"] = resolution
+            t["evidence"] = evidence
+            t["status"] = "done" if closes else "open"
+        else:
             t["status"] = "done"
-            t["note"] = note
-            t["findings"] = findings or []
-            break
+        t["note"] = note
+        t["findings"] = evidence.get("findings", findings or [])
+        break
+    else:
+        raise GapEvidenceError(f"未找到任务 {task_id}")
+
     open_tasks = [t for t in bundle["tasks"] if t["status"] == "open"]
     bundle["tasks_open"] = len(open_tasks)
     bundle["tasks_blocking_open"] = sum(1 for t in open_tasks if t.get("blocking"))
     bundle["tasks_action_open"] = bundle["tasks_open"] - bundle["tasks_blocking_open"]
+    bundle["tasks_unknown"] = sum(1 for t in bundle["tasks"]
+                                  if t.get("resolution") == "unknown")
     return bundle
 
 
@@ -247,8 +329,20 @@ def main():
     ap = argparse.ArgumentParser(description="覆盖缺口 → 补检任务")
     ap.add_argument("--report", required=True, help="collect_report.json 路径")
     ap.add_argument("--out", default="gap_tasks.json")
-    ap.add_argument("--mark-done", default="", help="标记完成的任务 ID")
-    ap.add_argument("--note", default="", help="完成说明")
+    ap.add_argument("--mark-done", default="", help="标记结论的任务 ID")
+    ap.add_argument("--note", default="", help="完成说明（人读）")
+    ap.add_argument("--resolution", default="",
+                    choices=[""] + sorted(RESOLUTIONS),
+                    help="结论类型：confirmed_zero / found_n / partial_compensated / unknown")
+    ap.add_argument("--channel", default="", help="实际使用的通道")
+    ap.add_argument("--range-checked", default="", help="检查覆盖的时间范围")
+    ap.add_argument("--latest-item-time", default="",
+                    help="该通道最新条目的时刻（confirmed_zero 必填，ISO 带时区）")
+    ap.add_argument("--items-checked", default="", help="去重后检查的条数")
+    ap.add_argument("--uncovered-range", default="",
+                    help="未覆盖时段（partial_compensated 必填）")
+    ap.add_argument("--finding", action="append", default=[],
+                    help="found_n 的条目，格式 <url>|<first_publish ISO>，可重复")
     args = ap.parse_args()
 
     report = json.loads(Path(args.report).read_text(encoding="utf-8"))
@@ -259,7 +353,19 @@ def main():
             print(f"{out} 不存在，无法标记")
             return 2
         bundle = json.loads(out.read_text(encoding="utf-8"))
-        bundle = mark_done(bundle, args.mark_done, args.note)
+        ev = {"channel": args.channel, "range_checked": args.range_checked,
+              "latest_item_time": args.latest_item_time,
+              "items_checked": args.items_checked,
+              "uncovered_range": args.uncovered_range,
+              "findings": [{"url": x.split("|")[0],
+                            "first_publish": (x.split("|") + [""])[1]}
+                           for x in args.finding]}
+        try:
+            bundle = mark_done(bundle, args.mark_done, args.note,
+                               resolution=args.resolution, evidence=ev)
+        except GapEvidenceError as e:
+            print(e)
+            return 2
     else:
         bundle = build_tasks(report, report.get("run_date", ""))
 

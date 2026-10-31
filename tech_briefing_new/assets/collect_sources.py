@@ -36,6 +36,7 @@ import json
 import os
 import sys
 import time
+import traceback
 import urllib.error
 import urllib.request
 from pathlib import Path
@@ -45,6 +46,7 @@ import extract
 import sources as src_reg
 
 SH_TZ = datetime.timezone(datetime.timedelta(hours=8))
+SCAN_BUFFER_HOURS = 6      # task_def §0.1：扫描窗口比归属窗口早 6 小时
 MAX_RETRIES = 3
 RETRY_DELAY = 2
 
@@ -105,7 +107,8 @@ def build_opener(proxies: dict):
 
 # ============ 抓取 ============
 def fetch(opener, url: str, ua: str, timeout: int,
-          retries: int = MAX_RETRIES, delay: int = RETRY_DELAY) -> tuple[str, bytes, str]:
+          retries: int = MAX_RETRIES, delay: int = RETRY_DELAY,
+          extra_headers: dict | None = None) -> tuple[str, bytes, str]:
     """
     返回 (transport_status, body, error)。
     transport_status: ok | http_error | timeout | url_error
@@ -118,6 +121,7 @@ def fetch(opener, url: str, ua: str, timeout: int,
                 "User-Agent": ua,
                 "Accept": "text/html,application/json,application/xml,text/plain,*/*",
                 "Accept-Language": "en-US,en;q=0.9,zh-CN;q=0.8",
+                **(extra_headers or {}),
             })
             with opener.open(req, timeout=timeout) as resp:
                 body = resp.read()
@@ -156,7 +160,7 @@ def collect_paginated(opener, src: dict, out_dir: Path, window_start: str,
     pg = src["paginate"]
     all_items = []
     seen = set()
-    cover = {"requests": 0, "slices": 0, "hits_per_slice": [],
+    cover = {"requests": 0, "pages_fetched": 0, "slices": 0, "hits_per_slice": [],
              "reached_window_start": False, "oldest_seen": "",
              "truncated": False, "errors": []}
 
@@ -204,6 +208,7 @@ def collect_paginated(opener, src: dict, out_dir: Path, window_start: str,
                                         src.get("ua", src_reg.DEFAULT_UA),
                                         src.get("timeout", 20))
             cover["requests"] += 1
+            cover["pages_fetched"] += 1
             if t_status != "ok":
                 cover["truncated"] = True
                 cover["errors"].append(f"slice {start_ts}: {t_status} {err[:100]}")
@@ -271,12 +276,31 @@ def collect_paginated(opener, src: dict, out_dir: Path, window_start: str,
     return all_items, cover
 
 
+def _auth_headers(url: str) -> dict:
+    """GitHub API 带上令牌（若配置）。未认证时速率只有 60 次/小时，很容易 403。"""
+    if "api.github.com" in url:
+        tok = os.environ.get("GH_TOKEN") or os.environ.get("GITHUB_TOKEN")
+        h = {"Accept": "application/vnd.github+json",
+             "X-GitHub-Api-Version": "2022-11-28"}
+        if tok:
+            h["Authorization"] = f"Bearer {tok}"
+        return h
+    return {}
+
+
 def collect_one(opener, src: dict, out_dir: Path, window_start: str,
-                window_end: str) -> dict:
+                window_end: str, scan_start: str = "") -> dict:
     """
     采集单个源，返回含三级状态的记录。
     按 urls 顺序 fallback：第一个 transport=ok 且 extract 不是 blocked/parse_failed 的即采用。
+
+    窗口有两个边界，不能混用（task_def §0.1）：
+      scan_start  —— 扫描边界，比 window_start 早 6h，用于「发现候选」，缓冲区条目要留下；
+      window_start —— 归属边界，用于「判定本轮新事件」。
+    items_in_window* 按 window_start 统计；items_in_scan_buffer 单独统计缓冲区命中，
+    让 8.1 能看出有多少条目是靠缓冲区捞回来的。
     """
+    scan_start = scan_start or window_start
     rec = {
         "id": src["id"], "entity": src["entity"], "surface": src["surface"],
         "layer": src["layer"], "channel": src["channel"],
@@ -286,6 +310,7 @@ def collect_one(opener, src: dict, out_dir: Path, window_start: str,
         "url": "", "file": "",
         "items_total": 0, "items_with_date": 0, "items_in_window": 0,
         "items_in_window_exact": 0, "items_in_window_fuzzy": 0,
+        "items_in_scan_buffer": 0,
         "earliest": "", "latest": "",
         "extract_error": "", "note": "", "attempts": [],
     }
@@ -293,7 +318,7 @@ def collect_one(opener, src: dict, out_dir: Path, window_start: str,
     # 分页源单独处理（覆盖度由翻页深度保证，而不是单页条数）
     if src.get("paginate"):
         items, cover = collect_paginated(opener, src, out_dir,
-                                         window_start, window_end)
+                                         scan_start, window_end)
         rec.update(transport="ok", extract="ok" if items else "empty",
                    url=src["paginate"]["url_template"],
                    content_kind="json", bytes=0,
@@ -310,21 +335,32 @@ def collect_one(opener, src: dict, out_dir: Path, window_start: str,
                        1 for i in items
                        if i.get("published")
                        and extract.window_match(i, window_start, window_end) == "fuzzy"),
+                   items_in_scan_buffer=sum(
+                       1 for i in items
+                       if i.get("published")
+                       and extract.in_window(i, scan_start, window_end)
+                       and not extract.in_window(i, window_start, window_end)),
                    pagination=cover)
         dated = [i for i in items if i.get("published")]
         if dated:
             rec["earliest"] = min(i["published"] for i in dated)
             rec["latest"] = max(i["published"] for i in dated)
         if cover.get("truncated"):
-            rec["note"] = (f"分页未覆盖到窗口起点：pages={cover['pages_fetched']} "
+            rec["note"] = (f"分页未覆盖到窗口起点：pages={cover.get('pages_fetched', '?')} "
                            f"oldest={cover['oldest_seen'][:19]}，窗口内容可能不完整")
         rec["verdict"] = coverage.source_verdict(rec)
         return rec
 
     chosen = None
-    for url, filename in src["urls"]:
+    for entry in src["urls"]:
+        # 三元组 (url, filename, mode) 允许同一个源挂多种内容形态的通道。
+        # GitHub 代码面因此可以 atom → API 两条机器可读通道并存：两条都给
+        # 秒级 published_at，而抓 HTML releases 页只会拿到无年份的陈旧结果
+        # （2026-10-31 实测，据此写出了三个伪零结果）。
+        url, filename, mode = (tuple(entry) + (src["mode"],))[:3]
         t_status, body, err = fetch(opener, url, src.get("ua", src_reg.DEFAULT_UA),
-                                    src.get("timeout", 20))
+                                    src.get("timeout", 20),
+                                    extra_headers=_auth_headers(url))
         rec["attempts"].append({"url": url, "transport": t_status, "error": err[:200]})
 
         if t_status != "ok":
@@ -332,7 +368,7 @@ def collect_one(opener, src: dict, out_dir: Path, window_start: str,
             continue
 
         kind = extract.classify(body, url)
-        res = extract.extract_items(body, src["mode"], source_url=url,
+        res = extract.extract_items(body, mode, source_url=url,
                                     json_mode=src.get("json_mode", ""))
         rec.update(transport="ok", url=url, bytes=len(body), content_kind=kind)
 
@@ -352,6 +388,25 @@ def collect_one(opener, src: dict, out_dir: Path, window_start: str,
 
         chosen = (url, res)
         break
+
+    # 归档回退：主通道解析成功但 0 条（arXiv 周末的空 feed 是典型），
+    # 改读该源登记的归档页。这不是"换个 URL 再试一次"，而是换一种内容形态，
+    # 所以用独立的 mode 解析，并在判定上与正常采集区分开。
+    fb = src.get("archive_fallback")
+    if fb and (chosen is None or chosen[1]["status"] == "empty"):
+        t_status, body, err = fetch(opener, fb["url"], src.get("ua", src_reg.DEFAULT_UA),
+                                    src.get("timeout", 20) + 40)
+        rec["attempts"].append({"url": fb["url"], "transport": t_status,
+                                "error": err[:200], "archive_fallback": True})
+        if t_status == "ok":
+            (out_dir / fb["file"]).write_bytes(body)
+            res2 = extract.extract_items(body, fb["mode"], source_url=fb["url"])
+            if res2["status"] == "ok" and res2["items"]:
+                rec.update(transport="ok", url=fb["url"], bytes=len(body),
+                           content_kind="html", file=fb["file"],
+                           from_archive=True,
+                           note="主通道 0 条，已改读归档页补回批次")
+                chosen = (fb["url"], res2)
 
     if chosen is None:
         if rec["transport"] != "ok":
@@ -382,6 +437,9 @@ def collect_one(opener, src: dict, out_dir: Path, window_start: str,
     rec["items_in_window"] = len(in_win)
     rec["items_in_window_exact"] = sum(1 for i in in_win if matches[id(i)] == "exact")
     rec["items_in_window_fuzzy"] = sum(1 for i in in_win if matches[id(i)] == "fuzzy")
+    rec["items_in_scan_buffer"] = sum(
+        1 for i in dated
+        if not matches[id(i)] and extract.in_window(i, scan_start, window_end))
     if dated:
         rec["earliest"] = min(i["published"] for i in dated)
         rec["latest"] = max(i["published"] for i in dated)
@@ -406,6 +464,8 @@ def main() -> int:
     ap.add_argument("--workers", type=int, default=6, help="并发数")
     ap.add_argument("--fail-on-gate", action="store_true",
                     help="覆盖 gate 失败时返回非零退出码（CI 用）")
+    ap.add_argument("--window", default="",
+                    help="步骤 1 冻结的 window.json；给了就以它为准，不再自行计算窗口")
     args = ap.parse_args()
 
     now = datetime.datetime.now(SH_TZ)
@@ -421,13 +481,33 @@ def main() -> int:
     out_dir = Path(args.out) if args.out else Path.cwd() / f"raw_{target_date:%Y-%m-%d}"
     out_dir.mkdir(parents=True, exist_ok=True)
 
-    # 窗口：WINDOW_START = 昨日 00:00；SCAN_START = WINDOW_START - 6h；END = now
-    window_start = (datetime.datetime.combine(target_date, datetime.time.min)
-                    - datetime.timedelta(days=1))
-    scan_start = window_start - datetime.timedelta(hours=6)
-    ws = window_start.replace(tzinfo=SH_TZ).isoformat()
-    we = now.isoformat()
-    ss = scan_start.replace(tzinfo=SH_TZ).isoformat()
+    # 窗口只冻结一次。步骤 1 产出 window.json 后，采集、建池、归窗、门禁都读同一份；
+    # 自行再算一遍会与冻结值产生秒级漂移（实测 22 秒），导致各产物的窗口口径不一致。
+    if args.window:
+        try:
+            win = json.loads(Path(args.window).read_text(encoding="utf-8"))
+            ws, we, ss = win["window_start"], win["window_end"], win["scan_start"]
+            if win.get("run_date") and win["run_date"] != target_date.strftime("%Y-%m-%d"):
+                print(f"window.json 的 run_date={win['run_date']} 与 --date "
+                      f"{target_date:%Y-%m-%d} 不一致，拒绝执行")
+                return 2
+            window_src = f"frozen:{args.window}"
+        except Exception as e:
+            print(f"无法读取 --window {args.window}: {e}")
+            return 2
+    else:
+        window_start = (datetime.datetime.combine(target_date, datetime.time.min)
+                        - datetime.timedelta(days=1))
+        ws = window_start.replace(tzinfo=SH_TZ).isoformat()
+        we = now.isoformat()
+        ss = (window_start - datetime.timedelta(hours=SCAN_BUFFER_HOURS)
+              ).replace(tzinfo=SH_TZ).isoformat()
+        window_src = "computed"
+        (out_dir / "window.json").write_text(json.dumps(
+            {"window_start": ws, "window_end": we, "scan_start": ss,
+             "scan_buffer_hours": SCAN_BUFFER_HOURS, "tz": "Asia/Shanghai",
+             "run_date": target_date.strftime("%Y-%m-%d"),
+             "frozen_at": now.isoformat()}, ensure_ascii=False, indent=2), encoding="utf-8")
 
     proxies, proxy_src = resolve_proxies(args.no_proxy)
     opener = build_opener(proxies)
@@ -443,7 +523,7 @@ def main() -> int:
     print("=" * 72)
     print("多源技术热点简报 · 采集 + 提取 + 对账")
     print(f"TARGET_WINDOW : {ws} → {we}")
-    print(f"SCAN_WINDOW   : {ss} → {we}")
+    print(f"SCAN_WINDOW   : {ss} → {we}   [{window_src}]")
     print(f"输出目录      : {out_dir}")
     print(f"代理          : {proxies or '直连'}  [{proxy_src}]")
     print(f"源数量        : {len(all_sources)}   并发 {args.workers}")
@@ -456,20 +536,29 @@ def main() -> int:
     records = []
     t0 = time.time()
     with concurrent.futures.ThreadPoolExecutor(args.workers) as ex:
-        futs = {ex.submit(collect_one, opener, s, out_dir, ws, we): s
+        futs = {ex.submit(collect_one, opener, s, out_dir, ws, we, ss): s
                 for s in all_sources}
         for fut in concurrent.futures.as_completed(futs):
             s = futs[fut]
             try:
                 rec = fut.result()
             except Exception as e:
+                # 代码缺陷不能伪装成"网站不可达"。2026-10-31 实测：collect_paginated
+                # 少写了 pages_fetched 字段，KeyError 被这里吞掉记成 TRANSPORT_FAIL，
+                # HN newest 的 1638 条就此消失，而 8.1 把它读成了外部环境问题。
+                tb = traceback.extract_tb(e.__traceback__)
+                where = f"{tb[-1].filename.split('/')[-1]}:{tb[-1].lineno}" if tb else "?"
                 rec = {"id": s["id"], "entity": s["entity"], "surface": s["surface"],
                        "layer": s["layer"], "channel": s["channel"],
                        "mode": s["mode"], "critical": s.get("critical", False),
-                       "transport": "url_error", "extract": "skipped",
-                       "verdict": "TRANSPORT_FAIL", "extract_error": str(e)[:200],
+                       "transport": "ok", "extract": "internal_error",
+                       "verdict": "INTERNAL_ERROR",
+                       "extract_error": f"{type(e).__name__}: {e}"[:200],
+                       "error_site": where,
+                       "note": "采集器自身异常，不是源不可达；修代码而不是换通道",
                        "items_total": 0, "items_with_date": 0, "items_in_window": 0,
-                       "items_in_window_exact": 0, "items_in_window_fuzzy": 0}
+                       "items_in_window_exact": 0, "items_in_window_fuzzy": 0,
+                       "items_in_scan_buffer": 0}
             records.append(rec)
             print(f"  [{rec['verdict']:16}] {rec['id']:30} "
                   f"items={rec.get('items_in_window',0)}/{rec.get('items_total',0)}"
@@ -508,6 +597,7 @@ def main() -> int:
         uncoverable=src_reg.UNCOVERABLE,
         diffs=diffs)
     report["proxy"] = {"config": proxies, "source": proxy_src}
+    report["window_source"] = window_src
     report["elapsed_sec"] = round(time.time() - t0, 1)
     report["snapshot_path"] = str(snap_path) if not args.no_snapshot else ""
 
