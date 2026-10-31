@@ -39,7 +39,7 @@ when_to_use: |
 $SKILL_DIR/                           # 本 skill 的安装目录（SKILL.md 所在目录）
 ├── SKILL.md                          # 本文件（skill 定义）
 ├── assets/                           # 只读引擎 + 稳定骨架
-│   ├── tech_report_task_def.md       # 24KB 完整任务定义（规则源）
+│   ├── tech_report_task_def.md       # 任务定义：做什么与判断标准（规则源）
 │   ├── sources.py                    # 源注册表（实体 × 面 × 提取模式）
 │   ├── extract.py                    # 条目提取层（rss/atom/json/md/html/sitemap）
 │   ├── coverage.py                   # 三级状态对账 + 窗口覆盖度 + 快照差分
@@ -99,10 +99,11 @@ $SKILL_DIR/                           # 本 skill 的安装目录（SKILL.md 所
 - **渲染引擎（默认 MD 路线必需）**：`$ASSETS/render_report.py` + `$ASSETS/report_engine/`。
   步骤 1 之前跑一次 `python "$ASSETS/render_report.py" --check` 确认引擎与 node 可用。
   引擎是 vendored 的纯 Node 零依赖实现，不依赖任何外部 skill。
-- **任务定义**：`$ASSETS/tech_report_task_def.md`
-  — 24KB 的完整任务定义，包含 TARGET_WINDOW Gate、五路召回、变化类型分类、
-  技术命题映射、A/A+ 评级标准、八章结构规范等全部规则。
-  **必须在步骤 1 之前读取此文件，并严格遵守其中的全部规则。**
+- **任务定义**：`$ASSETS/tech_report_task_def.md`（下文简称 task_def）—— 规则源：时间窗口、
+  召回机制、抽象提升、评级、各章内容要求、8.3 分类集合等"做什么、按什么标准判断"。
+  **分工**：task_def 只写规则；本文件只写执行步骤、命令、路径与产物契约，不重复规则，
+  用到时以"task_def §N"引用。二者冲突时：内容判断以 task_def 为准，结构契约、文件路径
+  与门禁以本文件和脚本为准。步骤 1 中读完全文（见 HARD-GATE）。
 - **采集脚本**：`$ASSETS/collect_sources.py`
   — 多源数据采集脚本，已针对华为 MWG 代理网关优化（UA 分流、HF 镜像、重试、fallback）。
 - **Thesis Registry 三件套**：
@@ -125,7 +126,7 @@ $SKILL_DIR/                           # 本 skill 的安装目录（SKILL.md 所
 1. TARGET_WINDOW 正确冻结（昨日 00:00 → 今日执行时刻 Asia/Shanghai）
 2. 包含完整八章结构
 3. 通过 `verify_gates.py` 机器校验 + 人工复核表
-4. 采集报告 collect_report.json 落盘到 `$WORKDIR`
+4. 采集报告落盘到 `$WORKDIR/raw_<date>/collect_report.json`
 5. 必须先运行 collect_sources.py 采集数据，不能跳过采集步骤
 6. Thesis registry 正确读写（normalize + candidates + 裁决 + ingest + report），第 7 章取自 report
 
@@ -159,12 +160,8 @@ $SKILL_DIR/                           # 本 skill 的安装目录（SKILL.md 所
 - tech_report_task_def.md 已读取并理解
 
 **Rules**:
-- <HARD-GATE>
-  禁止使用用户时区、浏览器时区、系统默认时区、上一轮日期、历史文件名、历史正文推导 TARGET_WINDOW。
-  违反则窗口边界错位，采集/事件归属/文件名全部失配，门禁在步骤 6 才暴露但已无法回溯。
-  </HARD-GATE>
-- 昨日 00:00 之前首次发布的事件不得作为本轮"新事件"进入正文
-- 无法确认首发时刻的高价值候选必须标注"首发时间未完全核实"
+- 窗口规则（禁止的推导来源、事件归属、Window Audit、扫描窗口与归属窗口分离）见 task_def §0 / §0.1。
+  推导错窗口会让采集、事件归属、文件名全部失配，门禁到步骤 6 才暴露，已无法回溯。
 - **`collect_sources.py` 不要传 `--date`**。它把 `--date` 当"今天"，再减一天算 WINDOW_START：
   传 `--date 2026-10-26` 会得到 WINDOW_START = **10-25**，整轮采集作废重跑。
   正确做法是不传，让脚本用真实今天；只在**补采历史某天**时才传，且传的是"那一天"。
@@ -236,8 +233,7 @@ research/model/support/aggregator/community）× 提取模式` 登记。
 每条任务给出：目标实体/面、失败源、检索式、换通道建议、验收条件。
 
 **执行规则**：
-- 检索式必须覆盖整个 SCAN_WINDOW，不得只搜 today
-- 检索结果必须回溯官方原文确认首发时刻，不得用媒体转载日期
+- 检索范围与首发时刻判定按 task_def §0.1 / §13（覆盖整个 SCAN_WINDOW、回溯官方原文）
 - 代理拦截类缺口（`fallback_channel` 非空）检索无效，必须换通道
 - 完成任务后用 `python "$ASSETS/gap_tasks.py" --report ... --out ... \
   --mark-done GAP-xx --note "结论"` 标记
@@ -333,21 +329,21 @@ cd "$WORKDIR" && python "$ASSETS/build_pool.py" --raw-dir raw_<date>
   这是官方 changelog 类源"本轮新增了什么"的直接证据，无需人工比对。
 - `covered_quality` / `pagination`：判断某源的候选池是否完整可信。
 
-候选池之外，仍需按 tech_report_task_def §2 的 Technology Watch Matrix 与
-Expert Thesis Watch 做**语义补检**（机制/专家维度，无法靠源覆盖证明）。
+**五路召回机制（task_def §2）与执行方式**。机制是"怎么召回"，源通道是代码里每个源的
+`channel` 字段；两套编号不要混用。8.3 的"召回通道"列：来自候选池的条目填源通道，
+来自检索补检的条目填"Technology Watch 补检"或对应的 `GAP-xx`。
 
-五路召回通道：
-- A. Entity Watch — Tier-1 厂商官方 blog（Anthropic/OpenAI/Google/Cloudflare/Mistral/MiniMax 等）
-- B. arXiv source-native feeds — cs.AI/CL/LG/MA/RO
-- C. Aggregator — Techmeme feed
-- D. Social Signal — Hacker News top stories + GitHub Trending
-- E. Expert Thesis Watch — Simon Willison / Latent Space / 专家博客圈
+| 召回机制 | 执行方式 | 对应源通道 |
+|---|---|---|
+| Entity Watch | `collect_sources.py` 读 Tier-1 官方面 | `A_entity`、`F_cn_media`（国内厂商） |
+| Technology Watch Matrix | 按 task_def §4 / §5 / §6 的技术面做语义检索（无法靠源覆盖证明） | —（检索补检） |
+| Source Full-Read | `build_pool.py` 合并全部源的窗口内条目，不按主题预过滤 | 全部源通道 |
+| Cross-Source Resonance | 候选池内跨源计数 + HN / GitHub Trending / HF Trending 热度 | `D_social`、`C_aggregator`、`E_expert` |
+| Official Surface Diff | 快照差分（`collect_report.json` 的 `diff.new_uids`） | `G_official_surface` |
 
-对每个候选项标注：
-- 首发时刻（Asia/Shanghai）
-- 来源 URL
-- 召回通道
-- 是否在 TARGET_WINDOW 内（本轮新事件 / Active Event / Historical Context）
+候选池之外，还要按 task_def §8 做 GitHub Org Diff、按 §12 做 Expert Thesis Watch。
+P1 候选池的必备字段见 task_def §2；`build_pool.py` 已给出来源、首发时刻、`window_match`、
+`freshness`，LLM 补"召回机制"与"本轮新事件 / Active Event / Historical Context"判定。
 
 **候选池筛选的实操顺序**（本轮实测有效，直接复用）
 
@@ -373,15 +369,10 @@ PY
 | 源 | 排序/过滤 | 注意 |
 |---|---|---|
 | HN（`hn_newest` / `hn_front`） | 按 `points` 降序，再用技术词过滤；不按时间 | 低分条目（points ≤ 10）里仍有真信号（如 `Init` 9 分、`Compaction Laundering` 9 分），**不能只取高分**；但也不得因低分直接判 A 级 |
-| arXiv | 按 title 关键词打分，**再按 `Announce Type` 分档** | `new` 才是本轮新投稿；`cross` 是跨分类转载；`replace` / `replace-cross` 是修订版。**修订版不能当新论文**，若 v2 在窗口内、v1 在窗口外，进正文时必须标"v2 修订" |
+| arXiv | 按 title 关键词打分，**再按 `Announce Type` 分档** | `new` 才是本轮新投稿；`cross` 是跨分类转载；`replace` / `replace-cross` 是修订版，按 task_def §9 不能当新论文，若 v2 在窗口内、v1 在窗口外，进正文时标"v2 修订" |
 | 无日期源（`no_date`） | 不进本章正文，只作背景 | `carried_over` 的条目全部只能进第 5 章"持续热度" |
 
-**摘要只有 300 字时不要猜机制**：arXiv RSS 的 `snippet` 常截断到 300 字符。
-候选池只是召回证据，写事件卡前必须 `fetch` 原文（`arxiv.org/abs/<id>` 的
-`<blockquote class="abstract">`、厂商 blog 的 `datePublished` + 正文）。
-
-**省级素材（原文抓不到时）**：Techmeme 等聚合源的条目摘要若信息充分，足以支撑事件卡，
-但必须在卡片上标"媒体摘要，未回溯原文"，并在 8.3 记为"官方原文未回溯"。
+候选池只是召回证据，写事件卡前要抓原文（见步骤 4"写卡前必须 fetch 原文"）。
 
 **Success criteria**:
 - 全部源数据已解析
@@ -527,17 +518,12 @@ DGX Spark（Hardware）合并成"NVIDIA Agent 基础设施"，会让四个不同
 3. 再做本轮窗口内聚类：同一技术命题的候选聚到一起，识别 Convergence Signal（多实体）
    与 Frontier Signal（单实体拐点）。
 
-**P4 价值门控排序**：按 Technical Value / Evidence Confidence / Trend Maturity 评级。
-A+ = 机制新颖 + 定量充分 + 多源共振；A = 量化显著但缺乏独立基准；
-B = 信号明确但证据不足。
-
-**章 2 取 Top N，不设固定数量**：按技术价值排序，达标几条列几条——2 条就列 2 条，7 条就列 7 条。
-- **不得为凑数降低门槛**，也不得为凑数把 B 级抬进焦点层；
-- **不得按栏目做配额**（"每个栏目都要有人上榜"、"单条栏目优先提上来"都是错的），技术讨论只讲价值；
-- 全卡超过 5 条时，Top 1 保留深拆，其余压缩为摘要卡（标题 + 评级 + 一句话命题 + 锚点指向分类章主卡），不重复正文。
-
-Top 1 需深拆（架构可视化 + 落地场景 + 与历史路线关系）。评级相同时，优先"改变技术判断"而非"刷新数字"的那条。
+**P4 价值门控排序**：评级标准见 task_def §10 与 `thesis_ontology.json` 的 `rating`；
+优先级见 task_def §14；章 2 Top N 的取舍规则见 task_def §16 第 2 章（不设固定数量、不按栏目配额）。
 命题的置信度与升降不由 LLM 判断，以 `registry report` 的输出为准（见下方"P4 后写入 registry"）。
+
+**主卡结构**：`####` 标题 → 评级标记行（见 P5 结构契约）→ 元信息表（task_def §17 的必备字段）
+→ 一段摘要 → 深拆小节。task_def §15 的分析门槛按 §15 末尾的落位写进这些位置。
 
 **A/A+ 事件卡四维深拆硬约束**：每张 A/A+ 主卡（不只是 Top 1）必须含四个 `#####` 五级小节
 （结构契约见 P5），缺一不成稿：
@@ -549,11 +535,13 @@ Top 1 需深拆（架构可视化 + 落地场景 + 与历史路线关系）。�
 | **效果与定量** | 原文披露的关键数字（benchmark/参数/定价/速度），抓不到就显式标"blog 未在首发时披露"，不得编造 | **必须 fetch 官方原文** |
 | **对比其他方案的价值** | 横向对比 2-3 个竞品（同栏目优先），点出本方案差异化价值，回扣 TH 命题 | 原文 + 候选池同栏目事件 |
 
-- **写卡前必须 fetch 原文**（候选池 snippet 截断到 300 字，见 P3）。抓原文遇企业网络拦截用
-  华为代理 `proxyca.huawei.com:8080` + `urllib.request.ProxyHandler` 绕过；URL 从
-  `candidate_pool.json` 按 title 关键词提取，不要手编 slug。
+- **写卡前必须 fetch 原文**：候选池的 `snippet` 常截断到 300 字符，不要据此猜机制。arXiv 取
+  `arxiv.org/abs/<id>` 的 `<blockquote class="abstract">`，厂商 blog 取 `datePublished` 与正文。
+  抓原文遇企业网络拦截用华为代理 `proxyca.huawei.com:8080` + `urllib.request.ProxyHandler` 绕过；
+  URL 从 `candidate_pool.json` 按 title 关键词提取，不要手编 slug。
 - **B 级卡片不强制四节**，但 A/A+ 必须四节齐全；持续信号卡（章 5）、聚合栏目摘要卡不适用。
-- **无官方原文可抓的事件**（仅媒体转载）标"媒体摘要，未回溯原文"，并在 8.3 记为"官方原文未回溯"。
+- **无官方原文可抓的事件**：聚合源（如 Techmeme）摘要信息充分时可以支撑事件卡，但卡片上标
+  "媒体摘要，未回溯原文"，并在 8.3 记根因"官方原文未回溯"。
 - 四节总长 200-350 字/卡；横向对比至少 2 个竞品（1 同栏目 + 1 跨栏目）。
 
 **P4 后写入 registry**（整批事务，`--run-date` 用 **WINDOW_START_DATE**）：
@@ -625,23 +613,9 @@ python "$ASSETS/render_report.py" \
   确需在别处渲染加 `--allow-outside`（仅用于排查）。
 - 渲染前先跑一次 `python "$ASSETS/render_report.py" --check` 确认引擎与 node 可用。
 
-八章结构（内容侧，必须是这些锚点）：
-
-1. 本轮结论与技术趋势（≤3 条跨栏目主线）
-2. 今日必看（技术价值 Top N，不设固定数量；Top 1 深拆）
-3. 模型技术热点（3.1 模型架构、训练与适应；3.2 推理、决策与效率；
-   3.3 多模态、语音与实时模型；3.4 世界、空间与动作模型）
-4. Agent 系统技术热点（4.1 任务控制、运行与基础设施；4.2 记忆、知识与上下文；
-   4.3 外部环境中的行动与工具使用；4.4 多 Agent 协同与互操作；
-   4.5 学习与系统自进化；4.6 评测、验证与可信治理；4.7 交互、主动服务与持续委托）
-5. 值得关注（Early Signal / Active Event / Counter-signal / 时间边界候选 / 未归类高信号）
-6. 业界专家观点与趋势信号（L1 New Statement / L2 Reactivated / L3 Validation）
-7. 本轮技术判断（Frontier Thesis / Convergence Thesis + 置信度）：只写 `thesis_report.json` 中
-   `core_judgment = true` 的命题，每条写 `TH-xxxx`、类型、置信度（与 report 一致）、本轮收敛 /
-   跨时间收敛与前后变化；contested 的命题同一行写出反证
-8. 信息源采集统计（8.1 源与覆盖审计、8.2 事件索引、8.3 丢弃与漏检回溯）
-
-栏目的叶子归属一律查 `$ASSETS/taxonomy.py`，不要在提示词里另抄一份映射表。
+八章与各章内容要求见 task_def §16（第 7 章只取 `thesis_report.json` 中 `core_judgment = true`
+的命题）。栏目编号与名称以 taxonomy 为准：`python "$ASSETS/taxonomy.py" chapter 3`、`chapter 4`；
+栏目的叶子归属一律查 `taxonomy.py`，不要在提示词里另抄一份映射表。
 
 **Markdown 结构契约**（门禁 `verify_gates.py --md` 按此切分，违反会判 FAIL）：
 
@@ -668,8 +642,6 @@ EV 编号写在这行 `**...**` 标记里，门禁只扫卡片前 200 字符的�
 | **空栏目不渲染** | 0 条事件的栏目不出现 `###` 标题；只有 1 条的栏目折叠进相邻展开栏目，卡片标记写 `归属 N.M`；每个栏目最多折叠 1 条 |
 | **聚合栏目标注** | `4.6` 的卡片必须写具体技术域（评测环境/结果核验/可靠性归因/运行证据/调试回放/生产质量/身份授权/执行隔离/内容防护/审计治理），且与事件 JSON 的 `annotation` 一致（后者由 `primary_path` 唯一确定） |
 
-章 2 的其余条目用摘要卡（标题 + 评级 + 一句话命题 + 锚点指向分类章主卡），不重复正文。
-
 **视觉侧的三条硬约束**（写 MD 时就要落实，门禁不查但必须遵守）：
 
 | 约束 | 做法 | 违反后果 |
@@ -688,9 +660,7 @@ EV 编号写在这行 `**...**` 标记里，门禁只扫卡片前 200 字符的�
 - 8.3 漏检回溯表已填写
 
 **Rules**:
-- 文件名中的日期 = WINDOW_START_DATE（昨日日期）
-- 正文首页必须显示 WINDOW_START / WINDOW_END
-- H1 中的时间范围必须等于 TARGET_WINDOW
+- 窗口在标题、首页、文件名上的一致性要求见 task_def §0
 - 视觉复核没过就不允许进入步骤 6 —— 门禁查的是事实与结构，查不出排版缺陷
 
 **intro 区深层推理硬约束**：
@@ -699,7 +669,7 @@ intro 区（第 1 章）不只是列举事件，必须分两层写，缺第二�
 
 | 层 | 元素 | 内容 |
 |---|---|---|
-| 事实层 | 普通段落 | 列举 2-3 条主线各自做了什么（一句话/条）+ 统计数据（源/条目/事件/评级分布） |
+| 事实层 | 普通段落 + Dashboard 表 | 列举 2-3 条主线各自做了什么（一句话/条）+ Dashboard（字段见 task_def §17） |
 | 推理层 | `> [INSIGHT] ...` callout | 把多条主线合在一起指向什么——跨层解耦/叠加效应/工程经济学改变等**潜在价值**，不是简单复述 |
 
 推理层写作要求：
@@ -799,24 +769,24 @@ ISO 串带 `T`，二次解析会把日粒度升级成秒级。
 | 命题归属是否合理 | `primary_path` 与事件机制是否对得上（门禁只校验形式） |
 | 证据是否充分 | 来源数量、独立性、定量数据 |
 | 章 1 主线是否成立 | 是否真的跨栏目，而不是把某一栏目的事件换个说法 |
-| 章 7 判断是否被证据支撑 | 有反证时是否下调置信度，而不是硬凑命题 |
+| 命题裁决是否合理 | attach / new 是否真是同一 / 不同命题；反驳性证据是否如实裁决为 `contradicts`（置信度由 registry 派生，裁决错了它就错） |
+| 窗口文字一致 | title / H1 / Dashboard / 正文窗口 / 文件名的时间范围一致；无残留"TARGET_DATE = 单一天"表述（task_def §18，脚本不查） |
 
 **6c. 漏检回溯表**（8.3）
 
-生成漏检回溯表，**数据直接来自 `gap_tasks.json` 与 `collect_report.json`**，
-不要凭印象填写。每行记录：
-- 条目 / 来源 / 召回通道 / 首发时刻 / 是否位于 TARGET_WINDOW / 处置 / 理由
-- 根因分类（用下面的封闭集合，不得自创）：
-  `代理拦截` / `源面未覆盖` / `解析失败` / `窗口覆盖不完整` / `窗口外`
-  / `重复` / `低影响` / `抽象提升失败` / `价值误判` / `日期边界`
-- 处置方式（下一轮补采 / 申请权限 / 换通道 / 用二次源确认 / 已并入 TH-xxx）
+8.3 分两张表，**数据直接来自 `candidate_pool.json` / `pool_out_of_window.json`、
+`gap_tasks.json` 与 `collect_report.json`**，不要凭印象填写：
+- **丢弃日志**：字段与"丢弃理由"封闭集合见 task_def §16.1；
+- **漏检回溯**：字段同上，"漏检根因"封闭集合见 task_def §16.1，处置方式取
+  下一轮补采 / 申请权限 / 换通道 / 用二次源确认 / 已并入 TH-xxxx。
 
-**8.1 必须包含三级状态统计**，而不是只写"采集成功 N 个源"：
+**8.1 的格式**（task_def §13 的 Zero-result 证据也记在这里），不能只写"采集成功 N 个源"：
 - 判定分布（OK_IN_WINDOW / OK_OUT_OF_WINDOW / OK_EMPTY / PARSE_FAILED / PROXY_BLOCKED 等）
 - 结论数（`items_in_window_exact` / `items_in_window_fuzzy` 分别报）
 - 每个失明源的具体原因
 - 每个实体×面的覆盖情况（哪些面读过、哪些面失明）
 - 不可达面的登记理由（来自 `sources.py` 的 `UNCOVERABLE`）
+- 每个"0 命中 / 无新增"结论的检查面、时间范围、查询方式、无法访问的页面、快照不可用原因
 
 **6d. Registry**：状态迁移（proposed / active / contested / dormant / retired）由证据与 run 计数
 派生，ingest 记录了本轮 run 即自动推进，**没有单独的生命周期命令**。
@@ -906,3 +876,13 @@ ISO 串带 `T`，二次解析会把日粒度升级成秒级。
   召回 → 裁决 → 事务入库三步留痕、按 `event_key` 幂等、状态移到 `$WORKDIR/state/`。v1 数据不迁移。
 - **约束**：候选只能由 `candidates` 生成；新建命题必须逐个拒绝候选；第 7 章只取 `report` 的
   `core_judgment` 命题。改裁决后重跑 ingest 即可，同一 run 整批替换。
+
+### 2026-10-31 起：task_def 与 SKILL.md 分工
+
+- **问题**：两份文件各写一遍窗口规则、评级定义、Top N 规则、八章清单、8.3 字段，且互相矛盾：
+  五路召回的 A–E 两边含义不同，又与代码里的源通道 `channel`（A_entity…G_official_surface）撞字母；
+  8.3 根因在 SKILL 是"封闭集合"，在 task_def 是另一份清单；task_def 仍写旧文件名、旧章号、
+  已不存在的 `thesis_map` / `source_registry`，§18 仍是 LLM 读 HTML 自证的旧验收。
+- **约束**：task_def 只写"做什么、按什么标准判断"，SKILL.md 只写步骤、命令、路径、产物契约，
+  同一规则只在一处，另一处以"task_def §N"引用。冲突时内容判断以 task_def 为准，结构契约、
+  路径与门禁以 SKILL.md 和脚本为准。召回"机制"与源"通道"分开命名。
