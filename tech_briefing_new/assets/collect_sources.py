@@ -43,6 +43,7 @@ from pathlib import Path
 
 import coverage
 import extract
+import git_tags
 import sources as src_reg
 
 SH_TZ = datetime.timezone(datetime.timedelta(hours=8))
@@ -407,6 +408,35 @@ def collect_one(opener, src: dict, out_dir: Path, window_start: str,
                            from_archive=True,
                            note="主通道 0 条，已改读归档页补回批次")
                 chosen = (fb["url"], res2)
+
+    # 第三通道：匿名 git。GitHub 的 atom 与 API 在有出网网关的环境里会被一并
+    # 拦掉（2026-11-01 / 11-02 两轮实测，10 个代码面源全部 403），而这些源覆盖的
+    # 正是每天发版的面。git 读走另一条路，连续两轮手工补过，所以收进采集器。
+    gf = src.get("git_fallback")
+    if gf and (chosen is None or chosen[1]["status"] == "empty"):
+        res3 = git_tags.collect(gf["repo"], limit=gf.get("limit", 8))
+        rec["attempts"].append({"url": f"git ls-remote {gf['repo']}",
+                                "transport": "ok" if res3["status"] != "transport_failed"
+                                             else "url_error",
+                                "error": res3["error"][:200], "git_fallback": True})
+        if res3["status"] == "empty":
+            # 仓库确实没有 release tag（例如纯模型仓）。这是"结构正常但 0 条"，
+            # 不是源不可达——判成 TRANSPORT_FAIL 会造出一个假的阻断缺口。
+            rec.update(transport="ok", url=f"https://github.com/{gf['repo']}",
+                       extract="ok", structure_ok=True, extract_error="",
+                       from_git_tags=True,
+                       note="atom 与 API 均被拦；匿名 git 显示该仓库没有 release tag，"
+                            "按结构正常 0 条处理，不记失明")
+        if res3["status"] == "ok" and res3["items"]:
+            (out_dir / gf["file"]).write_text(
+                json.dumps(res3["items"], ensure_ascii=False, indent=1),
+                encoding="utf-8")
+            rec.update(transport="ok", url=f"https://github.com/{gf['repo']}",
+                       bytes=0, content_kind="json", file=gf["file"],
+                       from_git_tags=True, extract_error="",
+                       note="atom 与 API 通道均被拦，已改用匿名 git 的 tag 列表补回；"
+                            "时刻为 tag 提交时刻，不是 release 发布时刻")
+            chosen = (f"https://github.com/{gf['repo']}", res3)
 
     if chosen is None:
         if rec["transport"] != "ok":

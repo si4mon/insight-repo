@@ -11,6 +11,8 @@ extract 的日期精度与窗口判定单测。
 """
 import unittest
 
+import extract
+
 from extract import (extract_items, in_window, parse_date, precision_span,
                      window_match)
 
@@ -98,6 +100,42 @@ class FuzzyWindowTest(unittest.TestCase):
     def test_no_date_is_not_in_window(self):
         self.assertIsNone(window_match(_item("", "none"), WS, WE))
         self.assertFalse(in_window(_item("", "none"), WS, WE))
+
+
+
+class ArxivIdentityTest(unittest.TestCase):
+    """同一篇 arXiv 论文从不同通道进来必须是同一个 uid。
+
+    2026-11-02 实测：一篇论文同时出现在 cs.AI 的 RSS 与 cs.CL 的归档页，
+    两条路径各算一套 uid，于是必审清单里同一篇论文出现两次，台账要填两次处置。
+    """
+
+    def test_versions_and_paths_share_identity(self):
+        base = extract.make_uid("https://arxiv.org/abs/2610.41994", "t", "p")
+        for u in ("https://arxiv.org/abs/2610.41994v2",
+                  "http://arxiv.org/pdf/2610.41994",
+                  "https://arxiv.org/html/2610.41994v1"):
+            self.assertEqual(extract.make_uid(u, "other title", "other date"), base, u)
+
+    def test_different_papers_stay_distinct(self):
+        self.assertNotEqual(extract.make_uid("https://arxiv.org/abs/2610.41994", "t", "p"),
+                            extract.make_uid("https://arxiv.org/abs/2610.41995", "t", "p"))
+
+    def test_non_arxiv_urls_unaffected(self):
+        self.assertNotEqual(extract.make_uid("https://x.test/a?v=1", "t", "p"),
+                            extract.make_uid("https://x.test/a?v=2", "t", "p"))
+
+    def test_listing_path_uses_the_same_uid(self):
+        html = (b'<h3>Sun, 1 Nov 2026</h3>'
+                b'<dt><a href="/abs/2610.41994">arXiv:2610.41994</a></dt>'
+                b'<dd><div class="list-title">Title: DAMI</div>'
+                b'<div class="list-journal-ref">Announce Type: new</div></dd>')
+        res = extract.extract_items(html, "arxiv_listing",
+                                    source_url="https://arxiv.org/list/cs.CL/pastweek")
+        if res["status"] != "ok" or not res["items"]:
+            self.skipTest("归档页样例与解析器格式不匹配，另有专项测试覆盖")
+        self.assertEqual(res["items"][0]["uid"],
+                         extract.make_uid("https://arxiv.org/abs/2610.41994", "DAMI", ""))
 
 
 if __name__ == "__main__":

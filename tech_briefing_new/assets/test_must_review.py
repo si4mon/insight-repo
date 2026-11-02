@@ -63,6 +63,18 @@ class TierTest(unittest.TestCase):
         got = {r["uid"] for r in mr.build(pool, TERMS)["items"]}
         self.assertEqual(got, {"b"})
 
+    def test_duplicate_arxiv_papers_do_not_eat_the_top_k_quota(self):
+        """同一篇论文跨分类出现时，不能占掉两个名额——否则前 40 名实际只有 33 篇。"""
+        pool = [row(uid="dup", src="arxiv_cs_AI", channel="B_arxiv",
+                    title="Verification of agent plans"),
+                row(uid="dup", src="arxiv_cs_CL", channel="B_arxiv",
+                    title="Verification of agent plans"),
+                row(uid="p2", src="arxiv_cs_AI", channel="B_arxiv",
+                    title="Agent reasoning survey")]
+        out = mr.build(pool, TERMS, arxiv_top_k=2)
+        self.assertEqual([r["uid"] for r in out["items"]], ["dup", "p2"])
+        self.assertEqual(out["arxiv_candidates"], 2)
+
     def test_arxiv_takes_top_k_by_score(self):
         pool = [row(uid=f"p{i}", src="arxiv_cs_AI", channel="B_arxiv",
                     title=t) for i, t in enumerate([

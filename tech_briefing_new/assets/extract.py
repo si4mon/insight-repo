@@ -79,8 +79,20 @@ def _squash(s: str) -> str:
     return re.sub(r"\s+", " ", s or "").strip()
 
 
+_ARXIV_URL = re.compile(r'arxiv\.org/(?:abs|pdf|html)/(\d{4}\.\d{4,5})', re.I)
+
+
 def make_uid(url: str, title: str, published: str) -> str:
-    raw = (url or "").strip() or f"{title}|{published}"
+    """条目身份。同一条目从不同通道进来必须得到同一个 uid。
+
+    arXiv 单独规范化：一篇论文会同时出现在多个分类的 feed 里，而 RSS 路径与
+    归档页路径此前各算一套 uid（前者哈希 URL、后者用裸 id），于是 2026-11-02
+    的必审清单里 4 篇论文各出现两次——台账要为同一篇论文填两次处置。
+    去掉版本号后按 arxiv:<id> 归并，两条通道就对齐了。
+    """
+    u = (url or "").strip()
+    m = _ARXIV_URL.search(u)
+    raw = f"arxiv:{m.group(1)}" if m else (u or f"{title}|{published}")
     return hashlib.sha1(raw.encode("utf-8")).hexdigest()[:16]
 
 
@@ -620,7 +632,8 @@ def _extract_arxiv_listing(body: bytes, source_url: str = "") -> list:
                 continue
             seen.add(aid)
             out.append({
-                "uid": aid,
+                # 与 RSS 路径共用 make_uid，否则同一篇论文在两条通道下是两个身份
+                "uid": make_uid(url, title, published),
                 "title": html.unescape(titles[n]) if n < len(titles) else aid,
                 "url": f"https://arxiv.org/abs/{aid}",
                 "published": published,

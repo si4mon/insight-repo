@@ -33,6 +33,14 @@ class CanonicalTest(unittest.TestCase):
         b = event_key({"source": "http://example.com/post"})
         self.assertEqual(a, b)
 
+    def test_hn_items_keep_their_ids(self):
+        """HN 的条目身份全在 query 里；去掉 query 会让所有 HN 来源的事件撞成一个 key。"""
+        a = event_key({"source": "https://news.ycombinator.com/item?id=50363688"})
+        b = event_key({"source": "https://news.ycombinator.com/item?id=50371265"})
+        self.assertNotEqual(a, b)
+        self.assertEqual(canonical_source("https://news.ycombinator.com/item?id=50363688"),
+                         "hn:50363688")
+
     def test_canonical_source_overrides(self):
         a = event_key({"source": "https://media.com/repost", "canonical_source": "https://openai.com/x"})
         self.assertEqual(a, event_key({"source": "https://openai.com/x"}))

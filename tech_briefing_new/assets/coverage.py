@@ -67,6 +67,10 @@ def source_verdict(rec: dict, diff: dict | None = None) -> str:
     if rec.get("items_in_window", 0) > 0:
         # 归档回退补回来的批次要能被看见：8.1 里"靠回退才拿到"和"主通道正常"
         # 是两种不同的覆盖状况，合并成 OK_IN_WINDOW 会掩盖主通道的故障。
+        # 回退补回来的批次要能被看见：8.1 里"靠回退才拿到"和"主通道正常"
+        # 是两种覆盖状况，合并成 OK_IN_WINDOW 会掩盖主通道的故障。
+        if rec.get("from_git_tags"):
+            return "OK_FROM_GIT_TAGS"
         return "OK_BATCH_FROM_ARCHIVE" if rec.get("from_archive") else "OK_IN_WINDOW"
     if rec.get("items_with_date", 0) == 0:
         if diff and diff.get("new_count", 0) > 0 and not diff.get("is_first_run"):
@@ -83,6 +87,7 @@ VERDICT_LABEL = {
     "EMPTY":            "结构不可识别或空响应（真失明）",
     "OK_EMPTY":         "源结构正常但当天 0 条（非失明）",
     "OK_BATCH_FROM_ARCHIVE": "主通道 0 条，改读归档页后取到窗口内批次",
+    "OK_FROM_GIT_TAGS": "atom 与 API 均被拦，改用匿名 git 的 tag 列表补回（时刻为 tag 提交时刻）",
     "INTERNAL_ERROR":   "采集器自身异常（代码缺陷），不是源不可达",
     "PARSE_FAILED":     "内容形态与声明模式不符",
     "PROXY_BLOCKED":    "代理拦截页",
@@ -258,7 +263,8 @@ def track_coverage(records: list[dict]) -> dict:
                                "items_in_window": 0, "items_in_window_fuzzy": 0})
         d["sources"] += 1
         v = r.get("verdict", "")
-        if v in ("OK_IN_WINDOW", "OK_NEW_VIA_DIFF", "OK_BATCH_FROM_ARCHIVE"):
+        if v in ("OK_IN_WINDOW", "OK_NEW_VIA_DIFF", "OK_BATCH_FROM_ARCHIVE",
+                 "OK_FROM_GIT_TAGS"):
             d["ok_in_window"] += 1
         if v in BLIND_VERDICTS:
             d["blind"] += 1
@@ -277,7 +283,8 @@ def surface_coverage(records: list[dict]) -> dict:
                                  "items_in_window_fuzzy": 0})
         d["sources"].append(r.get("id"))
         v = r.get("verdict", "")
-        if v in ("OK_IN_WINDOW", "OK_NEW_VIA_DIFF", "OK_BATCH_FROM_ARCHIVE"):
+        if v in ("OK_IN_WINDOW", "OK_NEW_VIA_DIFF", "OK_BATCH_FROM_ARCHIVE",
+                 "OK_FROM_GIT_TAGS"):
             d["ok_in_window"] += 1
         # "读过"与"读到新内容"必须分开：OK_OUT_OF_WINDOW 表示源被成功读取、
         # 只是窗口内无新增，这不是失明。把两者混同会让"已检查无更新"

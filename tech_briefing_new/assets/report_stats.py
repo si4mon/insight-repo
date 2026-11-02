@@ -93,7 +93,8 @@ def dashboard_markdown(st: dict) -> str:
     L.append(f"| 事件总数 | {st['events_total']} |")
     L.append(f"| A+ / A | {st['by_rating']['A+']} / {st['by_rating']['A']} |")
     for k, v in st["by_signal"].items():
-        L.append(f"| {k} Signal | {v} |")
+        # 信号名已自带 Signal 的（Early Signal）不再追加，否则出现 "Early Signal Signal"
+        L.append(f"| {k if k.endswith('Signal') else k + ' Signal'} | {v} |")
     L.append(f"| Active Event | {st['active_events']} |")
     for k, v in st["by_change_object"].items():
         L.append(f"| change_object：{k} | {v} |")

@@ -40,6 +40,7 @@ REQUIRED = ("event_title", "source", "entity", "first_publish_shanghai",
 
 _ARXIV = re.compile(r'arxiv\.org/(?:abs|pdf|html)/(\d{4}\.\d{4,5})(?:v\d+)?', re.I)
 _GH_RELEASE = re.compile(r'github\.com/([^/\s]+)/([^/\s]+)/releases/tag/([^/?#\s]+)', re.I)
+_HN_ITEM = re.compile(r'news\.ycombinator\.com/item\?id=(\d+)', re.I)
 
 
 def canonical_source(url: str) -> str:
@@ -52,6 +53,11 @@ def canonical_source(url: str) -> str:
     m = _GH_RELEASE.search(u)
     if m:
         return f"gh:{m.group(1).lower()}/{m.group(2).lower()}@{m.group(3)}"
+    # HN 的条目身份全在 query 里（item?id=N）。去掉 query 会让所有以 HN 为来源的
+    # 事件撞成同一个 event_key——2026-11-02 实测两个无关事件被判成同一事件。
+    m = _HN_ITEM.search(u)
+    if m:
+        return f"hn:{m.group(1)}"
     parts = urlsplit(u if "://" in u else f"https://{u}")
     host = parts.netloc.lower()
     if host.startswith("www."):

@@ -1200,6 +1200,9 @@ def check_link_identity(c: Check, report: dict, events_dir: Path | None,
 
     bad = []
     for eid, ev in sorted(events.items()):
+        # 被重新公告的论文（replace / cross）保留原始编号，年月自然早于本窗口；
+        # 只有 new 公告的编号才应落在窗口附近。事件要显式声明 announce_type。
+        replaced = str(ev.get("announce_type") or "new") != "new"
         for u in _event_urls(ev):
             m = _URL_SHAPES[0][1].search(u)
             if m and lo:
@@ -1213,8 +1216,10 @@ def check_link_identity(c: Check, report: dict, events_dir: Path | None,
                 yy, mm = int(m.group(1)), int(m.group(2))
                 if not (1 <= mm <= 12):
                     bad.append(f"{eid}: arXiv id 月份非法 {m.group(0)}")
-                elif abs((2000 + yy) * 12 + mm - (ws.year * 12 + ws.month)) > 2:
-                    bad.append(f"{eid}: arXiv id {m.group(0)} 的年月距窗口超过 2 个月")
+                elif not replaced and \
+                        abs((2000 + yy) * 12 + mm - (ws.year * 12 + ws.month)) > 2:
+                    bad.append(f"{eid}: arXiv id {m.group(0)} 的年月距窗口超过 2 个月"
+                               f"（若为 replace / cross 公告，事件要写 announce_type）")
                 continue
     c.add("trace", "来源链接的对象编号落在本轮区间内", not bad, "; ".join(bad[:4]))
 
@@ -1483,8 +1488,12 @@ def check_registry(c: Check, events_dir: Path | None, state_dir: Path | None, ru
         if strong:
             got = ev.get("thesis_candidates")
             want = [x["id"] for x in reg.candidates(ev, run_date)]
-            if got is None or [x.get("id") for x in got] != want:
-                drift.append(f"{eid}: 写的是 {[x.get('id') for x in got or []]}，应为 {want}")
+            # 召回条目可能被写成 id 字符串而不是工具输出的对象：按 id 比对，
+            # 不要因为形状不对就崩在这里——门禁的职责是报告，不是抛异常。
+            def _cid(x):
+                return x.get("id") if isinstance(x, dict) else str(x)
+            if got is None or [_cid(x) for x in got] != want:
+                drift.append(f"{eid}: 写的是 {[_cid(x) for x in got or []]}，应为 {want}")
             if (ev.get("thesis_decision") or {}).get("action") not in ("attach", "new"):
                 undecided.append(eid)
         action = (ev.get("thesis_decision") or {}).get("action")

@@ -252,7 +252,9 @@ def build_sources() -> list[dict]:
                    f"gh_openai_{sdk}.atom"),
                    # API 通道：published_at 秒级带时区，atom 被拦时仍可归窗
                    (f"https://api.github.com/repos/openai/{sdk}/releases?per_page=30",
-                    f"gh_openai_{sdk}_api.json", "github_releases")])
+                    f"gh_openai_{sdk}_api.json", "github_releases")],
+                   git_fallback={"repo": f"openai/{sdk}",
+                               "file": f"gh_openai_{sdk}_tags.json"})
 
     add(id="openai_platform_docs", entity="OpenAI", surface="developer",
         layer="platform-docs-index", channel="G_official_surface",
@@ -299,7 +301,9 @@ def build_sources() -> list[dict]:
                    f"gh_anthropic_{sdk}.atom"),
                    # API 通道：published_at 秒级带时区，atom 被拦时仍可归窗
                    (f"https://api.github.com/repos/anthropics/{sdk}/releases?per_page=30",
-                    f"gh_anthropic_{sdk}_api.json", "github_releases")])
+                    f"gh_anthropic_{sdk}_api.json", "github_releases")],
+                   git_fallback={"repo": f"anthropics/{sdk}",
+                               "file": f"gh_anthropic_{sdk}_tags.json"})
 
     # anthropic.com 保留为"探测性源"：不设 critical，且拦截页会被显式标记，
     # 这样 8.1 能持续显示"该面仍被拦截"，而不是静默成功。
@@ -336,7 +340,9 @@ def build_sources() -> list[dict]:
                "gh_python_genai.atom"),
                # API 通道：published_at 秒级带时区，atom 被拦时仍可归窗
                ("https://api.github.com/repos/googleapis/python-genai/releases?per_page=30",
-                "gh_python_genai_api.json", "github_releases")])
+                "gh_python_genai_api.json", "github_releases")],
+               git_fallback={"repo": "googleapis/python-genai",
+                           "file": "gh_python_genai_tags.json"})
 
     # ==========================================================
     # NVIDIA —— 此前完全缺失，遗漏 3 的直接原因
@@ -366,13 +372,17 @@ def build_sources() -> list[dict]:
         layer="qwen-blog", channel="A_entity", mode="rss",
         urls=[("https://qwenlm.github.io/blog/index.xml", "qwen_blog.xml")])
 
+    # 仓库订正（2026-11-02）：原先指 QwenLM/Qwen3，那是模型仓、没有 release tag，
+    # 三条通道都只能回答"没有"，于是这个面长期是个假的零结果。CLI 发布在 qwen-code。
     add(id="qwen_code", entity="Qwen", surface="code",
         layer="qwen-github-release", channel="G_official_surface", mode="atom",
         required=False,
-        urls=[("https://github.com/QwenLM/Qwen3/releases.atom", "gh_qwen3.atom"),
+        urls=[("https://github.com/QwenLM/qwen-code/releases.atom", "gh_qwen_code.atom"),
               # API 通道：published_at 秒级带时区，atom 被拦时仍可归窗
-              ("https://api.github.com/repos/QwenLM/Qwen3/releases?per_page=30",
-               "gh_qwen3_api.json", "github_releases")])
+              ("https://api.github.com/repos/QwenLM/qwen-code/releases?per_page=30",
+               "gh_qwen_code_api.json", "github_releases")],
+              git_fallback={"repo": "QwenLM/qwen-code",
+                          "file": "gh_qwen_code_tags.json"})
 
     # DeepSeek 公司面：deepseek.com 首页无日期结构，用 GitHub release 作代码面兜底
     add(id="deepseek_code", entity="DeepSeek", surface="code",
@@ -382,7 +392,9 @@ def build_sources() -> list[dict]:
                "gh_deepseek.atom"),
                # API 通道：published_at 秒级带时区，atom 被拦时仍可归窗
                ("https://api.github.com/repos/deepseek-ai/DeepSeek-V3/releases?per_page=30",
-                "gh_deepseek_api.json", "github_releases")])
+                "gh_deepseek_api.json", "github_releases")],
+               git_fallback={"repo": "deepseek-ai/DeepSeek-V3",
+                           "file": "gh_deepseek_tags.json"})
 
     add(id="mistral_news", entity="Mistral", surface="company",
         layer="mistral-news", channel="A_entity", mode="rss",
@@ -411,7 +423,9 @@ def build_sources() -> list[dict]:
                "gh_moonshot_kimi_code.atom"),
                # API 通道：published_at 秒级带时区，atom 被拦时仍可归窗
                ("https://api.github.com/repos/MoonshotAI/kimi-code/releases?per_page=30",
-                "gh_moonshot_kimi_code_api.json", "github_releases")])
+                "gh_moonshot_kimi_code_api.json", "github_releases")],
+               git_fallback={"repo": "MoonshotAI/kimi-code",
+                           "file": "gh_moonshot_kimi_code_tags.json"})
     add(id="moonshot_checkpoint_engine", entity="Moonshot", surface="code",
         layer="checkpoint-engine-release", channel="G_official_surface", mode="atom",
         required=False,
@@ -419,7 +433,9 @@ def build_sources() -> list[dict]:
                "gh_moonshot_checkpoint.atom"),
                # API 通道：published_at 秒级带时区，atom 被拦时仍可归窗
                ("https://api.github.com/repos/MoonshotAI/checkpoint-engine/releases?per_page=30",
-                "gh_moonshot_checkpoint_api.json", "github_releases")])
+                "gh_moonshot_checkpoint_api.json", "github_releases")],
+               git_fallback={"repo": "MoonshotAI/checkpoint-engine",
+                           "file": "gh_moonshot_checkpoint_tags.json"})
 
     # Microsoft：devblogs RSS 可达（116KB/10 条），是 Agent 相关一手内容的主要来源
     add(id="msft_devblogs", entity="Microsoft", surface="developer",

@@ -158,6 +158,16 @@ def build(in_pool: list[dict], terms: dict,
                 add(row, "T5_cn_media", f"中文媒体条目命中「{hit}」")
             continue
 
+    # 先按 uid 去重再取前 K：同一篇论文跨分类出现时，不去重会把名额占掉，
+    # 前 40 名实际只剩 33 篇（2026-11-02 实测）。
+    seen_uid, uniq = set(), []
+    for sc, hits, row in arxiv_scored:
+        u = row.get("uid") or ""
+        if u in seen_uid:
+            continue
+        seen_uid.add(u)
+        uniq.append((sc, hits, row))
+    arxiv_scored = uniq
     arxiv_scored.sort(key=lambda x: (-x[0], x[2].get("uid") or ""))
     cutoff = arxiv_scored[arxiv_top_k - 1][0] if len(arxiv_scored) >= arxiv_top_k else None
     for sc, hits, row in arxiv_scored[:arxiv_top_k]:

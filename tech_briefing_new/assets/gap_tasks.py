@@ -19,6 +19,7 @@
   python gap_tasks.py --report ... --mark-done openai_api_changelog --note "..."
 """
 import argparse
+import hashlib
 import json
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -177,8 +178,16 @@ def build_tasks(report: dict, run_date: str) -> dict:
         if verdict in ("PROXY_BLOCKED", "ALL_BLIND") and entity in PROXY_FALLBACK_HINT:
             fallback = PROXY_FALLBACK_HINT[entity]
 
+        # 任务 ID 必须由内容派生，不能靠序号：缺口集合一变，位置号就全体平移，
+        # 而 --mark-done 是按 ID 结案的——2026-11-02 实测 11 条补检记录因此落到
+        # 错误的任务上。改为 GAP-<type 首字母><实体与面的短哈希>，跨 run 稳定。
+        _kind = {"critical_blind": "C", "surface_blind": "S",
+                 "window_partial": "W", "entity_blind": "E"}.get(g.get("type"), "X")
+        _slug = hashlib.sha1(
+            f"{g.get('type')}|{entity}|{surface}".encode("utf-8")).hexdigest()[:4]
         tasks.append({
-            "id": f"GAP-{tid:02d}",
+            "id": f"GAP-{_kind}{_slug}",
+            "seq": tid,
             "priority": "P0" if g.get("type") == "critical_blind" else "P1",
             "type": g.get("type"),
             "entity": entity,

@@ -11,6 +11,7 @@ coverage.source_verdict / build_gaps 的单测。
 """
 import unittest
 
+import coverage
 from coverage import BLIND_VERDICTS, source_verdict
 import sources as src_reg
 
@@ -86,6 +87,80 @@ class Tier1InvariantTest(unittest.TestCase):
                 if (ent, surf) not in have and (ent, surf) not in registered:
                     silent.append(f"{ent}/{surf}")
         self.assertEqual(silent, [], f"既无源也未登记不可达: {silent}")
+
+
+
+class GitTagsFallbackTest(unittest.TestCase):
+    """第三通道（匿名 git）的判定要与正常采集区分开。"""
+
+    def rec(self, **kw):
+        base = {"transport": "ok", "extract": "ok", "items_total": 4,
+                "items_with_date": 4, "items_in_window": 2}
+        base.update(kw)
+        return base
+
+    def test_git_tags_has_its_own_verdict(self):
+        self.assertEqual(coverage.source_verdict(self.rec(from_git_tags=True)),
+                         "OK_FROM_GIT_TAGS")
+
+    def test_plain_success_is_not_relabelled(self):
+        self.assertEqual(coverage.source_verdict(self.rec()), "OK_IN_WINDOW")
+
+    def test_git_tags_wins_over_archive_label(self):
+        """两条回退都标了时，git 通道更具体，标签取它。"""
+        self.assertEqual(
+            coverage.source_verdict(self.rec(from_git_tags=True, from_archive=True)),
+            "OK_FROM_GIT_TAGS")
+
+    def test_verdict_is_healthy_and_labelled(self):
+        self.assertIn("OK_FROM_GIT_TAGS", coverage.VERDICT_LABEL)
+        self.assertNotIn("OK_FROM_GIT_TAGS", coverage.BLIND_VERDICTS)
+
+
+class GitTagsCollectTest(unittest.TestCase):
+    """git_tags.collect 的状态语义：取不到时刻就不能回答归窗问题。"""
+
+    def setUp(self):
+        import git_tags
+        self.gt = git_tags
+
+    def test_transport_failure_reported(self):
+        self.gt.list_tags = lambda *a, **k: ([], "fatal: could not read")
+        r = self.gt.collect("x/y")
+        self.assertEqual(r["status"], "transport_failed")
+        self.assertEqual(r["items"], [])
+
+    def test_no_tags_is_empty_not_failure(self):
+        self.gt.list_tags = lambda *a, **k: ([], "")
+        self.assertEqual(self.gt.collect("x/y")["status"], "empty")
+
+    def test_tags_without_times_cannot_answer_window(self):
+        self.gt.list_tags = lambda *a, **k: (["v1", "v2"], "")
+        self.gt.tag_times = lambda *a, **k: {}
+        r = self.gt.collect("x/y")
+        self.assertEqual(r["status"], "parse_failed")
+        self.assertEqual([i["date_precision"] for i in r["items"]], ["none", "none"])
+
+    def test_items_carry_second_precision_when_timed(self):
+        self.gt.list_tags = lambda *a, **k: (["v1"], "")
+        self.gt.tag_times = lambda *a, **k: {"v1": "2026-11-01T20:51:31+00:00"}
+        r = self.gt.collect("x/y")
+        self.assertEqual(r["status"], "ok")
+        it = r["items"][0]
+        self.assertEqual(it["date_precision"], "second")
+        self.assertEqual(it["url"], "https://github.com/x/y/releases/tag/v1")
+        self.assertIn("tag 提交时刻", it["snippet"])
+
+    def test_deref_and_moving_tags_skipped(self):
+        """^{} 解引用行与 latest / stable 这类移动 tag 不是发布。"""
+        import subprocess
+        out = ("aaa\trefs/tags/v2\n"
+               "bbb\trefs/tags/v2^{}\n"
+               "ccc\trefs/tags/latest\n"
+               "ddd\trefs/tags/v1\n")
+        self.gt._run = lambda args, timeout: (True, out)
+        tags, err = self.gt.list_tags("x/y")
+        self.assertEqual((tags, err), (["v2", "v1"], ""))
 
 
 if __name__ == "__main__":
