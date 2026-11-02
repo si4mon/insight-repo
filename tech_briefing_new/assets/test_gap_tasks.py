@@ -30,7 +30,13 @@ class BuildTasksTest(unittest.TestCase):
         b = build_tasks(rep, "2026-10-31")
         self.assertEqual((b["tasks_total"], b["tasks_blocking_open"], b["tasks_action_open"]), (2, 1, 1),
                          "非阻断且无 action_required 的 source_blind 不产生任务")
-        self.assertEqual(b["tasks"][0]["id"], "GAP-01")
+        # ID 由内容派生而不是位置号（见 gap_tasks 里的注释）：阻断缺口仍排在最前，
+        # 但编号不随缺口集合平移——否则 --mark-done 会结错任务。
+        self.assertTrue(b["tasks"][0]["id"].startswith("GAP-C"), b["tasks"][0]["id"])
+        self.assertEqual(b["tasks"][0]["seq"], 1)
+        self.assertEqual(b["tasks"][0]["id"],
+                         build_tasks(rep, "2026-10-31")["tasks"][0]["id"],
+                         "同一缺口两次构建必须得到同一个 ID")
         self.assertTrue(b["tasks"][0]["blocking"], "阻断任务先编号")
 
     def test_entity_blind_queries_come_from_search_terms(self):
@@ -60,7 +66,8 @@ class BuildTasksTest(unittest.TestCase):
         rep = _report([{"type": "entity_blind", "blocking": False, "action_required": True,
                         "entity": "Baidu", "surface": "company", "source": "", "verdict": "ENTITY_BLIND",
                         "search_terms": ["文心"]}])
-        b = mark_done(build_tasks(rep, "2026-10-31"), "GAP-01", "确认 0 条")
+        built = build_tasks(rep, "2026-10-31")
+        b = mark_done(built, built["tasks"][0]["id"], "确认 0 条")
         self.assertEqual((b["tasks_open"], b["tasks_action_open"]), (0, 0))
 
 
