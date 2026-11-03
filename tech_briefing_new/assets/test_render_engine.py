@@ -59,6 +59,28 @@ class RenderEngineTest(unittest.TestCase):
         _, latin = self.render("## Summary\n\nWindow stats: 12 events.", name="l-2026-10-30.md")
         self.assertIn('class="dropcap"', latin)
 
+    def test_dropcap_only_on_first_paragraph_after_chapter(self):
+        """章内后面的拉丁段落不该被选中。
+
+        lastHeadingLevel 以前不会被段落重置，所以「Early Signal（…）」
+        「Model–Harness 边界：…」这类段落只要出现在章里就会拿到首字下沉，
+        连续四轮都要把中文挪到段首来规避。
+        """
+        _, html = self.render(
+            "## 值得关注\n\n本章收的是证据不足的条目。\n\n"
+            "Early Signal（本轮窗口内）：三条。",
+            name="d-2026-10-30.md")
+        self.assertNotIn('class="dropcap"', html)
+
+    def test_dropcap_skips_cjk_first_paragraph_without_falling_through(self):
+        _, html = self.render(
+            "## 第一章\n\n中文首段。\n\nLatin second paragraph here.\n\n"
+            "## Second chapter\n\nLatin first paragraph here.",
+            name="e-2026-10-30.md")
+        caps = re.findall(r'<p class="dropcap"[^>]*>([^<]{0,20})', html)
+        self.assertEqual(len(caps), 1, caps)
+        self.assertTrue(caps[0].startswith("Latin first"), caps)
+
     def test_local_image_inlined(self):
         r, html = self.render("## 章\n\n![结论](figures/a.svg)\n\n行内 ![x](figures/a.svg) 图。")
         self.assertEqual(r.returncode, 0, r.stderr)

@@ -9,6 +9,7 @@ import unittest
 
 import coverage
 import sources
+import gap_tasks
 from gap_tasks import build_tasks, mark_done
 
 
@@ -60,7 +61,8 @@ class BuildTasksTest(unittest.TestCase):
         t = b["tasks"][0]
         self.assertEqual(sorted(t["failing_sources"]), ["arxiv_cs_AI", "arxiv_cs_CL"])
         # 02:00-04:00 = 14:00+08:00，比 12:00+08:00 晚；最宽缺口取最早的 12:00
-        self.assertIn("2026-10-30T12:00", t["acceptance"])
+        # 验收区间一律按 Asia/Shanghai 写出
+        self.assertIn("2026-10-30 12:00 +08:00", t["acceptance"])
 
     def test_mark_done_updates_counters(self):
         rep = _report([{"type": "entity_blind", "blocking": False, "action_required": True,
@@ -103,3 +105,68 @@ class CoverageGapsTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)
+
+
+class AcceptanceTimezoneTest(unittest.TestCase):
+    """window_partial 的验收区间要归一到 Asia/Shanghai。
+
+    covered_from 带源自己的时区。arXiv 的 RSS 是 -05:00，所以
+    2026-11-02T00:00:00-05:00 其实是上海 11-02 13:00，离窗口起点 13 小时；
+    旧实现直接截字符串，写出来是"窗口起点 至 2026-11-02T00:00"，
+    读起来像个空区间，于是这条盲区会被当成不存在而草草结案。
+    """
+
+    def test_arxiv_offset_is_normalized(self):
+        report = {
+            "run_date": "2026-11-03",
+            "target_window": {"start": "2026-11-02T00:00:00+08:00",
+                              "end": "2026-11-03T09:41:00+08:00"},
+            "sources": [{"id": "arxiv_cs_CL", "covered_from": "2026-11-02T00:00:00-05:00"}],
+            "gaps": [{"type": "window_partial", "entity": "arXiv", "surface": "research",
+                      "source": "arxiv_cs_CL", "action_required": True,
+                      "covered_from": "2026-11-02T00:00:00-05:00"}],
+        }
+        task = gap_tasks.build_tasks(report, "2026-11-03")["tasks"][0]
+        self.assertIn("2026-11-02 13:00 +08:00", task["acceptance"])
+        self.assertNotIn("2026-11-02T00:00", task["acceptance"])
+
+
+class WindowPartialConfirmedZeroTest(unittest.TestCase):
+    """window_partial 的 confirmed_zero 按未覆盖时段判，而不是按整个窗口。
+
+    arXiv 每个工作日只在美东 00:00 公告一批（上海 13:00）。窗口起点到 13:00
+    这一段不可能有公告，但整个窗口当然有条目；按窗口起点比，这条缺口永远
+    结不了案，只能天天挂一条 partial_compensated。
+    """
+
+    WS = "2026-11-02T00:00:00+08:00"
+
+    def test_window_partial_needs_range_end(self):
+        ev = {"channel": "arxiv rss", "range_checked": "起点→13:00",
+              "latest_item_time": "2026-11-02T13:00:00+08:00"}
+        probs = gap_tasks.validate_resolution("confirmed_zero", ev, self.WS,
+                                              "window_partial")
+        self.assertTrue(any("range_end" in x for x in probs), probs)
+
+    def test_window_partial_closes_within_uncovered_range(self):
+        ev = {"channel": "arxiv rss", "range_checked": "起点→13:00",
+              "latest_item_time": "2026-11-02T13:00:00+08:00",
+              "range_end": "2026-11-02T13:00:00+08:00"}
+        self.assertEqual(
+            gap_tasks.validate_resolution("confirmed_zero", ev, self.WS,
+                                          "window_partial"), [])
+
+    def test_item_after_uncovered_range_still_fails(self):
+        ev = {"channel": "arxiv rss", "range_checked": "起点→13:00",
+              "latest_item_time": "2026-11-02T18:00:00+08:00",
+              "range_end": "2026-11-02T13:00:00+08:00"}
+        probs = gap_tasks.validate_resolution("confirmed_zero", ev, self.WS,
+                                              "window_partial")
+        self.assertTrue(any("未覆盖时段终点" in x for x in probs), probs)
+
+    def test_entity_blind_rule_unchanged(self):
+        ev = {"channel": "blog", "range_checked": "SCAN_WINDOW",
+              "latest_item_time": "2026-11-02T09:00:00+08:00"}
+        probs = gap_tasks.validate_resolution("confirmed_zero", ev, self.WS,
+                                              "entity_blind")
+        self.assertTrue(any("窗口起点" in x for x in probs), probs)

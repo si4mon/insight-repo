@@ -1071,6 +1071,46 @@ def check_must_review(c: Check, mr_path: Path | None, trace_path: Path | None,
     c.add("collection", "台账与事件产物不矛盾", not misfiled, "; ".join(misfiled[:3]))
 
 
+_CT_CONNECTIVES = set("与和及或等的是在按见对把从并再也则就")
+_CT_LABEL = re.compile(r'\b(CT-0\d)\s*([\u4e00-\u9fff][\u4e00-\u9fff/、·]*)')
+
+
+def check_ct_labels(c: Check, md_path: Path | None):
+    """正文里写在 CT 编号后面的中文标签必须等于 ontology 里那条的名字。
+
+    events.normalize 只校验 CT 的 ID，标签是正文里手写的。2026-11-01 的报告
+    把 CT-02 写成「机制变化」、CT-05 写成「效率/成本结构变化」——那是另一套
+    早期词表，而 ontology 里 CT-02 是「抽象合并」、CT-05 是「交互契约变化」。
+    ID 合法，所以当轮门禁 92 项全过，错标签照样发了出去。
+    """
+    if not (md_path and md_path.exists()):
+        return
+    try:
+        import events as evmod
+        names = {ct["id"]: ct["name"] for ct in evmod.ONTOLOGY["change_types"]}
+    except Exception as e:                                   # pragma: no cover
+        c.warn("md", "读不到变化类型词表", str(e))
+        return
+    text = md_path.read_text(encoding="utf-8", errors="ignore")
+    wrong, seen = [], 0
+    for m in _CT_LABEL.finditer(text):
+        cid, label = m.group(1), m.group(2)
+        want = names.get(cid)
+        if not want:
+            continue
+        # 「回扣 CT-03 与 CT-09」里的「与」不是标签，是连词；一个字的词
+        # 以及以连词开头的片段都不当标签看。
+        if len(label) < 2 or label[0] in _CT_CONNECTIVES:
+            continue
+        seen += 1
+        # 标签写全名或写成全名的前缀都算对（「CT-01 边界迁移」「CT-01 边界」）；
+        # 写成另一个词才算错。
+        if not (want.startswith(label) or label.startswith(want)):
+            wrong.append(f"{cid} 写「{label}」，词表是「{want}」")
+    c.add("md", "变化类型的中文标签与词表一致", not wrong,
+          "; ".join(sorted(set(wrong))[:4]) if wrong else f"核对 {seen} 处")
+
+
 def _script_commit() -> str:
     """记录跑门禁时的脚本版本，便于回溯一份报告是用哪一版校验的。"""
     try:
@@ -1414,6 +1454,25 @@ def check_publish_precision(c: Check, events_dir: Path | None):
             # 日粒度必须在正文里显式标出，且时刻写成日期（不含时分秒）
             if re.search(r"T\d{2}:\d{2}", fp) and not ev.get("date_precision_note"):
                 bad_first.append(f"{eid}={fp}")
+    # arXiv 的 replace / replace-cross 是对旧版本的重新公告，首发是 v1 那天，
+    # 不是本次公告日。2026-11-02 与 2026-11-03 两轮都出现过把 replace 当成
+    # 窗口内首发写成主事件的情况（Heads of Security、EvoMemBench、AgentCollab），
+    # 所以这里直接按 announce_type 拦：要么标成 Active Event / 历史增量，
+    # 要么不能当本轮新事件写。
+    bad_replace = []
+    for eid, ev in events.items():
+        at = (ev.get("announce_type") or "").strip().lower()
+        if at not in ("replace", "replace-cross"):
+            continue
+        tags = " ".join(str(ev.get(k) or "") for k in
+                        ("date_semantics", "date_precision_note", "signal"))
+        if not any(k in tags for k in ("Active Event", "历史", "增量", "不计入本轮")):
+            bad_replace.append(f"{eid} announce_type={at}")
+    c.add("trace", "arXiv replace 不当作窗口内首发", not bad_replace,
+          "; ".join(bad_replace[:4])
+          + "（v1 公告日早于本窗口：要么按 Active Event 增量写并在 date_semantics "
+            "里标明，要么丢弃，理由取「首发早于 WINDOW_START」）" if bad_replace else "")
+
     c.add("trace", "事件声明了 date_precision", not bad_prec,
           "缺: " + ", ".join(bad_prec[:6]))
     c.add("trace", "日粒度事件标注了精度来源", not bad_first,
@@ -1631,6 +1690,7 @@ def main():
             check_md_event_index(c, md_path, report, events_dir)
             check_stats_recomputable(c, md_path, report, events_dir)
             check_ch1_mainlines(c, md_path, events_dir)
+            check_ct_labels(c, md_path)
             html_sibling = md_path.with_suffix(".html")
             if html_sibling.exists():
                 check_html_lightweight(c, html_sibling, report)

@@ -21,6 +21,7 @@ CLI（全局参数 --state DIR）：
 """
 import argparse
 import json
+import re
 import os
 import sys
 import time
@@ -69,6 +70,18 @@ def independent_entities(sup) -> list[str]:
     if any(c not in orgs for c in collective):
         orgs.append(_SLOT)
     return orgs
+def _is_placeholder_entity(ent) -> bool:
+    """实体是否只是占位（arXiv / 学术界 / 开源社区…），允许带括号后缀。
+
+    "学术界（OLMo-Twin，代码已公开）" 与 "学术界" 都是占位：它不标识任何组织，
+    所以两条都写 "学术界" 的事件并不是同一家机构在同一天发的两件事。疑似重复
+    事件的判定靠的就是"同实体"，占位实体会让任意两篇同叶子的论文互相告警，
+    2026-11-02 与 2026-11-03 两轮各出现两条这样的假阳性。
+    """
+    e = re.split(r"[（(]", str(ent or "").strip(), maxsplit=1)[0].strip()
+    return (not e) or e in _NON_ORG
+
+
 RELATIONS = ("supports", "contradicts", "refines")
 ACTIONS = ("attach", "new", "none")
 STRONG = ("A+", "A")
@@ -545,6 +558,8 @@ class Registry:
         for i, (a, ea) in enumerate(pool):
             for b, eb in pool[i + 1:]:
                 if ea["event_key"] == eb["event_key"] or a.startswith("registry:"):
+                    continue
+                if _is_placeholder_entity(ea.get("entity")):
                     continue
                 if ea.get("entity") and ea.get("entity") == eb.get("entity") \
                         and ea.get("primary_path") == eb.get("primary_path"):

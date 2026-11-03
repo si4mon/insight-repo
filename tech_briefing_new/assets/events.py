@@ -33,6 +33,9 @@ EVIDENCE_FORMS = tuple(ONTOLOGY["evidence_forms"])
 CHANGE_TYPES = tuple(ct["id"] for ct in ONTOLOGY["change_types"])
 RATINGS = ("A+", "A", "B", "C")
 DATE_PRECISIONS = ("second", "day", "batch", "none")
+# 与 report_stats.CHANGE_OBJECTS 同一封闭集合：dashboard 只按这五项计数，
+# 写了别的值不会报错、只会从统计里静默消失（2026-11-03 一轮出现过 "Benchmark"）。
+CHANGE_OBJECTS = ("Model", "Harness", "运行平台", "交互·应用", "尚未披露")
 
 # rating 不在必填里：它由 scoring 派生（见 scoring.py）。必填的是评分块本身。
 REQUIRED = ("event_title", "source", "entity", "first_publish_shanghai",
@@ -106,6 +109,13 @@ def normalize_event(ev: dict, event_id: str) -> tuple[dict, list[str]]:
         out["date_precision"] = prec
         if prec not in DATE_PRECISIONS:
             errors.append(f"{event_id}: date_precision={prec} 不在 {DATE_PRECISIONS}")
+
+    if "change_object" in out:
+        co = str(out["change_object"] or "").strip()
+        out["change_object"] = co
+        if co not in CHANGE_OBJECTS:
+            errors.append(f"{event_id}: change_object={co!r} 不在 {CHANGE_OBJECTS}"
+                          f"（写别的值不会进 dashboard 统计）")
 
     path = out.get("primary_path")
     if path:

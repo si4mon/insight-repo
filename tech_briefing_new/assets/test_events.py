@@ -98,3 +98,27 @@ class NormalizeTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)
+
+
+class ChangeObjectTest(unittest.TestCase):
+    """change_object 必须取 dashboard 的封闭集合。
+
+    report_stats 只按 ("Model", "Harness", "运行平台", "交互·应用", "尚未披露")
+    计数，别的值不报错、只会从统计表里静默消失；2026-11-03 一轮写过 "Benchmark"，
+    结果 13 个事件在 dashboard 上只数出 12 个。
+    """
+
+    def _ev(self, obj):
+        import events as evmod
+        import report_stats
+        self.assertEqual(evmod.CHANGE_OBJECTS, report_stats.CHANGE_OBJECTS)
+        return normalize_event(dict(GOOD, change_object=obj), "EV-01")
+
+    def test_legal_value_passes(self):
+        out, errs = self._ev("Harness")
+        self.assertEqual(errs, [])
+        self.assertEqual(out["change_object"], "Harness")
+
+    def test_off_list_value_fails(self):
+        _, errs = self._ev("Benchmark")
+        self.assertTrue(any("change_object" in e for e in errs), errs)

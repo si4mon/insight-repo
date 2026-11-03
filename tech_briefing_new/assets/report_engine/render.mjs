@@ -499,10 +499,15 @@ function render(tokens) {
         continue;
       }
       pendingSectionLede = false;
+      // 首字下沉只给"章标题后紧挨着的那一段"。lastHeadingLevel 不会被段落
+      // 重置，所以旧实现会让章内任意一段只要以拉丁字母开头就被选中——简报里
+      // 这类段落（"Early Signal（…）"、"Model–Harness 边界：…"）很常见，
+      // 连续四轮都要手工把中文挪到段首来规避。
       if (!dropCapApplied && lastHeadingLevel === 2 && startsWithLatin(t.text)) {
         cls = ' class="dropcap"';
         dropCapApplied = true;
       }
+      lastHeadingLevel = 0;
       html += withReportComments(`<p${cls}${reportBlockAttr(blockId)}>${inline(t.text)}</p>`, comments, blockId);
       continue;
     }

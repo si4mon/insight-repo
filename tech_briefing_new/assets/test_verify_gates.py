@@ -16,7 +16,8 @@ from pathlib import Path
 
 from taxonomy import TAXONOMY
 import testlib
-from verify_gates import (check_ch1_mainlines, Check, check_event_annotations, check_event_paths,
+from verify_gates import (check_ch1_mainlines, Check, check_ct_labels,
+                          check_event_annotations, check_event_paths,
                           check_markdown, check_md_event_index, check_md_theses,
                           check_publish_precision, check_source_coverage_definition,
                           check_registry, check_taxonomy_definition, check_traceability,
@@ -725,3 +726,86 @@ class Ch1MainlineTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)
+
+
+class ReplaceAnnounceTest(unittest.TestCase):
+    """arXiv 的 replace / replace-cross 不是窗口内首发。
+
+    回测动机：2026-11-02 与 2026-11-03 两轮都有 replace 公告被当成新事件写进
+    主事件（Heads of Security、EvoMemBench、AgentCollab）。门禁此前只比对
+    first_publish 是否落在窗口里，而 replace 的公告日确实在窗口里，所以查不出来。
+    """
+
+    def setUp(self):
+        self._tmp = tempfile.TemporaryDirectory()
+        self.evdir = Path(self._tmp.name) / "events"
+        self.evdir.mkdir()
+        self.addCleanup(self._tmp.cleanup)
+
+    def _write(self, eid: str, **kw):
+        ev = {"rating": "B", "date_precision": "batch",
+              "first_publish_shanghai": "2026-11-02T13:00:00+08:00"}
+        ev.update(kw)
+        (self.evdir / f"{eid}.json").write_text(
+            json.dumps(ev, ensure_ascii=False), encoding="utf-8")
+
+    def _status(self):
+        c = Check()
+        check_publish_precision(c, self.evdir)
+        return _status(c, "arXiv replace 不当作窗口内首发")
+
+    def test_new_announcement_passes(self):
+        self._write("EV-01", announce_type="new")
+        self.assertEqual(self._status(), "PASS")
+
+    def test_cross_v1_passes(self):
+        self._write("EV-01", announce_type="cross")
+        self.assertEqual(self._status(), "PASS")
+
+    def test_replace_without_marker_fails(self):
+        self._write("EV-01", announce_type="replace",
+                    date_semantics="arXiv 公告日（replace）")
+        self.assertEqual(self._status(), "FAIL")
+
+    def test_replace_cross_without_marker_fails(self):
+        self._write("EV-01", announce_type="replace-cross")
+        self.assertEqual(self._status(), "FAIL")
+
+    def test_replace_marked_as_active_event_passes(self):
+        self._write("EV-01", announce_type="replace",
+                    date_semantics="机制披露日；本体首发于历史窗口，按 Active Event 增量记")
+        self.assertEqual(self._status(), "PASS")
+
+
+class CtLabelTest(unittest.TestCase):
+    """正文里 CT 编号后面的中文标签必须等于词表里的名字。
+
+    2026-11-01 的报告把 CT-02 写成「机制变化」、CT-05 写成「效率/成本结构变化」
+    （那是另一套早期词表），而 ontology 里 CT-02 是「抽象合并」、CT-05 是
+    「交互契约变化」。ID 合法，所以当轮 92 项门禁全过，错标签照样发了出去。
+    """
+
+    def setUp(self):
+        self._tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self._tmp.cleanup)
+        self.md = Path(self._tmp.name) / "r-2026-11-02.md"
+
+    def _status(self, body: str) -> str:
+        self.md.write_text(body, encoding="utf-8")
+        c = Check()
+        check_ct_labels(c, self.md)
+        return _status(c, "变化类型的中文标签与词表一致")
+
+    def test_correct_label_passes(self):
+        self.assertEqual(self._status("| 变化类型 | CT-01 边界迁移 · CT-06 新一等对象 |"),
+                         "PASS")
+
+    def test_prefix_of_label_passes(self):
+        self.assertEqual(self._status("变化类型：CT-01 边界迁移"), "PASS")
+
+    def test_old_vocabulary_fails(self):
+        self.assertEqual(self._status("| 变化类型 | CT-02 机制变化 · CT-05 效率/成本结构变化 |"),
+                         "FAIL")
+
+    def test_bare_id_passes(self):
+        self.assertEqual(self._status("回扣 CT-03 与 CT-09。"), "PASS")

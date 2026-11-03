@@ -24,6 +24,8 @@
 | trace | 8.2 每个 EV 编号都有 `EV-xx.json`，每个 JSON 都在 8.2 出现；JSON 首发落在窗口内；8.2 行的评级是独立的评级记号（精确匹配，不是子串）；8.2 时刻等于 JSON 的 `first_publish_shanghai`（分钟粒度） |
 | registry | 本轮已入库，入库事件与 events 目录一致；A/A+ 的 `thesis_candidates` 等于工具重算结果；A/A+ 有 attach/new 裁决且已写入 registry；存在漏跑窗口时给出警告 |
 | registry | 第 7 章：每条判断（列表项）都写 TH 编号，整章无编号时必须写明"本轮无核心技术判断"；覆盖 registry 报告中全部核心判断；引用的命题存在、为 active/contested 且非 Low、置信度与 registry 一致、contested 写出反证 |
+| trace | arXiv 的 `replace` / `replace-cross` 公告不当作窗口内首发：这类事件必须标成 Active Event / 历史增量，否则不许当本轮新事件（重新公告的时刻确实在窗口里，按 `first_publish` 比对查不出来） |
+| md | 正文里写在 `CT-0N` 后面的中文标签等于 `thesis_ontology.json` 里那条的名字（`normalize` 只校验 ID，标签是手写的，词表漂移过一次） |
 
 **trace 层以 8.2 声明的编号为分母**：缺 JSON 直接 FAIL。8.2 的时刻必须能被 `EV-*.json` 证实——
 门禁校验事实源，不是表格里手填的日期；两者不一致时以 JSON 为准。`check_md_event_index`

@@ -11,6 +11,7 @@ import unittest
 from pathlib import Path
 
 from events import event_key
+import thesis_registry as tr
 from thesis_registry import LockTimeout, Registry, RegistryError, ValidationError
 
 R1, R2, R3 = "2026-10-28", "2026-10-29", "2026-10-30"
@@ -476,3 +477,23 @@ class ViaClaimTest(Base):
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)
+
+
+class PlaceholderEntityDuplicateTest(unittest.TestCase):
+    """占位实体不触发「疑似同一事件」告警。
+
+    两篇不同作者团队的 arXiv 论文都写 entity="学术界"，同叶子、同一个 arXiv
+    公告批次，旧逻辑会互相告警；2026-11-02 与 2026-11-03 两轮各出现两条这样的
+    假阳性，每条都要人工排除。真实组织（OpenAI、NVIDIA）的同叶子同日两条仍要告警。
+    """
+
+    def test_placeholder_pair_no_warning(self):
+        self.assertTrue(tr._is_placeholder_entity("学术界"))
+        self.assertTrue(tr._is_placeholder_entity("学术界（OLMo-Twin，代码已公开）"))
+        self.assertTrue(tr._is_placeholder_entity("arXiv"))
+        self.assertTrue(tr._is_placeholder_entity(""))
+        self.assertTrue(tr._is_placeholder_entity(None))
+
+    def test_real_org_is_not_placeholder(self):
+        for ent in ("OpenAI", "NVIDIA", "Anthropic", "小米", "学术出版社"):
+            self.assertFalse(tr._is_placeholder_entity(ent), ent)

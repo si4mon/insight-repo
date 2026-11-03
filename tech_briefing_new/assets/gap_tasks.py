@@ -83,6 +83,16 @@ def _as_dt(s: str) -> datetime:
     return dt if dt.tzinfo else dt.replace(tzinfo=SH_TZ)
 
 
+def _to_sh(iso: str) -> str:
+    """把任意时区的 ISO 时刻归一成 Asia/Shanghai 的 'YYYY-MM-DD HH:MM +08:00'。"""
+    if not iso:
+        return ""
+    try:
+        return _as_dt(iso).astimezone(SH_TZ).strftime("%Y-%m-%d %H:%M +08:00")
+    except (TypeError, ValueError):
+        return str(iso)[:16]
+
+
 def build_tasks(report: dict, run_date: str) -> dict:
     """从 collect_report 的 gaps 生成任务清单。"""
     tasks = []
@@ -153,9 +163,12 @@ def build_tasks(report: dict, run_date: str) -> dict:
             sources = g.get("sources") or [source]
             covered_from = (g.get("covered_from")
                             or src_by_id.get(source, {}).get("covered_from", ""))
+            # covered_from 带的是源自己的时区（arXiv -05:00 / HN Z / 其余 +08:00），
+            # 直接截前 16 个字符会把 13 小时的盲区写成"窗口起点至窗口起点"，
+            # 读起来像个空区间（2026-11-03 一轮的 arXiv 任务就是这样）。
             acceptance = (
                 f"能给出 {entity}/{surface} 面在 窗口起点 至 "
-                f"{covered_from[:16] or '最早条目'} 之间的明确结论："
+                f"{_to_sh(covered_from) or '最早条目'} 之间的明确结论："
                 f"有 N 条发布（附原始 URL 与首发时刻），"
                 f"或确认该时段确实无发布（附翻页/归档检查证据）"
             )
@@ -241,12 +254,22 @@ def _require(ev: dict, *keys) -> list:
     return [k for k in keys if not str(ev.get(k, "")).strip()]
 
 
-def validate_resolution(resolution: str, evidence: dict, window_start: str) -> list:
+def validate_resolution(resolution: str, evidence: dict, window_start: str,
+                        gap_type: str = "") -> list:
     """按结论类型校验证据字段。返回问题列表，空表示可以结案。
 
     关键一条：confirmed_zero 要求 latest_item_time 必须由**同一通道**给出，
-    且早于 window_start。不按日期过滤的 WebSearch、无年份的 releases 页
-    都给不出这个时间，只能落到 unknown。
+    且早于被追问的那段时间的起点。不按日期过滤的 WebSearch、无年份的
+    releases 页都给不出这个时间，只能落到 unknown。
+
+    被追问的起点按缺口类型取：
+      - entity_blind / surface_blind 问的是"整个窗口内有没有"，起点是 WINDOW_START；
+      - window_partial 问的是"窗口起点到 covered_from 这一段里有没有"，
+        起点同样是 WINDOW_START，但判据是该通道在这段里的最新条目，
+        所以上界用 covered_from（evidence 里的 range_end）而不是窗口终点。
+        arXiv 这类按固定时刻批量公告的面，整个窗口当然有条目（13:00 那批），
+        但窗口起点到 13:00 之间不可能有，按整窗口比就永远结不了案，
+        这条缺口会每天挂着一条 partial_compensated（2026-11-03 一轮发现）。
     """
     if resolution not in RESOLUTIONS:
         return [f"resolution={resolution} 不在 {sorted(RESOLUTIONS)}"]
@@ -260,10 +283,19 @@ def validate_resolution(resolution: str, evidence: dict, window_start: str) -> l
                 "confirmed_zero 必须给 latest_item_time（该通道最新条目的时刻）；"
                 "给不出就只能写 unknown")
         else:
-            try:
-                if datetime.fromisoformat(lt) >= datetime.fromisoformat(window_start):
+            bound, bound_name = window_start, "窗口起点"
+            if gap_type == "window_partial":
+                re_ = str(evidence.get("range_end", "")).strip()
+                if not re_:
                     problems.append(
-                        f"latest_item_time={lt} 不早于窗口起点 {window_start}，"
+                        "window_partial 判 confirmed_zero 必须给 range_end"
+                        "（未覆盖时段的终点，一般就是该源的 covered_from）")
+                else:
+                    bound, bound_name = re_, "未覆盖时段终点"
+            try:
+                if datetime.fromisoformat(lt) > datetime.fromisoformat(bound):
+                    problems.append(
+                        f"latest_item_time={lt} 晚于{bound_name} {bound}，"
                         f"不能判 0 条")
             except ValueError:
                 problems.append(f"latest_item_time={lt} 不是带时区的 ISO 时间")
@@ -293,7 +325,8 @@ def mark_done(bundle: dict, task_id: str, note: str,
         if t["id"] != task_id:
             continue
         if resolution:
-            problems = validate_resolution(resolution, evidence, ws)
+            problems = validate_resolution(resolution, evidence, ws,
+                                            t.get("type", ""))
             if problems:
                 raise GapEvidenceError(
                     f"{task_id} 证据不足，不能结案：\n  - " + "\n  - ".join(problems))
@@ -350,6 +383,9 @@ def main():
     ap.add_argument("--items-checked", default="", help="去重后检查的条数")
     ap.add_argument("--uncovered-range", default="",
                     help="未覆盖时段（partial_compensated 必填）")
+    ap.add_argument("--range-end", default="",
+                    help="未覆盖时段的终点，ISO 带时区（window_partial 判 "
+                         "confirmed_zero 必填，一般取该源的 covered_from）")
     ap.add_argument("--finding", action="append", default=[],
                     help="found_n 的条目，格式 <url>|<first_publish ISO>，可重复")
     args = ap.parse_args()
@@ -366,6 +402,7 @@ def main():
               "latest_item_time": args.latest_item_time,
               "items_checked": args.items_checked,
               "uncovered_range": args.uncovered_range,
+              "range_end": args.range_end,
               "findings": [{"url": x.split("|")[0],
                             "first_publish": (x.split("|") + [""])[1]}
                            for x in args.finding]}

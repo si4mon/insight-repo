@@ -152,3 +152,46 @@
 另有两处不是缺陷但记下来：`report_stats.py` 的「Early Signal Signal」重复后缀已修；论域词表缺「开源」导致一条最终入选的事件没进必审清单，已补 8 个中文词（规则是补词表不抬阈值，见 `must-review.md`）。
 
 **仍未解决的设计缺口**：registry 没有「向已有事件追加增量」的通道。同一事件的机制在后续窗口被披露时（如 Anthropic 用途边界：第一轮是用户报告、第二轮是系统提示机制），两者来源 URL 不同，于是被记成两条独立事件，入库只给「疑似同一事件」警告。
+
+## 2026-11-03（第四轮运行发现的六处缺陷）
+
+本轮运行 2026-11-02 窗口时发现并修掉六处缺陷，全部带回归测试（测试总数 311 → 317）。
+
+1. **`verify_gates.check_publish_precision`：arXiv 的 `replace` / `replace-cross` 不当作窗口内首发。**
+   重新公告的时刻确实落在窗口里，所以旧门禁的 `first_publish ∈ [WS, WE]` 查不出来。现在
+   `announce_type ∈ {replace, replace-cross}` 的事件必须在 `date_semantics` /
+   `date_precision_note` / `signal` 里标成 Active Event / 历史 / 增量 / 不计入本轮，否则门禁不过。
+   回测：2026-11-01 的报告有两条（Heads of Security、EvoMemBench）本该被拦。
+
+2. **`events.normalize`：`change_object` 按封闭集合校验。**
+   此前不校验，而 `report_stats` 只按 `("Model", "Harness", "运行平台", "交互·应用", "尚未披露")`
+   计数——写别的值不报错，只会从 dashboard 统计里静默消失（门禁用同一脚本复算，也查不出来）。
+   `events.CHANGE_OBJECTS` 与 `report_stats.CHANGE_OBJECTS` 由测试断言保持一致。
+
+3. **`verify_gates.check_ct_labels`：正文里 CT 编号后的中文标签必须等于词表里的名字。**
+   `normalize` 只校验 CT 的 ID，标签是正文手写的。2026-11-01 的报告把 CT-02 写成「机制变化」、
+   CT-03 写成「核验方式变化」、CT-05 写成「效率/成本结构变化」、CT-06 写成「评测与度量变化」，
+   那是另一套早期词表；当轮 92 项门禁全过，错标签照样发了出去。连词（与/和/及…）与单字片段
+   不当标签看。
+
+4. **`thesis_registry._is_placeholder_entity`：占位实体不触发「疑似同一事件」。**
+   两篇不同作者团队的 arXiv 论文都写 `entity="学术界"`，同叶子、同一个公告批次就会互相告警。
+   11-02 与 11-03 两轮各出现两条假阳性，每条都要人工排除。占位判定允许带括号后缀
+   （「学术界（OLMo-Twin，代码已公开）」）。真实组织不受影响。
+
+5. **`gap_tasks`：window_partial 的验收区间归一到 Asia/Shanghai。**
+   `covered_from` 带源自己的时区，旧实现直接截前 16 字符，于是 arXiv 的
+   `2026-11-02T00:00:00-05:00`（= 上海 13:00）被写成「窗口起点 至 2026-11-02T00:00」——
+   而窗口起点正是 2026-11-02 00:00 (+08:00)，13 小时的盲区读起来像空区间。
+
+6. **`gap_tasks.validate_resolution`：window_partial 的 `confirmed_zero` 按未覆盖时段判。**
+   旧校验要求 `latest_item_time < WINDOW_START`。arXiv 整个窗口当然有条目（每工作日美东
+   00:00 一批），但未覆盖的那段里不可能有，于是这类缺口永远结不了案，只能天天挂一条
+   `partial_compensated`。现在 `window_partial` 需要新的 `range_end` 证据字段
+   （CLI `--range-end`，一般取该源的 `covered_from`），并按它判定。
+   entity_blind / surface_blind 的规则不变。
+
+7. **`report_engine/render.mjs`：首字下沉只给章标题后紧挨着的那一段。**
+   `lastHeadingLevel` 不被段落重置，所以章内任意一段只要以拉丁字母开头就会被选中
+   （「Early Signal（…）」「Model–Harness 边界：…」在简报里很常见）。**连续四轮手工
+   规避同一处**：前三轮都是把中文挪到段首。
