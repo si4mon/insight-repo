@@ -17,6 +17,7 @@
 """
 from __future__ import annotations
 
+import datetime
 import hashlib
 import json
 import re
@@ -61,6 +62,22 @@ def list_tags(repo: str, limit: int = 8, timeout: int = 90) -> tuple[list[str], 
     return tags, ""
 
 
+def _to_utc(iso: str) -> str:
+    """把 %cI 归一到 UTC。
+
+    git 的 %cI 带的是**提交者本地**的时区偏移，不是 UTC：同一次采集里
+    anthropic 的 tag 回来是 +00:00，而 QwenLM 的回来是 +08:00。原始文件里
+    混着两种偏移，读的人很容易再按 +08 换一次——2026-11-02 那份简报就把
+    qwen-code v0.26.6 的 11-03 01:51 写成了 09:51（nightly 那条同样差 8 小时）。
+    统一成 UTC 之后，原始文件里只剩一种偏移，没有可以再换一次的空间。
+    """
+    try:
+        return datetime.datetime.fromisoformat(iso).astimezone(
+            datetime.timezone.utc).isoformat()
+    except (TypeError, ValueError):
+        return iso
+
+
 def tag_times(repo: str, tags: list[str], timeout: int = 150) -> dict[str, str]:
     """浅取每个 tag，返回 {tag: 提交时刻 ISO}。取不到的 tag 不出现在结果里。"""
     if not tags:
@@ -78,7 +95,7 @@ def tag_times(repo: str, tags: list[str], timeout: int = 150) -> dict[str, str]:
                 continue
             ok, iso = _run(["git", "-C", d, "log", "-1", "--format=%cI", t], 30)
             if ok and iso.strip():
-                out[t] = iso.strip()
+                out[t] = _to_utc(iso.strip())
     return out
 
 

@@ -165,3 +165,129 @@ class GitTagsCollectTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)
+
+
+class GzipSniffTest(unittest.TestCase):
+    """响应是 gzip 但头没了，也要能解开。
+
+    deepmind.google/blog/rss.xml 返回 gzip 字节，而 content-encoding 头在出网
+    代理那里被改掉了。我们把 gzip 字节当文本存下来，classify 看到二进制就判
+    PARSE_FAILED「内容形态与声明模式不符」。压不压由代理当时的协商决定，所以
+    它表现得像偶发故障（11-01 失败、11-02 正常、11-04 又失败），前两次都被记成
+    传输层偶发。失败的那几轮 Google DeepMind 的 blog 面实际是失明的。
+    """
+
+    def test_gzip_body_is_decompressed(self):
+        import gzip
+        import collect_sources
+        raw = b'<?xml version="1.0"?><rss version="2.0"><channel/></rss>'
+        self.assertEqual(collect_sources._maybe_decompress(gzip.compress(raw)), raw)
+
+    def test_plain_body_untouched(self):
+        import collect_sources
+        raw = b'<?xml version="1.0"?><rss/>'
+        self.assertEqual(collect_sources._maybe_decompress(raw), raw)
+
+    def test_bad_gzip_magic_returns_input(self):
+        import collect_sources
+        raw = b"\x1f\x8b not actually gzip"
+        self.assertEqual(collect_sources._maybe_decompress(raw), raw)
+
+
+class GitTagTimezoneTest(unittest.TestCase):
+    """git 的 %cI 带提交者本地时区，原始文件必须统一成 UTC。
+
+    同一次采集里 anthropic 的 tag 回来是 +00:00、QwenLM 的回来是 +08:00。
+    原始文件混着两种偏移，读的人很容易再按 +08 换一次——2026-11-02 那份简报
+    就把 qwen-code v0.26.6 的 11-03 01:51 写成了 09:51，nightly 那条同样差 8 小时。
+    """
+
+    def test_local_offset_normalized(self):
+        import git_tags
+        self.assertEqual(git_tags._to_utc("2026-11-03T01:51:25+08:00"),
+                         "2026-11-02T17:51:25+00:00")
+
+    def test_utc_unchanged(self):
+        import git_tags
+        self.assertEqual(git_tags._to_utc("2026-11-03T01:25:28+00:00"),
+                         "2026-11-03T01:25:28+00:00")
+
+    def test_garbage_passes_through(self):
+        import git_tags
+        self.assertEqual(git_tags._to_utc("garbage"), "garbage")
+
+    def test_all_offsets_identical_after_normalizing(self):
+        import git_tags
+        raw = ["2026-11-03T01:51:25+08:00", "2026-11-03T01:25:28+00:00",
+               "2026-11-02T19:02:13-05:00"]
+        offs = {git_tags._to_utc(x)[-6:] for x in raw}
+        self.assertEqual(offs, {"+00:00"})
+
+
+class ArchiveFallbackOnTruncationTest(unittest.TestCase):
+    """窗口跨了两个公告批次时，归档回退也要触发。
+
+    arXiv 的 RSS 只带最近一个公告批次。2026-11-04 一轮的窗口跨了 11-03 13:00
+    与 11-04 13:00 两批，11-03 那一整批（数百篇）一条都没进池子：window_partial
+    缺口把它报了出来，但旧条件只在"主通道 0 条"时读归档页，所以补偿从未发生。
+    阈值用「够装下一整个批次」，避免 feed 只回溯几小时这种常态截断反复多抓。
+    """
+
+    WS = "2026-11-03T00:00:00+08:00"
+
+    def _res(self, *iso):
+        return {"status": "ok", "items": [{"published": t} for t in iso]}
+
+    def test_missing_whole_batch_triggers(self):
+        import collect_sources
+        self.assertTrue(collect_sources._truncated_before_window(
+            self._res("2026-11-04T05:00:00+00:00"), self.WS))
+
+    def test_few_hours_late_does_not_trigger(self):
+        import collect_sources
+        self.assertFalse(collect_sources._truncated_before_window(
+            self._res("2026-11-02T20:00:00+00:00"), self.WS))
+
+    def test_source_spanning_window_does_not_trigger(self):
+        import collect_sources
+        self.assertFalse(collect_sources._truncated_before_window(
+            self._res("2026-11-02T17:00:00+00:00", "2026-11-04T05:00:00+00:00"), self.WS))
+
+    def test_undated_items_do_not_trigger(self):
+        import collect_sources
+        self.assertFalse(collect_sources._truncated_before_window(
+            {"status": "ok", "items": [{}, {"published": ""}]}, self.WS))
+
+    def test_non_ok_status_does_not_trigger(self):
+        import collect_sources
+        self.assertFalse(collect_sources._truncated_before_window(
+            {"status": "empty", "items": []}, self.WS))
+
+    def test_custom_threshold_respected(self):
+        import collect_sources
+        res = self._res("2026-11-03T06:00:00+08:00")      # 窗口起点后 6 小时
+        self.assertFalse(collect_sources._truncated_before_window(res, self.WS, 12.0))
+        self.assertTrue(collect_sources._truncated_before_window(res, self.WS, 3.0))
+
+
+class ArchiveMergeTest(unittest.TestCase):
+    """归档回退要与主通道合并，不能顶掉。
+
+    归档页不带摘要，主通道的 RSS 带。直接替换会让当天那一批论文失去摘要，
+    必审清单打分只剩标题可用——2026-11-04 一轮归档补回 1528 篇，同时把 684 篇
+    当天论文的摘要弄丢了，T6 层的排序因此被标题关键词密度主导。
+    """
+
+    def test_merge_prefers_main_channel_copy(self):
+        archive = {"status": "ok", "items": [
+            {"uid": "a", "title": "A", "snippet": "arXiv 公告批次 2026-11-03"},
+            {"uid": "b", "title": "B", "snippet": "arXiv 公告批次 2026-11-04"}]}
+        main = {"status": "ok", "items": [
+            {"uid": "b", "title": "B", "snippet": "Abstract: the real abstract"}]}
+        by_uid = {it["uid"]: it for it in archive["items"]}
+        by_uid.update({it["uid"]: it for it in main["items"]})
+        merged = list(by_uid.values())
+        self.assertEqual(len(merged), 2)
+        got = {it["uid"]: it["snippet"] for it in merged}
+        self.assertIn("real abstract", got["b"])
+        self.assertIn("公告批次", got["a"])

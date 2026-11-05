@@ -631,11 +631,17 @@ def _extract_arxiv_listing(body: bytes, source_url: str = "") -> list:
             if aid in seen:
                 continue
             seen.add(aid)
+            # url / title 以前是在 dict 字面量里才算出来的，而 make_uid 在同一个
+            # 字面量里就先引用了它们 —— 第一条就 NameError，整个函数 parse_failed，
+            # 于是归档回退自引入 make_uid（2026-11-02 那轮）起从未产出过一条。
+            # 当轮的 8.1 还写了"自动改读归档页补回批次"，那句话是错的。
+            url = f"https://arxiv.org/abs/{aid}"
+            title = html.unescape(titles[n]) if n < len(titles) else aid
             out.append({
                 # 与 RSS 路径共用 make_uid，否则同一篇论文在两条通道下是两个身份
                 "uid": make_uid(url, title, published),
-                "title": html.unescape(titles[n]) if n < len(titles) else aid,
-                "url": f"https://arxiv.org/abs/{aid}",
+                "title": title,
+                "url": url,
                 "published": published,
                 "date_precision": "batch",
                 "announce_type": (types[n].lower() if n < len(types) else "new"),

@@ -32,6 +32,7 @@
 import argparse
 import concurrent.futures
 import datetime
+import gzip
 import json
 import os
 import sys
@@ -107,6 +108,25 @@ def build_opener(proxies: dict):
 
 
 # ============ 抓取 ============
+def _maybe_decompress(body: bytes) -> bytes:
+    """按首字节判断压缩，不信 content-encoding 头。
+
+    deepmind.google/blog/rss.xml 的响应是 gzip，但 content-encoding 头在到达这里
+    之前就没了（出网代理会改写响应头），于是我们把 gzip 字节当文本存了下来，
+    extract.classify 看到二进制就判 PARSE_FAILED「内容形态与声明模式不符」。
+    响应到底压不压由出网代理当时的协商决定，所以它表现得像偶发故障：11-01 一轮
+    判 PARSE_FAILED、11-02 一轮正常、11-04 一轮又失败，前两次都被记成传输层偶发。
+    按魔数判断不依赖任何响应头，也不会误伤正常文本——没有哪个 feed 以 1f 8b 开头。
+    """
+    if body[:2] == b"\x1f\x8b":
+        try:
+            return gzip.decompress(body)
+        except Exception:
+            return body
+    return body
+
+
+
 def fetch(opener, url: str, ua: str, timeout: int,
           retries: int = MAX_RETRIES, delay: int = RETRY_DELAY,
           extra_headers: dict | None = None) -> tuple[str, bytes, str]:
@@ -125,7 +145,7 @@ def fetch(opener, url: str, ua: str, timeout: int,
                 **(extra_headers or {}),
             })
             with opener.open(req, timeout=timeout) as resp:
-                body = resp.read()
+                body = _maybe_decompress(resp.read())
                 if body:
                     return "ok", body, ""
                 last = "empty body"
@@ -147,6 +167,44 @@ def fetch(opener, url: str, ua: str, timeout: int,
         if attempt < retries:
             time.sleep(delay)
     return "timeout" if "timed out" in last.lower() else "url_error", b"", last
+
+
+def _truncated_before_window(res: dict, window_start: str,
+                             min_hours: float = 12.0) -> bool:
+    """主通道有条目，但窗口前段有一大块没被这条通道覆盖到。
+
+    判据只看条目自己的时刻，不看源怎么声明：最早一条比 WINDOW_START 晚
+    min_hours 小时以上才算。阈值的意思是"够装下一整个发布批次"——按日批量
+    公告的源（arXiv 每工作日一批）缺一批就必然超过 12 小时，而 feed 只回溯
+    几小时这种常态截断不会触发多抓一次归档页。
+
+    2026-11-04 一轮发现：arXiv 的 RSS 只带最近一个公告批次，而窗口跨了
+    11-03 13:00 与 11-04 13:00 两个公告日，11-03 那一整批一条都没进池子。
+    window_partial 缺口把它报了出来，但补偿从来没发生，因为旧条件只看
+    "是不是 0 条"。
+
+    拿不到可比的时刻就返回 False：宁可不触发回退，也不要因为时间解析不出来
+    就凭空多抓一遍。
+    """
+    if not window_start or not res or res.get("status") != "ok":
+        return False
+    stamps = []
+    for it in res.get("items") or []:
+        t = (it.get("published") or "").strip()
+        if not t:
+            continue
+        try:
+            stamps.append(datetime.datetime.fromisoformat(t))
+        except ValueError:
+            continue
+    if not stamps:
+        return False
+    try:
+        ws = datetime.datetime.fromisoformat(window_start)
+    except ValueError:
+        return False
+    gap_h = (min(stamps) - ws).total_seconds() / 3600.0
+    return gap_h > min_hours
 
 
 def collect_paginated(opener, src: dict, out_dir: Path, window_start: str,
@@ -390,11 +448,19 @@ def collect_one(opener, src: dict, out_dir: Path, window_start: str,
         chosen = (url, res)
         break
 
-    # 归档回退：主通道解析成功但 0 条（arXiv 周末的空 feed 是典型），
-    # 改读该源登记的归档页。这不是"换个 URL 再试一次"，而是换一种内容形态，
-    # 所以用独立的 mode 解析，并在判定上与正常采集区分开。
+    # 归档回退触发条件有两个：
+    #   (a) 主通道解析成功但 0 条（arXiv 周末的空 feed 是典型）；
+    #   (b) 主通道有条目，但最早一条晚于 WINDOW_START —— 窗口前半段这个面
+    #       根本没被这条通道覆盖到。
+    # (b) 是 2026-11-04 一轮发现的：arXiv 的 RSS 只带最近一个公告批次，而窗口
+    # 跨了两个公告日（11-03 13:00 与 11-04 13:00），11-03 那一整批（数百篇）
+    # 一条都没进池子。window_partial 缺口把它报了出来，但补偿从来没发生，
+    # 因为旧条件只看"是不是 0 条"。
     fb = src.get("archive_fallback")
-    if fb and (chosen is None or chosen[1]["status"] == "empty"):
+    if fb and (chosen is None or chosen[1]["status"] == "empty"
+               or _truncated_before_window(
+                   chosen[1], window_start,
+                   fb.get("on_truncation_hours", 12.0))):
         t_status, body, err = fetch(opener, fb["url"], src.get("ua", src_reg.DEFAULT_UA),
                                     src.get("timeout", 20) + 40)
         rec["attempts"].append({"url": fb["url"], "transport": t_status,
@@ -403,11 +469,24 @@ def collect_one(opener, src: dict, out_dir: Path, window_start: str,
             (out_dir / fb["file"]).write_bytes(body)
             res2 = extract.extract_items(body, fb["mode"], source_url=fb["url"])
             if res2["status"] == "ok" and res2["items"]:
+                # 主通道还有条目时要合并、不要顶掉：归档页不带摘要，而主通道
+                # 的 RSS 带。直接替换会让当天那一批论文失去摘要，必审清单的
+                # 打分只剩标题可用，整个 T6 层的排序质量跟着掉。
+                # 2026-11-04 一轮就是这样：归档补回 1528 篇，同时把 684 篇
+                # 当天论文的摘要弄丢了。
+                merged, note = res2["items"], "主通道 0 条，已改读归档页补回批次"
+                if chosen is not None and (chosen[1].get("items") or []):
+                    by_uid = {it.get("uid"): it for it in res2["items"]}
+                    by_uid.update({it.get("uid"): it
+                                   for it in chosen[1]["items"] if it.get("uid")})
+                    merged = list(by_uid.values())
+                    note = (f"主通道只覆盖窗口后段，已并入归档页批次"
+                            f"（归档 {len(res2['items'])} 条 + 主通道 "
+                            f"{len(chosen[1]['items'])} 条 → {len(merged)} 条）")
                 rec.update(transport="ok", url=fb["url"], bytes=len(body),
                            content_kind="html", file=fb["file"],
-                           from_archive=True,
-                           note="主通道 0 条，已改读归档页补回批次")
-                chosen = (fb["url"], res2)
+                           from_archive=True, note=note)
+                chosen = (fb["url"], {**res2, "items": merged})
 
     # 第三通道：匿名 git。GitHub 的 atom 与 API 在有出网网关的环境里会被一并
     # 拦掉（2026-11-01 / 11-02 两轮实测，10 个代码面源全部 403），而这些源覆盖的

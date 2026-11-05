@@ -195,3 +195,51 @@
    `lastHeadingLevel` 不被段落重置，所以章内任意一段只要以拉丁字母开头就会被选中
    （「Early Signal（…）」「Model–Harness 边界：…」在简报里很常见）。**连续四轮手工
    规避同一处**：前三轮都是把中文挪到段首。
+
+## 2026-11-04（第五轮运行发现的五处缺陷）
+
+本轮跑 2026-11-03 窗口时挖出五处缺陷，其中四处会导致漏采或误判，且都不是本轮新引入的——
+触发点是一个没有被当成偶发放过的 PARSE_FAILED。全部带回归测试（测试总数 317 → 335）。
+
+1. **`collect_sources._maybe_decompress`：按首字节魔数判断 gzip，不信 `content-encoding` 头。**
+   `deepmind.google/blog/rss.xml` 的响应体是 gzip，而该头在到达采集器前被出网代理改掉了，
+   于是 gzip 字节被当文本落盘，`extract.classify` 判「内容形态与声明模式不符」。压不压由代理
+   当时的协商决定，所以它表现得像偶发故障：11-01 判 PARSE_FAILED、11-02 正常、11-04 又失败，
+   前两次都被记成传输层偶发。失败的那几轮 Google DeepMind 的 blog 面实际是失明的。
+
+2. **`git_tags._to_utc`：把 `%cI` 归一到 UTC 再写入原始文件。**
+   git 的 `%cI` 带的是**提交者本地**时区偏移，同一次采集里会同时出现 `+00:00` / `+08:00` / `-07:00`。
+   原始文件混着多种偏移，读的人很容易再按 +08 换一次——2026-11-02 那份简报就把
+   qwen-code v0.26.6 的 11-03 01:51 写成 09:51，同仓 nightly 的 06:04 写成 14:04。
+
+3. **`collect_sources._truncated_before_window`：归档回退的第二个触发条件。**
+   旧条件只在主通道 0 条时读归档页，而 arXiv 的 RSS 只带最近一个公告批次。窗口跨两个公告日时，
+   较早那一整批一条都不会进池子（2026-11-03 窗口漏掉 1,294 篇）。`window_partial` 缺口报了出来，
+   但补偿从未发生。新条件：主通道最早一条比 WINDOW_START 晚 `on_truncation_hours`（默认 12）小时以上
+   也触发，阈值的意思是「够装下一整个发布批次」。
+
+4. **`extract._extract_arxiv_listing`：`url` / `title` 在 make_uid 之前求值。**
+   两者原先只在 dict 字面量里算出来，而 `make_uid` 在同一字面量里就引用了它们：第一条即 NameError，
+   整个函数 parse_failed。**归档回退自 2026-11-02 引入 make_uid 起从未产出过一条**，而当轮的 8.1
+   还写了「自动改读归档页补回批次」——那句话当时就是错的。教训：报告里写某个机制起了作用时，
+   要引用它产出的条数，不要引用它被调用了。
+
+5. **`collect_sources`：归档回退与主通道合并，不顶掉。**
+   归档页不带摘要，主通道的 RSS 带。第 3 条修好后当天那一批论文的摘要全部消失，而
+   `must_review.arxiv_score` 打的是标题加摘要，于是 T6 排序被标题关键词密度主导。改为归档条目在前、
+   主通道条目按 uid 覆盖。
+
+### 同轮的词表与口径调整（非缺陷）
+
+- `data/review_terms.json` 的 `arxiv_score` 补了 19 个 high 与 13 个 med 词
+  （interpretab / collusion / membership inference / state tracking / linear attention /
+  weight-space / subliminal / recurrent / provenance / unlearn 等）。回测动机见该文件的 `_doc`。
+- T6 的截断改为「不在并列分数档内部切刀」：68 篇得分 ≥6 时取前 40，等于在 6 分档内随机取舍。
+  本轮用 `--arxiv-top-k 68` 取整档，清单 155 → 183 条。
+
+### 本轮新记录的两处待办
+
+- **`arxiv_score` 对没有摘要的条目系统性低估**：归档页来源的条目没有摘要，而打分用标题加摘要。
+  要么为归档条目补抓摘要，要么把打分按「有无摘要」分层。
+- **门禁不检查「栏目章里每个非 Active 的 EV 都有一张卡」**：`check_md_event_index` 只核 8.2 索引与
+  EV JSON 的对应，2026-11-03 一轮漏写了一张 C 级卡而门禁没发现。

@@ -140,3 +140,52 @@ class ArxivIdentityTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)
+
+
+class ArxivListingTest(unittest.TestCase):
+    """归档页解析不能在第一条上就炸掉。
+
+    url / title 原先只在 dict 字面量里算出来，而 make_uid 在同一个字面量里就
+    引用了它们：第一条即 NameError，整个 _extract_arxiv_listing 变成 parse_failed，
+    归档回退自引入 make_uid（2026-11-02 那轮）起从未产出过一条。那轮的 8.1
+    还写了"自动改读归档页补回批次"——报告里这句话当时就是错的。
+    """
+
+    PAGE = b"""<h3>Wed, 4 Nov 2026 (showing 2 of 2 entries )</h3>
+    <dt><a name='item1'>[1]</a>
+      <a href ="/abs/2611.04977" title="Abstract" id="2611.04977">arXiv:2611.04977</a></dt>
+    <dd><div class='meta'><div class='list-title mathjax'><span class='descriptor'>Title:</span>
+          First Paper Title
+        </div></div></dd>
+    <dt><a name='item2'>[2]</a>
+      <a href ="/abs/2611.04978" title="Abstract" id="2611.04978">arXiv:2611.04978</a></dt>
+    <dd><div class='meta'><div class='list-title mathjax'><span class='descriptor'>Title:</span>
+          Second Paper Title (cross-list from cs.LG)
+        </div></div></dd>
+    """
+
+    def _items(self):
+        import extract
+        r = extract.extract_items(
+            self.PAGE, "arxiv_listing",
+            source_url="https://arxiv.org/list/cs.MA/pastweek?skip=0&show=2000")
+        self.assertEqual(r["status"], "ok", r.get("error"))
+        return r["items"]
+
+    def test_parses_entries(self):
+        items = self._items()
+        self.assertEqual(len(items), 2)
+        self.assertEqual(items[0]["url"], "https://arxiv.org/abs/2611.04977")
+        self.assertEqual(items[0]["title"], "First Paper Title")
+
+    def test_uid_matches_rss_path(self):
+        import extract
+        items = self._items()
+        self.assertEqual(items[0]["uid"],
+                         extract.make_uid("https://arxiv.org/abs/2611.04977v2",
+                                          "whatever", items[0]["published"]))
+
+    def test_published_is_batch_time(self):
+        items = self._items()
+        self.assertEqual(items[0]["published"], "2026-11-04T12:00:00+08:00")
+        self.assertEqual(items[0]["date_precision"], "batch")
