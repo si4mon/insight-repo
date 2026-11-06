@@ -291,3 +291,44 @@ class ArchiveMergeTest(unittest.TestCase):
         got = {it["uid"]: it["snippet"] for it in merged}
         self.assertIn("real abstract", got["b"])
         self.assertIn("公告批次", got["a"])
+
+
+class BatchNotYetDueTest(unittest.TestCase):
+    """当天批次还没公告，不算缺。
+
+    arXiv 每个工作日在固定时刻公告一批（归一到上海约 12:00），而窗口终点是任务
+    开始时刻。2026-11-05 窗口于上海 09:44 执行，五个 arXiv 源都被报成 partial，
+    凭空生出五条无事可做的补检任务——缺的那天正是执行当天，批次还没发。
+    """
+
+    def _rec(self, dates):
+        return {"daily_batch": True, "batch_dates": list(dates)}
+
+    def _q(self, dates, earliest, start, end):
+        from datetime import datetime
+        import coverage
+        return coverage._batch_coverage(
+            self._rec(dates), datetime.fromisoformat(start),
+            datetime.fromisoformat(end), earliest)
+
+    def test_today_batch_not_yet_announced_is_full(self):
+        q = self._q(["2026-11-05", "2026-11-04"], "2026-11-04T12:00:00+08:00",
+                    "2026-11-05T00:00:00+08:00", "2026-11-06T09:44:00+08:00")
+        self.assertEqual(q["covered_quality"], "full", q)
+
+    def test_today_batch_overdue_is_partial(self):
+        q = self._q(["2026-11-05", "2026-11-04"], "2026-11-04T12:00:00+08:00",
+                    "2026-11-05T00:00:00+08:00", "2026-11-06T18:00:00+08:00")
+        self.assertEqual(q["covered_quality"], "partial", q)
+        self.assertEqual(q["missing_batch_days"], ["2026-11-06"])
+
+    def test_missing_earlier_weekday_still_partial(self):
+        q = self._q(["2026-11-05"], "2026-11-05T12:00:00+08:00",
+                    "2026-11-04T00:00:00+08:00", "2026-11-06T09:44:00+08:00")
+        self.assertEqual(q["covered_quality"], "partial", q)
+        self.assertEqual(q["missing_batch_days"], ["2026-11-04"])
+
+    def test_weekend_never_required(self):
+        q = self._q(["2026-11-06"], "2026-11-06T12:00:00+08:00",
+                    "2026-11-07T00:00:00+08:00", "2026-11-08T20:00:00+08:00")
+        self.assertEqual(q["covered_quality"], "full", q)

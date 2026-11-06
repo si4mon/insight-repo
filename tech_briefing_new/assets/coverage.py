@@ -188,12 +188,24 @@ def _batch_coverage(rec: dict, start: datetime, end: datetime,
         return {"covered_from": earliest, "covered_quality": "unknown"}
 
     batch_dates = {d[:10] for d in rec.get("batch_dates", [])} or {e.date().isoformat()}
+    # 当天的批次还没公告，就不算缺。arXiv 每个工作日在固定时刻公告一批
+    # （归一到上海约 12:00），而窗口终点是任务开始时刻——上午跑的那几轮
+    # 必然早于当天的公告时刻。2026-11-05 窗口于上海 09:44 执行，五个 arXiv
+    # 源因此都被报成 partial，凭空生出五条无事可做的补检任务。
+    # 公告时钟从已有批次条目里取，取不到就按 12:00 兜底。
+    batch_clock = e.timetz()
     missing = []
     d = start.date()
     while d <= end.date():
-        # arXiv 周末不发布；只要求工作日有批次
-        if d.weekday() < 5 and d.isoformat() not in batch_dates:
-            missing.append(d.isoformat())
+        if d.weekday() >= 5:          # arXiv 周末不发布
+            d += timedelta(days=1)
+            continue
+        if d.isoformat() not in batch_dates:
+            due = datetime.combine(d, batch_clock)
+            if due.tzinfo is None:
+                due = due.replace(tzinfo=SH_TZ)
+            if due <= end:             # 公告时刻已过，才算缺
+                missing.append(d.isoformat())
         d += timedelta(days=1)
 
     if missing:
