@@ -35,6 +35,56 @@ from extract import window_match  # noqa: E402
 
 SH_TZ = timezone(__import__("datetime").timedelta(hours=8))
 
+ABSTRACT_MIN_CHARS = 80          # snippet 短于此视为"没有摘要"
+ABSTRACT_CACHE = "arxiv_abstracts.json"
+_ABS_ID = __import__("re").compile(
+    r"arxiv\.org/abs/([0-9]{4}\.[0-9]{4,5})(v\d+)?", __import__("re").I)
+
+
+def has_abstract(row: dict) -> bool:
+    """这条是不是带摘要。
+
+    归档页回退召回的条目只有标题，主通道 RSS 的条目带摘要。而
+    must_review.arxiv_score 打的是标题加摘要，于是同一篇论文在两条通道里能差出
+    几分——差的不是信号强弱，是可打分文本的长度。2026-11-03 一轮实测：窗口内
+    1840 篇去重条目里 1459 篇（79%）没有摘要，却只占到 top-40 的 45%。
+    """
+    return len((row.get("snippet") or "").strip()) >= ABSTRACT_MIN_CHARS
+
+
+def arxiv_id(row: dict) -> str:
+    m = _ABS_ID.search(row.get("url") or "")
+    return m.group(1) if m else ""
+
+
+def apply_abstract_cache(pool: list, raw_dir: Path) -> int:
+    """把 arxiv_abstracts.py 抓下来的摘要写回条目的 snippet。返回补上的条数。
+
+    原 snippet（「arXiv 公告批次 YYYY-MM-DD」这类来源标记）留在 snippet_origin，
+    免得丢掉"这条是归档批次召回的"这个事实。快照不存在就什么都不做——
+    打分仍按标题计，残量由 must_review 报出来。
+    """
+    f = raw_dir / ABSTRACT_CACHE
+    if not f.exists():
+        return 0
+    try:
+        abstracts = (json.loads(f.read_text(encoding="utf-8")) or {}).get("abstracts") or {}
+    except Exception:
+        return 0
+    n = 0
+    for row in pool:
+        if (row.get("channel") or "") != "B_arxiv" or has_abstract(row):
+            continue
+        s = abstracts.get(arxiv_id(row))
+        if not s:
+            continue
+        if row.get("snippet"):
+            row.setdefault("snippet_origin", row["snippet"])
+        row["snippet"] = s
+        row["abstract_backfilled"] = True
+        n += 1
+    return n
+
 
 def load_report(raw_dir: Path) -> dict:
     p = raw_dir / "collect_report.json"
@@ -114,6 +164,7 @@ def build(raw_dir: Path) -> tuple[list, list]:
     in_pool.sort(key=lambda x: (x.get("published") or "", x.get("src", "")),
                  reverse=True)
     out_pool.sort(key=lambda x: (x.get("published") or ""), reverse=True)
+    apply_abstract_cache(in_pool, raw_dir)
     return in_pool, out_pool
 
 

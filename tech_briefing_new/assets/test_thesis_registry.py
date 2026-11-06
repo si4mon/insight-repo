@@ -479,6 +479,194 @@ if __name__ == "__main__":
     unittest.main(verbosity=2)
 
 
+class IncrementTest(Base):
+    """为已有事件追加增量，而不是把连续演进的事情拆成多个事件。
+
+    registry 原先只有"新事件"与"同一事件再次出现"两种状态——再次出现只往
+    seen_in_runs 里加一个日期，记不下"这次又发生了什么"。实际后果：
+    openai-python 与 openai-node 同分钟配对发版这桩事，在 11-01 / 11-03 / 11-05
+    三轮各建了一个 B 级事件，三者描述的是同一个现象；想表达增量只能绕成
+    「章 5 的 Active Event + 另建一个带 contradicts 的事件」，语义是错的。
+    """
+
+    def setUp(self):
+        super().setUp()
+        self.base = ev("EV-01", "https://ex.com/sdk-1", rating="B", decision=new("t1"))
+        self.ingest(R1, [self.base])
+        self.key = self.base["event_key"]
+
+    def test_append_and_read_back(self):
+        with self.reg() as reg:
+            res = reg.append_increment(self.key, "又两次同分钟成对发版", run_date=R2,
+                                       source="https://ex.com/sdk-2",
+                                       first_publish="2026-10-29T18:12:00+08:00",
+                                       event_id="EV-07", rating="B")
+        self.assertTrue(res["appended"])
+        incs = self.reg().increments(self.key)
+        self.assertEqual([i["run_date"] for i in incs], [R2])
+        self.assertEqual(incs[0]["source"], "https://ex.com/sdk-2")
+
+    def test_increment_may_carry_a_different_source(self):
+        """配对 SDK 的后续动作来自另一个仓库，仍要能挂在同一个事件下。"""
+        with self.reg() as reg:
+            reg.append_increment(self.key, "另一个仓库同分钟跟发", run_date=R2,
+                                 source="https://other.example/repo/tag/v6.9.0")
+        self.assertEqual(self.reg().increments(self.key)[0]["source"],
+                         "https://other.example/repo/tag/v6.9.0")
+
+    def test_same_run_same_source_is_idempotent(self):
+        with self.reg() as reg:
+            reg.append_increment(self.key, "第一次", run_date=R2, source="https://ex.com/s")
+            res = reg.append_increment(self.key, "再来一次", run_date=R2,
+                                       source="https://ex.com/s")
+        self.assertFalse(res["appended"])
+        self.assertEqual(len(self.reg().increments(self.key)), 1)
+
+    def test_same_run_different_source_both_kept(self):
+        with self.reg() as reg:
+            reg.append_increment(self.key, "a", run_date=R2, source="https://ex.com/a")
+            reg.append_increment(self.key, "b", run_date=R2, source="https://ex.com/b")
+        self.assertEqual(len(self.reg().increments(self.key)), 2)
+
+    def test_as_of_filters_later_runs(self):
+        with self.reg() as reg:
+            reg.append_increment(self.key, "a", run_date=R2, source="https://ex.com/a")
+            reg.append_increment(self.key, "b", run_date=R3, source="https://ex.com/b")
+        self.assertEqual([i["run_date"] for i in self.reg().increments(self.key, R2)], [R2])
+
+    def test_empty_delta_rejected(self):
+        """增量的全部价值就是那句"这次又发生了什么"，空的就不该入库。"""
+        with self.reg() as reg:
+            with self.assertRaises(RegistryError):
+                reg.append_increment(self.key, "   ", run_date=R2)
+
+    def test_unknown_event_rejected(self):
+        with self.reg() as reg:
+            with self.assertRaises(RegistryError):
+                reg.append_increment("deadbeef", "x", run_date=R2)
+
+    def test_write_requires_lock(self):
+        with self.assertRaises(RegistryError):
+            self.reg().append_increment(self.key, "x", run_date=R2)
+
+    def test_declared_in_event_json_at_ingest(self):
+        """build.py 里写 increment_of，入库时自动挂上，不用再跑一次 CLI。"""
+        nxt = ev("EV-05", "https://ex.com/sdk-2", rating="B",
+                 fp="2026-10-29T18:12:00+08:00", decision=attach("TH-0001"))
+        nxt["increment_of"] = {"event_key": self.key, "delta": "配对间隔收敛到同分钟"}
+        res = self.ingest(R2, [nxt])
+        self.assertEqual(res["increments"],
+                         [{"event_id": "EV-05", "event_key": self.key}])
+        incs = self.reg().increments(self.key)
+        self.assertEqual(incs[0]["delta"], "配对间隔收敛到同分钟")
+        self.assertEqual(incs[0]["event_id"], "EV-05")
+
+    def test_increment_of_unknown_event_fails_validation(self):
+        nxt = ev("EV-05", "https://ex.com/x", rating="B", decision=attach("TH-0001"))
+        nxt["increment_of"] = {"event_key": "nosuchkey", "delta": "x"}
+        with self.assertRaises(ValidationError) as cm:
+            self.ingest(R2, [nxt])
+        self.assertTrue(any("不在库中" in e for e in cm.exception.errors))
+
+    def test_increment_of_needs_delta(self):
+        nxt = ev("EV-05", "https://ex.com/x", rating="B", decision=attach("TH-0001"))
+        nxt["increment_of"] = {"event_key": self.key}
+        with self.assertRaises(ValidationError):
+            self.ingest(R2, [nxt])
+
+    def test_increment_of_self_rejected(self):
+        nxt = ev("EV-05", "https://ex.com/x", rating="B", decision=attach("TH-0001"))
+        nxt["increment_of"] = {"event_key": nxt["event_key"], "delta": "x"}
+        with self.assertRaises(ValidationError):
+            self.ingest(R2, [nxt])
+
+    def test_report_surfaces_this_round_increments_only(self):
+        with self.reg() as reg:
+            reg.append_increment(self.key, "本轮这步", run_date=R1, source="https://ex.com/a")
+        self.ingest(R2, [ev("EV-09", "https://ex.com/other", rating="B",
+                            fp="2026-10-29T10:00:00+08:00", decision=attach("TH-0001"))])
+        with self.reg() as reg:
+            reg.append_increment(self.key, "下一轮那步", run_date=R2, source="https://ex.com/b")
+        rep = self.reg().report(R2)
+        self.assertEqual([i["delta"] for i in rep["increments"]], ["下一轮那步"])
+        self.assertEqual(rep["summary"]["increments"], 1)
+        self.assertEqual(rep["increments"][0]["first_seen"], R1)
+
+
+class SeenAtSelectionTest(Base):
+    """判重要能在选题阶段回答，而不是等到 ingest。
+
+    registry 一直存着每个事件的来源，也有 seen_before——但 seen_before 只在
+    ingest 时命中，那已经是卡片写完之后。于是每轮十几条「重复」处置都是手工
+    grep 上一份报告填出来的（第五轮实测：183 条候选里 15 条早在 11-02 / 11-03
+    就已入库）。而第 5 章线索与被并入的条目根本不进 events，完全没有跨轮记忆。
+    """
+
+    def setUp(self):
+        super().setUp()
+        self.ingest(R1, [ev("EV-01", "https://ex.com/a", decision=new("t1"))])
+
+    def test_known_event_source_is_seen(self):
+        hits = self.reg().seen(["https://ex.com/a", "https://ex.com/zzz"])
+        self.assertEqual(list(hits), ["https://ex.com/a"])
+        self.assertEqual(hits["https://ex.com/a"]["kind"], "event")
+        self.assertEqual(hits["https://ex.com/a"]["first_seen"], R1)
+        self.assertEqual(hits["https://ex.com/a"]["labels"], {R1: "EV-01"})
+
+    def test_matching_uses_the_same_canonicalization_as_event_key(self):
+        """口径必须和 event_key 一致，否则会出现"选题说新、入库说旧"。"""
+        hits = self.reg().seen(["http://www.ex.com/a/?utm_source=x#frag"])
+        self.assertEqual(len(hits), 1)
+
+    def test_arxiv_version_suffix_is_ignored(self):
+        self.ingest(R2, [ev("EV-02", "https://arxiv.org/abs/2611.02153v1",
+                            fp="2026-10-29T10:00:00+08:00", decision=attach("TH-0001"))])
+        self.assertEqual(len(self.reg().seen(["https://arxiv.org/abs/2611.02153"])), 1)
+
+    def test_increment_source_is_also_seen(self):
+        """增量自带的来源也要进索引，否则配对 SDK 的另一半会被当成新事件。"""
+        key = ev("EV-01", "https://ex.com/a")["event_key"]
+        with self.reg() as reg:
+            reg.append_increment(key, "配对的另一半", run_date=R2,
+                                 source="https://other.example/repo/tag/v6.9.0")
+        hits = self.reg().seen(["https://other.example/repo/tag/v6.9.0"])
+        self.assertEqual(hits["https://other.example/repo/tag/v6.9.0"]["event_key"], key)
+
+    def test_chapter5_clue_is_remembered_across_rounds(self):
+        with self.reg() as reg:
+            n = reg.record_mentions(R1, [
+                {"url": "https://ex.com/clue", "title": "一条线索",
+                 "disposition": "chapter5", "reason": "Early Signal"},
+                {"url": "https://ex.com/merged", "title": "已并入",
+                 "disposition": "merged"}])
+        self.assertEqual(n, 2)
+        hits = self.reg().seen(["https://ex.com/clue"])
+        self.assertEqual(hits["https://ex.com/clue"]["kind"], "mention")
+        self.assertEqual(hits["https://ex.com/clue"]["note"], "chapter5")
+
+    def test_mentions_are_idempotent_per_run(self):
+        with self.reg() as reg:
+            reg.record_mentions(R1, [{"url": "https://ex.com/c", "disposition": "chapter5"}])
+            again = reg.record_mentions(R1, [{"url": "https://ex.com/c",
+                                              "disposition": "chapter5"}])
+        self.assertEqual(again, 0)
+
+    def test_mentions_write_requires_lock(self):
+        with self.assertRaises(RegistryError):
+            self.reg().record_mentions(R1, [{"url": "https://ex.com/c"}])
+
+    def test_event_wins_over_mention_and_keeps_earliest(self):
+        """同一来源既当过线索又成了事件时，报最早那次。"""
+        with self.reg() as reg:
+            reg.record_mentions(R2, [{"url": "https://ex.com/a", "disposition": "chapter5"}])
+        hit = self.reg().seen(["https://ex.com/a"])["https://ex.com/a"]
+        self.assertEqual(hit["first_seen"], R1)
+        self.assertEqual(hit["kind"], "event")
+
+    def test_empty_and_garbage_urls_are_ignored(self):
+        self.assertEqual(self.reg().seen(["", None]), {})
+
+
 class PlaceholderEntityDuplicateTest(unittest.TestCase):
     """占位实体不触发「疑似同一事件」告警。
 

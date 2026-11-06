@@ -30,7 +30,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent))
 from taxonomy import TAXONOMY, TaxonomyError  # noqa: E402
-from events import event_key as compute_event_key  # noqa: E402
+from events import canonical_source, event_key as compute_event_key  # noqa: E402
 
 SCHEMA_VERSION = 2
 ONTOLOGY = json.loads((Path(__file__).parent / "thesis_ontology.json").read_text(encoding="utf-8"))
@@ -472,6 +472,18 @@ class Registry:
                 errors.append(f"{eid}: 与 {seen_keys[ev['event_key']]} 是同一事件")
             seen_keys[ev["event_key"]] = eid
 
+            inc = ev.get("increment_of")
+            if inc is not None:
+                if not isinstance(inc, dict) or not inc.get("event_key") \
+                        or not (inc.get("delta") or "").strip():
+                    errors.append(f"{eid}: increment_of 需要 event_key 与 delta")
+                elif inc["event_key"] not in self.data["events"] \
+                        and inc["event_key"] not in seen_keys:
+                    errors.append(f"{eid}: increment_of 指向不在库中的事件 "
+                                  f"{inc['event_key']}")
+                elif inc["event_key"] == ev["event_key"]:
+                    errors.append(f"{eid}: increment_of 指向自己")
+
             dec = ev.get("thesis_decision")
             rating = ev.get("rating")
             if dec is None:
@@ -608,6 +620,7 @@ class Registry:
                           "ingested_at": datetime.now(SH_TZ).isoformat(timespec="seconds"),
                           "event_keys": sorted(e["event_key"] for e in events)})
         alias_ids, created, attached, seen_before = {}, [], [], {}
+        incremented: list[dict] = []
 
         # 先建全部新命题，NEW:<alias> 才能在同批次内被引用
         for ev in events:
@@ -644,6 +657,23 @@ class Registry:
             stored["seen_in_runs"] = sorted(set(stored["seen_in_runs"]) | {run_date})
             stored.setdefault("labels", {})[run_date] = ev["event_id"]
 
+            # 事件 JSON 可以声明自己是某个已有事件的增量：build.py 里写
+            # increment_of = {"event_key": ..., "delta": ...}，入库时挂上去，
+            # 不必再单独跑一次 append-increment。
+            inc = ev.get("increment_of")
+            if inc:
+                tgt = self.data["events"].get(inc["event_key"])
+                incs = tgt.setdefault("increments", [])
+                if not any(i["run_date"] == run_date
+                           and i.get("source", "") == ev["source"] for i in incs):
+                    incs.append({"run_date": run_date, "delta": inc["delta"].strip(),
+                                 "source": ev["source"],
+                                 "first_publish": ev["first_publish_shanghai"],
+                                 "event_id": ev["event_id"], "rating": ev["rating"]})
+                    incs.sort(key=lambda x: (x["run_date"], x.get("source", "")))
+                    incremented.append({"event_id": ev["event_id"],
+                                        "event_key": inc["event_key"]})
+
             dec = ev.get("thesis_decision") or {}
             action = dec.get("action", "none")
             if action == "none":
@@ -675,11 +705,151 @@ class Registry:
         self._cache = {}
         result = {"run_date": run_date, "events": len(events), "new_theses": created,
                   "links": attached, "seen_before": seen_before,
+                  "increments": incremented,
                   "warnings": self._rollback_notes + warnings}
         self.save()
         self._log("ingest", run_date=run_date, new=[c["thesis_id"] for c in created],
                   links=len(attached), seen_before=seen_before)
         return result
+
+
+
+    # ---------- 选题阶段判重 ----------
+    def _url_index(self) -> dict[str, dict]:
+        """canonical_source → 这个来源此前是什么。
+
+        三类来源都进索引：
+          event     已写成事件的来源（含增量自带的来源）；
+          mention   进过第 5 章或被并入其他事件的候选（record_mentions 落的）。
+        判重的口径和 event_key 完全一致（都走 events.canonical_source），
+        所以这里命中就等于 ingest 时会命中，不会出现"选题说新、入库说旧"。
+        """
+        ck = ("urlindex", len(self.data["events"]), len(self.data.get("mentions") or []))
+        if ck in self._cache:
+            return self._cache[ck]
+        idx: dict[str, dict] = {}
+
+        def put(url, rec):
+            cs = canonical_source(url or "")
+            if not cs:
+                return
+            old = idx.get(cs)
+            if old is None or rec["first_seen"] < old["first_seen"]:
+                idx[cs] = rec
+
+        for k, stored in self.data["events"].items():
+            runs = stored.get("seen_in_runs") or []
+            first = runs[0] if runs else ""
+            put(stored.get("source"), {
+                "kind": "event", "event_key": k, "title": stored.get("title", ""),
+                "entity": stored.get("entity", ""), "rating": stored.get("rating", ""),
+                "first_seen": first, "runs": runs,
+                "labels": stored.get("labels") or {}})
+            for it in stored.get("increments") or []:
+                put(it.get("source"), {
+                    "kind": "event", "event_key": k, "title": stored.get("title", ""),
+                    "entity": stored.get("entity", ""), "rating": it.get("rating", ""),
+                    "first_seen": it.get("run_date", ""),
+                    "runs": [it.get("run_date", "")], "labels": {},
+                    "note": "作为增量记录"})
+        for m in self.data.get("mentions") or []:
+            put(m.get("url"), {
+                "kind": "mention", "event_key": "", "title": m.get("title", ""),
+                "entity": "", "rating": "", "first_seen": m.get("run_date", ""),
+                "runs": [m.get("run_date", "")], "labels": {},
+                "note": m.get("disposition", "")})
+        self._cache[ck] = idx
+        return idx
+
+    def seen(self, urls) -> dict[str, dict]:
+        """批量回答"这些来源以前见过吗"。未见过的不出现在结果里。
+
+        为什么要有这条：registry 存着每个事件的来源，也有 seen_before，但
+        seen_before 只在 ingest 时命中——那已经是卡片写完之后。判重发生在
+        成本最高的环节之后，于是每轮十几条「重复」处置都是手工 grep 上一份报告
+        填出来的。这条接口把判重提前到选题阶段：拿候选池直接问。
+        """
+        idx = self._url_index()
+        out = {}
+        for u in urls:
+            hit = idx.get(canonical_source(u or ""))
+            if hit:
+                out[u] = hit
+        return out
+
+    def record_mentions(self, run_date: str, items: list[dict]) -> int:
+        """登记本轮进过第 5 章或被并入其他事件的候选来源。
+
+        这些条目不是事件，不进 events，所以此前完全没有跨轮记忆——同一条线索
+        可以连续几轮以"新线索"出现。这里只存判重需要的最小信息，不参与命题图谱。
+        """
+        if not self._locked:
+            raise RegistryError("写 mentions 必须持锁")
+        ms = self.data.setdefault("mentions", [])
+        have = {(m["run_date"], canonical_source(m.get("url") or "")) for m in ms}
+        n = 0
+        for it in items:
+            url = (it.get("url") or "").strip()
+            cs = canonical_source(url)
+            if not cs or (run_date, cs) in have:
+                continue
+            ms.append({"url": url, "title": (it.get("title") or "")[:200],
+                       "run_date": run_date,
+                       "disposition": it.get("disposition", ""),
+                       "note": (it.get("reason") or "")[:200]})
+            have.add((run_date, cs))
+            n += 1
+        if n:
+            self._cache = {}
+            self.save()
+            self._log("mentions", run_date=run_date, added=n)
+        return n
+
+    # ---------- 事件增量 ----------
+    def append_increment(self, event_key: str, delta: str, run_date: str | None = None,
+                         source: str = "", first_publish: str = "",
+                         event_id: str = "", rating: str = "") -> dict:
+        """给已在库的事件追加一条增量，而不是新建一个事件。
+
+        为什么需要这条通道：registry 原先只有"新事件"与"同一事件再次出现"两种
+        状态——再次出现只往 seen_in_runs 里加一个日期，记不下"这次又发生了什么"。
+        于是连续演进型的事情没有正确的表达方式：openai-python 与 openai-node
+        同分钟配对发布跨两个窗口出现，只能描述成"节奏"；想表达增量就得绕成
+        「章 5 的 Active Event + 另建一个带 contradicts 的事件」，语义是错的。
+
+        增量自带 source 与 first_publish，所以同一桩事情的后续动作即使来自
+        另一个 URL（配对 SDK 的另一个仓库）也能挂在同一个事件下。
+        同一 (run_date, source) 只记一次，重复调用不产生第二条。
+        """
+        if not self._locked:
+            raise RegistryError("写增量必须持锁")
+        if not (delta or "").strip():
+            raise RegistryError("增量必须写出 delta（这次又发生了什么）")
+        stored = self.data["events"].get(event_key)
+        if stored is None:
+            raise RegistryError(f"事件不在库中: {event_key}；新事件走 ingest_run")
+        run_date = run_date or self.latest_run() or _today()
+        incs = stored.setdefault("increments", [])
+        for it in incs:
+            if it["run_date"] == run_date and it.get("source", "") == source:
+                return {"event_key": event_key, "appended": False,
+                        "reason": "同一轮同一来源的增量已记录", "increments": len(incs)}
+        rec = {"run_date": run_date, "delta": delta.strip(), "source": source,
+               "first_publish": first_publish, "event_id": event_id, "rating": rating}
+        incs.append(rec)
+        incs.sort(key=lambda x: (x["run_date"], x.get("source", "")))
+        self.save()
+        self._log("increment", event_key=event_key, run_date=run_date,
+                  source=source, delta=delta[:200])
+        return {"event_key": event_key, "appended": True, "increments": len(incs)}
+
+    def increments(self, event_key: str, as_of: str | None = None) -> list[dict]:
+        """事件在 as_of（含）之前的增量，按轮次升序。"""
+        stored = self.data["events"].get(event_key)
+        if stored is None:
+            raise RegistryError(f"事件不在库中: {event_key}")
+        incs = stored.get("increments") or []
+        return [i for i in incs if not as_of or i["run_date"] <= as_of]
 
     # ---------- 显式决策 ----------
     def _decide(self, rec: dict):
@@ -746,8 +916,20 @@ class Registry:
                 and after["confidence"] not in CM["core_judgment_excludes"],
             })
         rows.sort(key=lambda r: (not r["core_judgment"], -r["score"], r["id"]))
+        # 本轮追加的事件增量：连续演进型的事情不再拆成多个事件，所以第 5 章的
+        # Active Event 与第 7 章的收敛叙述要能看到"这桩事情这次又走了一步"。
+        incs = []
+        for k, stored in sorted(self.data["events"].items()):
+            for it in stored.get("increments") or []:
+                if it["run_date"] == run_date:
+                    incs.append({"event_key": k, "title": stored.get("title", ""),
+                                 "entity": stored.get("entity", ""),
+                                 "first_seen": (stored.get("seen_in_runs") or [""])[0],
+                                 **it})
         return {"run_date": run_date, "previous_run": prev, "theses": rows,
+                "increments": incs,
                 "summary": {"touched": len(rows),
+                            "increments": len(incs),
                             "core_judgment": sum(r["core_judgment"] for r in rows),
                             "new": sum(r["state_before"] is None for r in rows),
                             "contested": sum(r["state"] == "contested" for r in rows)}}
@@ -831,6 +1013,28 @@ def main() -> int:
     rv.add_argument("--id", required=True)
     rv.add_argument("--statement", required=True)
     rv.add_argument("--reason", required=True)
+    ai = sub.add_parser("append-increment",
+                        help="给已在库的事件追加增量（连续演进的事情不再拆成多个事件）")
+    ai.add_argument("--event-key", required=True)
+    ai.add_argument("--delta", required=True, help="这次又发生了什么")
+    ai.add_argument("--source", default="", help="本次增量的来源 URL（可与原事件不同）")
+    ai.add_argument("--first-publish", default="", help="本次增量的首发时刻（Asia/Shanghai）")
+    ai.add_argument("--ev", default="", help="本轮的 EV 编号")
+    ai.add_argument("--rating", default="")
+    ai.add_argument("--run-date", default="")
+    sn = sub.add_parser("seen", help="选题阶段判重：候选池里哪些来源以前见过")
+    sn.add_argument("--pool", default="", help="candidate_pool.json")
+    sn.add_argument("--must-review", default="", help="must_review.json")
+    sn.add_argument("--urls-file", default="", help="每行一个 URL 的文本文件")
+    sn.add_argument("--out", default="", help="结果写成 JSON（供 build.py 读）")
+    rm = sub.add_parser("record-mentions",
+                        help="登记本轮进第 5 章 / 被并入的候选，供后续轮次判重")
+    rm.add_argument("--must-review", required=True)
+    rm.add_argument("--trace", required=True, help="must_review_trace.json")
+    rm.add_argument("--run-date", required=True)
+    si = sub.add_parser("increments", help="列出某个事件的增量")
+    si.add_argument("--event-key", required=True)
+    si.add_argument("--as-of", default="")
     sp = sub.add_parser("supersede")
     sp.add_argument("--old", required=True)
     sp.add_argument("--new", required=True)
@@ -878,6 +1082,62 @@ def main() -> int:
                       f"collect_sources.py --date <D+1>，ingest --backfill --run-date D", file=sys.stderr)
         elif args.cmd == "stats":
             _print(reg.stats())
+        elif args.cmd == "seen":
+            urls, titles = [], {}
+            for path, key in ((args.pool, None), (args.must_review, "items")):
+                if not path:
+                    continue
+                raw = json.loads(Path(path).read_text(encoding="utf-8"))
+                rows = raw.get(key) if (key and isinstance(raw, dict)) else raw
+                rows = rows if isinstance(rows, list) else (raw.get("items") or [])
+                for r in rows:
+                    u = (r.get("url") or "").strip()
+                    if u:
+                        urls.append(u)
+                        titles[u] = (r.get("title") or "")[:70]
+            if args.urls_file:
+                urls += [ln.strip() for ln in
+                         Path(args.urls_file).read_text(encoding="utf-8").splitlines()
+                         if ln.strip()]
+            urls = list(dict.fromkeys(urls))
+            hits = reg.seen(urls)
+            res = {"checked": len(urls), "seen": len(hits),
+                   "hits": [{"url": u, "candidate_title": titles.get(u, ""), **h}
+                            for u, h in hits.items()]}
+            if args.out:
+                Path(args.out).write_text(json.dumps(res, ensure_ascii=False, indent=2),
+                                          encoding="utf-8")
+            print(f"候选 {len(urls)} 条，以前见过 {len(hits)} 条"
+                  + (f" → {args.out}" if args.out else ""))
+            for h in res["hits"][:40]:
+                tag = "事件" if h["kind"] == "event" else "线索"
+                lab = ("/".join(f"{k}:{v}" for k, v in sorted(h["labels"].items()))
+                       or h.get("note", ""))
+                print(f"  [{tag}] 首见 {h['first_seen']} {lab:22} "
+                      f"{(h['title'] or h['candidate_title'])[:52]}")
+            if len(res["hits"]) > 40:
+                print(f"  …… 另有 {len(res['hits']) - 40} 条，见 --out")
+        elif args.cmd == "record-mentions":
+            mr = json.loads(Path(args.must_review).read_text(encoding="utf-8"))
+            tr_ = json.loads(Path(args.trace).read_text(encoding="utf-8"))
+            disp = tr_.get("dispositions") or {}
+            items = []
+            for it in mr.get("items") or []:
+                e = disp.get(it.get("uid") or "") or {}
+                d = (e.get("disposition") or "").strip()
+                if d in ("chapter5", "merged"):
+                    items.append({"url": it.get("url"), "title": it.get("title"),
+                                  "disposition": d, "reason": e.get("reason", "")})
+            with reg:
+                n = reg.record_mentions(args.run_date, items)
+            print(f"登记 {n} 条线索（第 5 章 / 已并入），本轮候选 {len(items)} 条")
+        elif args.cmd == "increments":
+            _print(reg.increments(args.event_key, args.as_of or None))
+        elif args.cmd == "append-increment":
+            with reg:
+                _print(reg.append_increment(
+                    args.event_key, args.delta, args.run_date or None,
+                    args.source, args.first_publish, args.ev, args.rating))
         else:
             with reg:
                 if args.cmd == "merge":

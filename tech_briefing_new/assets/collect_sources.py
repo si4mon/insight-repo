@@ -510,11 +510,22 @@ def collect_one(opener, src: dict, out_dir: Path, window_start: str,
             (out_dir / gf["file"]).write_text(
                 json.dumps(res3["items"], ensure_ascii=False, indent=1),
                 encoding="utf-8")
+            # 发布说明原文落盘。git 通道此前只有 tag 名与时刻，拿不到"改了什么"
+            # 的可引证原文，事件三轮卡在 B 级（A / A+ 要求 claim 绑定快照，
+            # 见 task_def 15.1）。快照名与条目文件同名换后缀，便于回溯。
+            snap_name, note_n = "", res3.get("notes_count") or 0
+            if res3.get("notes_snapshot"):
+                snap_name = Path(gf["file"]).stem + "_changelog.md"
+                (out_dir / snap_name).write_text(res3["notes_snapshot"],
+                                                 encoding="utf-8")
             rec.update(transport="ok", url=f"https://github.com/{gf['repo']}",
                        bytes=0, content_kind="json", file=gf["file"],
                        from_git_tags=True, extract_error="",
+                       changelog_file=snap_name,
                        note="atom 与 API 通道均被拦，已改用匿名 git 的 tag 列表补回；"
-                            "时刻为 tag 提交时刻，不是 release 发布时刻")
+                            "时刻为 tag 提交时刻，不是 release 发布时刻"
+                            + (f"；{note_n} 个 tag 的发布说明已落盘 {snap_name}"
+                               if snap_name else "；未取到发布说明"))
             chosen = (f"https://github.com/{gf['repo']}", res3)
 
     if chosen is None:

@@ -69,8 +69,16 @@ def hn_points(row: dict) -> int | None:
     return int(m.group(1)) if m else None
 
 
+# 摘要判定与补抓都归 build_pool（池层属性）；这里只保留别名，
+# 老调用点与测试不用改。补抓脚本是 arxiv_abstracts.py。
+has_abstract = build_pool.has_abstract
+
+
 def arxiv_score(row: dict, terms: dict) -> tuple[int, list[str]]:
-    """arXiv 打分：high 2 分 / med 1 分 / 新公告 1 分。分值只用于排序取前 K。"""
+    """arXiv 打分：high 2 分 / med 1 分 / 新公告 1 分。分值只用于排序取前 K。
+
+    分值在"有无摘要"之间不可比，跨车道比较由 _arxiv_lanes 处理，不在这里修正。
+    """
     t = _text(row)
     hits, score = [], 0
     for w in terms["arxiv_score"]["high"]:
@@ -85,6 +93,8 @@ def arxiv_score(row: dict, terms: dict) -> tuple[int, list[str]]:
         score += 1
         hits.append("announce:new")
     return score, hits
+
+
 
 
 def _fresh_enough(row: dict) -> bool:
@@ -173,6 +183,14 @@ def build(in_pool: list[dict], terms: dict,
     for sc, hits, row in arxiv_scored[:arxiv_top_k]:
         add(row, "T6_arxiv",
             f"arXiv 打分 {sc}（前 {arxiv_top_k}，命中 {','.join(hits[:4])}）")
+    # 打分用标题加摘要，没有摘要的条目分数系统性偏低（2026-11-03 一轮：无摘要
+    # 条目占池子 79%、只拿到 top-40 的 45%）。摘要由 arxiv_abstracts.py 在建清单
+    # 之前补抓；补抓失败的残量在这里报出来，不能让它静默影响排序。
+    no_abs = sum(1 for _sc, _h, row in arxiv_scored if not has_abstract(row))
+    lane_meta = {"arxiv_candidates": len(arxiv_scored), "no_abstract": no_abs,
+                 "cut_inside_tie": bool(
+                     0 < arxiv_top_k < len(arxiv_scored)
+                     and arxiv_scored[arxiv_top_k - 1][0] == arxiv_scored[arxiv_top_k][0])}
 
     # 同一条目可能被多个源召回（HN front 与 newest 是同一 uid）。台账按 uid 记，
     # 所以清单也按 uid 去重，否则"清单条数"与"台账条数"永远差几条，门禁没法比。
@@ -196,7 +214,8 @@ def build(in_pool: list[dict], terms: dict,
         "generated_by": "must_review.py",
         "thresholds": {"hn_min_points": hn_min_points,
                        "arxiv_top_k": arxiv_top_k,
-                       "arxiv_score_cutoff": cutoff},
+                       "arxiv_score_cutoff": cutoff,
+                       "arxiv_scoring_text": lane_meta},
         "pool_size": len(in_pool),
         "arxiv_candidates": len(arxiv_scored),
         "by_tier": by_tier,
@@ -258,8 +277,15 @@ def main() -> int:
     print(f"必审清单 {out['total']} 条 → {args.out}")
     for t in TIERS:
         print(f"  {t:14} {out['by_tier'][t]:4}")
+    lm = out["thresholds"]["arxiv_scoring_text"]
     print(f"  （arXiv 候选 {out['arxiv_candidates']} 篇，分数截断于 "
           f"{out['thresholds']['arxiv_score_cutoff']}）")
+    if lm["no_abstract"]:
+        print(f"    ! {lm['no_abstract']} 篇仍无摘要，分数按标题打，偏低；"
+              f"先跑 arxiv_abstracts.py 补抓")
+    if lm["cut_inside_tie"]:
+        print(f"    ! 截断切在并列分数档内部，同分条目被随机取舍；"
+              f"考虑调大 --arxiv-top-k 取整档")
 
     if args.trace_out:
         tp = Path(args.trace_out)

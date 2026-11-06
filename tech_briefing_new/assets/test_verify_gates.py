@@ -10,6 +10,7 @@ verify_gates 分类层单测：确认新增的 4 条校验既会在该红时红�
   python test_verify_gates.py
 """
 import json
+import re
 import tempfile
 import unittest
 from pathlib import Path
@@ -17,7 +18,8 @@ from pathlib import Path
 from taxonomy import TAXONOMY
 import testlib
 from verify_gates import (check_ch1_mainlines, Check, check_ct_labels,
-                          check_event_annotations, check_event_paths,
+                          check_event_annotations, check_event_body_presence,
+                          check_event_paths,
                           check_markdown, check_md_event_index, check_md_theses,
                           check_publish_precision, check_source_coverage_definition,
                           check_registry, check_taxonomy_definition, check_traceability,
@@ -724,10 +726,6 @@ class Ch1MainlineTest(unittest.TestCase):
         self.assertEqual({x["status"] for x in c.results}, {"PASS"})
 
 
-if __name__ == "__main__":
-    unittest.main(verbosity=2)
-
-
 class ReplaceAnnounceTest(unittest.TestCase):
     """arXiv 的 replace / replace-cross 不是窗口内首发。
 
@@ -809,3 +807,102 @@ class CtLabelTest(unittest.TestCase):
 
     def test_bare_id_passes(self):
         self.assertEqual(self._status("回扣 CT-03 与 CT-09。"), "PASS")
+
+
+def _eight_chapters(ch1_7: str, audit: str = "") -> str:
+    """固定八章骨架。第 8 章标题写的是「信息源采集统计」而不是以 8 开头——
+    第一版 _md_body_before_audit 按标题文字找 "8"，没命中就退回全文，
+    于是 8.2 索引表自己把检查喂成了恒绿。这里按真实标题写，守住那个回归。"""
+    heads = ["本轮结论与技术趋势", "今日必看", "模型技术热点", "Agent 系统技术热点",
+             "值得关注", "业界专家观点与趋势信号", "本轮技术判断"]
+    out = []
+    for i, h in enumerate(heads):
+        out.append(f"## {h}\n\n" + (ch1_7 if i == 2 else "正文。\n") + "\n")
+    out.append("## 信息源采集统计\n\n### 8.2 事件索引\n\n" + audit + "\n")
+    return "".join(out)
+
+
+class EventBodyPresenceTest(unittest.TestCase):
+    """每个事件都要在第 1–7 章有落点；正文卡片都要有事实源。
+
+    第五轮 EV-09（C 级）在 8.2 索引里有行、有 EV JSON、两边编号对得上、
+    门禁 94 项全过，正文里却一个字都没有——"主卡归位"只对 A / A+ 强制，
+    B 级及以下允许只出现在章 5，而"是否真的出现在章 5"没有任何检查项。
+    """
+
+    def setUp(self):
+        self._tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self._tmp.cleanup)
+        self.root = Path(self._tmp.name)
+        self.md = self.root / "r-2026-11-03.md"
+        self.ev = self.root / "events_run_2026-11-03"
+        self.ev.mkdir()
+
+    def _event(self, eid: str, rating: str = "C", path: str = "A2.2"):
+        ev = {"rating": rating, "primary_path": path,
+              "event_title": f"事件 {eid}",
+              "first_publish_shanghai": "2026-11-03T10:00:00+08:00"}
+        (self.ev / f"{eid}.json").write_text(
+            json.dumps(ev, ensure_ascii=False), encoding="utf-8")
+
+    def _run(self, body: str, audit: str = "", name: str = "每个事件在第 1–7 章有落点"):
+        self.md.write_text(_eight_chapters(body, audit), encoding="utf-8")
+        c = Check()
+        check_event_body_presence(c, self.md, self.ev)
+        return _status(c, name)
+
+    def test_card_in_body_passes(self):
+        self._event("EV-09")
+        self.assertEqual(self._run("### 3.1 模型架构、训练与适应\n\n"
+                                   + _card("EV-09", decl="3.1")), "PASS")
+
+    def test_mentioned_only_in_chapter5_passes(self):
+        """B / C 级只在章 5 露面是规定写法，不该被这条检查打红。"""
+        self._event("EV-09")
+        self.md.write_text(_eight_chapters("正文。\n").replace(
+            "## 值得关注\n\n正文。", "## 值得关注\n\n- **EV-09** 持续信号。"),
+            encoding="utf-8")
+        c = Check()
+        check_event_body_presence(c, self.md, self.ev)
+        self.assertEqual(_status(c, "每个事件在第 1–7 章有落点"), "PASS")
+
+    def test_only_in_audit_index_fails(self):
+        self._event("EV-09")
+        self.assertEqual(self._run("正文。\n", audit="| EV-09 | C | 标题 |"), "FAIL")
+
+    def test_audit_chapter_title_is_not_numbered(self):
+        """回归：审计章必须被切掉。切不掉的话上一条会误判为 PASS。"""
+        self._event("EV-09")
+        md = _eight_chapters("正文。\n", audit="| EV-09 | C | 标题 |")
+        self.assertFalse([h for h in re.findall(r'^## +(.*)$', md, re.M)
+                          if h.startswith("8")])     # 二级章标题确实不以 8 开头
+        self.md.write_text(md, encoding="utf-8")
+        c = Check()
+        check_event_body_presence(c, self.md, self.ev)
+        self.assertEqual(_status(c, "每个事件在第 1–7 章有落点"), "FAIL")
+
+    def test_card_without_event_json_fails(self):
+        self._event("EV-01")
+        self.assertEqual(
+            self._run("### 3.1 模型架构、训练与适应\n\n"
+                      + _card("EV-01", decl="3.1") + _card("EV-77", decl="3.1"),
+                      audit="| EV-01 | C |"),
+            "PASS")
+        self.md.write_text(_eight_chapters(
+            "### 3.1 模型架构、训练与适应\n\n"
+            + _card("EV-01", decl="3.1") + _card("EV-77", decl="3.1")), encoding="utf-8")
+        c = Check()
+        check_event_body_presence(c, self.md, self.ev)
+        self.assertEqual(_status(c, "正文卡片都有对应的 EV JSON"), "FAIL")
+
+    def test_missing_chapter_eight_does_not_go_vacuous(self):
+        """定位不到第 8 章时必须打红，不能退回全文把检查喂成恒绿。"""
+        self._event("EV-09")
+        self.md.write_text("## 只有一章\n\n| EV-09 | C |\n", encoding="utf-8")
+        c = Check()
+        check_event_body_presence(c, self.md, self.ev)
+        self.assertEqual(_status(c, "能切出第 1–7 章正文"), "FAIL")
+
+
+if __name__ == "__main__":
+    unittest.main(verbosity=2)

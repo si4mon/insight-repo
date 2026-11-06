@@ -1111,6 +1111,68 @@ def check_ct_labels(c: Check, md_path: Path | None):
           "; ".join(sorted(set(wrong))[:4]) if wrong else f"核对 {seen} 处")
 
 
+def _md_body_before_audit(text: str) -> str | None:
+    """正文部分：从开头到第 8 章（信息源采集统计）之前；定位不到返回 None。
+
+    第 8 章是审计章，8.2 索引表里本来就会列出每个编号。判断"这个事件被写过"
+    必须把审计章切掉，否则索引表自己就能让检查恒绿——按标题文字找"8"是不行的，
+    章标题写的是「信息源采集统计」，第一版就这么退回了全文、检查恒真。
+    这里按固定八章的位置取第 8 个二级标题，并用 8.x 的下级标题兜底，
+    两条都落空就返回 None 交给调用方报警，不退回全文。
+    """
+    body = re.sub(r'^---\r?\n[\s\S]*?\r?\n---\r?\n', '', text, count=1)
+    secs = _md_sections(body)
+    h2 = [off for lv, _t, off in secs if lv == 2]
+    if len(h2) >= 8:
+        return body[:h2[7]]
+    for level, title, off in secs:
+        if level >= 2 and re.match(r'^\s*8\.\d', title):
+            return body[:off]
+    return None
+
+
+def check_event_body_presence(c: Check, md_path: Path | None, events_dir: Path | None):
+    """每个事件在正文里都要有落点，正文里的卡片都要有事实源。
+
+    此前只强制 A / A+ 写主卡（见 _check_md_columns 的「主卡归位」），B 级及
+    以下允许只出现在章 5。于是出现过这样一稿：第五轮 EV-09 在 8.2 索引里有行、
+    有 EV JSON、两边编号对得上、门禁 94 项全过，正文里却一个字都没有。
+    索引对账只能证明"编号两边都有"，证明不了"这个事件被写过"——缺的那段
+    正文没有任何检查项以它为对象。
+
+    这里补两个方向：
+      正向  每个 EV JSON 的编号必须在第 1–7 章出现过（主卡、摘要卡或章 5 条目）；
+      反向  正文卡片的 EV 编号必须存在对应的 EV JSON，不能凭空多出一张卡。
+    """
+    if not (md_path and md_path.exists()):
+        return
+    events = _load_events(events_dir)
+    if not events:
+        c.warn("md", "未提供事件文件", "跳过事件落点检查")
+        return
+    text = md_path.read_text(encoding="utf-8", errors="ignore")
+    body = _md_body_before_audit(text)
+    if not (body and body.strip()):
+        c.add("md", "能切出第 1–7 章正文", False,
+              "定位不到第 8 章；八章结构缺失由 check_markdown 报，此处不退回全文核对")
+        return
+
+    missing = []
+    for eid in sorted(events):
+        if not re.search(rf'\b{re.escape(eid)}\b', body):
+            rating = events[eid].get("rating") or "?"
+            missing.append(f"{eid}（{rating} 级）")
+    c.add("md", "每个事件在第 1–7 章有落点", not missing,
+          "只在审计章出现、正文无任何文字: " + ", ".join(missing[:6]))
+
+    lay = _md_layout(text)
+    carded = {card["eid"] for cards in lay["columns"].values() for card in cards}
+    carded |= {card["eid"] for card in lay["focus"]}
+    orphan = sorted(e for e in carded if e not in events)
+    c.add("trace", "正文卡片都有对应的 EV JSON", not orphan,
+          "无事实源的卡片: " + ", ".join(orphan[:6]))
+
+
 def _script_commit() -> str:
     """记录跑门禁时的脚本版本，便于回溯一份报告是用哪一版校验的。"""
     try:
@@ -1691,6 +1753,7 @@ def main():
             check_stats_recomputable(c, md_path, report, events_dir)
             check_ch1_mainlines(c, md_path, events_dir)
             check_ct_labels(c, md_path)
+            check_event_body_presence(c, md_path, events_dir)
             html_sibling = md_path.with_suffix(".html")
             if html_sibling.exists():
                 check_html_lightweight(c, html_sibling, report)

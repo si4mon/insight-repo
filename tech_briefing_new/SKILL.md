@@ -52,6 +52,7 @@ $SKILL_DIR/
 │   ├── sources.py / extract.py / coverage.py / collect_sources.py   采集与覆盖对账
 │   ├── freeze_window.py          冻结 TARGET_WINDOW（window.json，一次冻结全程传参）
 │   ├── build_pool.py / gap_tasks.py / must_review.py   候选池、补检任务、分层必审清单
+│   ├── arxiv_abstracts.py / scaffold_build.py   arXiv 摘要补抓、build.py 骨架生成
 │   ├── events.py / thesis_registry.py / taxonomy.py   事件规范化、命题库、分类
 │   ├── scoring.py / root_tech.py   五维评分与评级派生、根技术计分（战略相关度）
 │   ├── claim_evidence.py         claim 绑定快照原文片段（sha256 + quote 精确匹配）
@@ -206,6 +207,28 @@ cd "$WORKDIR" && python "$ASSETS/build_pool.py" --raw-dir raw_<date>
 python "$ASSETS/must_review.py" --raw-dir raw_<date> \
   --out raw_<date>/must_review.json --trace-out raw_<date>/must_review_trace.json
 ```
+**先补抓 arXiv 摘要，再建清单**：归档页回退召回的条目只有标题，而 `arxiv_score` 打的是
+标题加摘要，分数系统性偏低（2026-11-03 一轮实测：窗口内 1840 篇去重条目里 1459 篇没有
+摘要）。补抓走 arXiv 官方批量接口，一次 100 篇、重跑不重抓：
+```bash
+python "$ASSETS/arxiv_abstracts.py" --raw-dir raw_<date>        # 加 --dry-run 先看规模
+```
+`must_review.py` 的输出里 `thresholds.arxiv_scoring_text.no_abstract` 是补抓后仍无摘要的
+残量，不为 0 就说明那部分条目的排序偏低，要在 8.3 写明。
+
+**选题前先问判重**：registry 的 `seen_before` 只在 ingest 时命中，那已经是卡片写完之后。
+把判重提前到选题阶段：
+```bash
+python "$ASSETS/thesis_registry.py" seen --must-review raw_<date>/must_review.json \
+  --pool raw_<date>/candidate_pool.json --out raw_<date>/seen.json
+```
+命中的条目要么按「重复」处置，要么作为已有事件的增量（见第 4 步 `increment_of`），
+不要新建事件。本轮收尾时把进第 5 章与被并入的条目登记进 registry，下一轮才认得它们：
+```bash
+python "$ASSETS/thesis_registry.py" record-mentions --must-review raw_<date>/must_review.json \
+  --trace raw_<date>/must_review_trace.json --run-date <WINDOW_START_DATE>
+```
+
 清单内每一条都必须在 `must_review_trace.json` 里给出处置（`selected` / `merged` /
 `chapter5` / `discarded`），`discarded` 的理由取 task_def §16.1 的封闭集合。清单外的条目
 按池筛规则统计留痕，不要求逐条。分层规则、阈值与词表维护见 `references/must-review.md`。
@@ -298,6 +321,19 @@ python "$ASSETS/claim_evidence.py" --events events_run_<date> --roots raw_<date>
 | `claims` | 逐条论点处置：`absorbed:<本事件 EV>` / `separated:<EV>` / `discarded:<理由>`。**A/A+ 的每条 claim 还要带 `evidence: {snapshot, snapshot_sha256, quote}`**，`quote` 必须能在快照里精确匹配到 |
 | `thesis_decision` | 归属裁决（P3），A/A+ 必填；还要写 `via_claim`（序号或 claim 原文），指出哪一条 claim 承载这个关系 |
 
+**build.py 的骨架由工具生成，不要从零敲**。手写 500–700 行里有四类纯机械劳动每轮重复
+且都出过错：样板头尾、事实转抄（2026-11-02 那份简报把两个 tag 时刻各错了 8 小时，
+就是把已经是 +08:00 的值又按 +08 换了一次）、SIG 表手抄、rejected 列表手工做差。
+选完题后写一份 `picks.txt`（每行 `EV-01 <url 或 uid>`），然后：
+```bash
+python "$ASSETS/scaffold_build.py" --raw-dir raw_<date> --picks picks.txt \
+  --snapshots src --state "$STATE" --out build.py
+```
+骨架预填 `source` / `entity` / `first_publish_shanghai`（已换算到 Asia/Shanghai，原值留在
+注释里供核对）/ 标题 / `evidence_form` 猜测，并在文件头列出 `change_object`、
+`evidence_form`、`change_types` 的全部合法取值。判断字段留 `TODO`，带着 TODO 跑会明确
+失败并列出缺什么。来源若被 `seen` 命中，骨架会写出 `increment_of` 的桩位。
+
 不写已废弃的 `tracks` / `sections`。写完必须规范化（补 `event_key`、统一枚举、校验必填；有错时一个
 文件都不改写）：
 ```bash
@@ -311,6 +347,12 @@ WINDOW_START 的背景事件 JSON 保留真实时刻，8.2 那一行标 `Active 
 1. 召回（工具写入，不要手改，门禁会重算比对）：
    ```bash
    python "$ASSETS/thesis_registry.py" candidates --events-dir events_run_<WINDOW_START_DATE>
+   ```
+   召回之后，新建命题必须逐个说明为何不归入召回到的候选。缺的部分由工具列出来，
+   并带上每个候选的名字与陈述——理由要对着真实内容写，不是对着一个编号写：
+   ```bash
+   python "$ASSETS/scaffold_build.py" rejected \
+     --events-dir events_run_<WINDOW_START_DATE> --state "$STATE"
    ```
 2. 逐个事件写 `thesis_decision`：
    ```jsonc

@@ -10,6 +10,7 @@ coverage.source_verdict / build_gaps 的单测。
      一个既无源又未登记不可达的实体必须被判出来。
 """
 import unittest
+from pathlib import Path
 
 import coverage
 from coverage import BLIND_VERDICTS, source_verdict
@@ -136,14 +137,17 @@ class GitTagsCollectTest(unittest.TestCase):
 
     def test_tags_without_times_cannot_answer_window(self):
         self.gt.list_tags = lambda *a, **k: (["v1", "v2"], "")
-        self.gt.tag_times = lambda *a, **k: {}
+        self.gt.tag_details = lambda *a, **k: {}
         r = self.gt.collect("x/y")
         self.assertEqual(r["status"], "parse_failed")
         self.assertEqual([i["date_precision"] for i in r["items"]], ["none", "none"])
 
     def test_items_carry_second_precision_when_timed(self):
         self.gt.list_tags = lambda *a, **k: (["v1"], "")
-        self.gt.tag_times = lambda *a, **k: {"v1": "2026-11-01T20:51:31+00:00"}
+        self.gt.tag_details = lambda *a, **k: {
+            "v1": {"time": "2026-11-01T20:51:31+00:00",
+                   "notes": "* **api:** add a model option",
+                   "notes_source": "CHANGELOG.md diff v0..v1"}}
         r = self.gt.collect("x/y")
         self.assertEqual(r["status"], "ok")
         it = r["items"][0]
@@ -161,6 +165,85 @@ class GitTagsCollectTest(unittest.TestCase):
         self.gt._run = lambda args, timeout: (True, out)
         tags, err = self.gt.list_tags("x/y")
         self.assertEqual((tags, err), (["v2", "v1"], ""))
+
+
+class GitReleaseNotesTest(unittest.TestCase):
+    """git 通道必须带回"改了什么"的可引证原文。
+
+    原先只有 tag 名与提交时刻：git_tags 的文档说第 3 步"由采集器按
+    git_fallback.changelog 顺带落盘"，但采集器里从来没有这段实现。于是该通道
+    产出的事件连续三轮卡在 B 级——A / A+ 要求每条 claim 绑定到快照里的原文
+    片段（task_def 15.1），而原文从未落盘。openai-python / openai-node 同分钟
+    配对发布跨两个窗口出现，只能描述成"节奏"，就是这个缺口的直接后果。
+    """
+
+    def setUp(self):
+        import git_tags
+        self.gt = git_tags
+        self.gt.list_tags = lambda *a, **k: (["v2", "v1"], "")
+        self.gt.tag_details = lambda *a, **k: {
+            "v2": {"time": "2026-11-05T17:58:18+00:00",
+                   "notes": "* **api:** add a model option for Responses",
+                   "notes_source": "CHANGELOG.md diff v1..v2"},
+            "v1": {"time": "2026-11-04T02:16:58+00:00",
+                   "notes": "", "notes_source": ""}}
+
+    def test_items_carry_release_notes(self):
+        it = self.gt.collect("openai/openai-python")["items"][0]
+        self.assertIn("add a model option", it["release_notes"])
+        self.assertEqual(it["release_notes_source"], "CHANGELOG.md diff v1..v2")
+
+    def test_notes_reach_the_snippet_not_only_the_snapshot(self):
+        """打分与选题读 snippet；原文只进快照等于不给下游看。"""
+        it = self.gt.collect("openai/openai-python")["items"][0]
+        self.assertIn("add a model option", it["snippet"])
+
+    def test_snapshot_contains_quotable_text_and_provenance(self):
+        res = self.gt.collect("openai/openai-python")
+        snap = res["notes_snapshot"]
+        self.assertIn("* **api:** add a model option for Responses", snap)
+        self.assertIn("CHANGELOG.md diff v1..v2", snap)
+        self.assertEqual(res["notes_count"], 1)
+
+    def test_tag_without_notes_is_marked_not_faked(self):
+        snap = self.gt.collect("openai/openai-python")["notes_snapshot"]
+        self.assertIn("（未取到发布说明）", snap)
+
+    def test_snapshot_present_even_when_times_missing(self):
+        """取不到时刻仍判 parse_failed，但已拿到的发布说明不该一起丢掉。"""
+        self.gt.tag_details = lambda *a, **k: {}
+        res = self.gt.collect("openai/openai-python")
+        self.assertEqual(res["status"], "parse_failed")
+        self.assertIn("notes_snapshot", res)
+
+    def test_collector_writes_the_snapshot_file(self):
+        """回归：缺的那一步是采集器里的写文件，所以必须走真实的 collect_one。
+
+        让 atom / API 两条通道全部传输失败（线上是 403），逼出 git 回退，
+        然后断言快照文件真的落在 raw 目录里、内容可引用、记录里指得到它。
+        """
+        import tempfile
+        import collect_sources as cs
+        orig_fetch = cs.fetch
+        cs.fetch = lambda *a, **k: ("http_error", b"", "HTTP 403")
+        self.addCleanup(lambda: setattr(cs, "fetch", orig_fetch))
+
+        out = Path(tempfile.mkdtemp())
+        src = {"id": "gh_openai_openai-python", "entity": "OpenAI",
+               "surface": "code", "layer": "sdk-release", "channel": "G_official_surface",
+               "mode": "atom", "critical": False,
+               "urls": [("https://github.com/openai/openai-python/releases.atom",
+                         "gh_openai_openai-python.atom")],
+               "git_fallback": {"repo": "openai/openai-python",
+                                "file": "gh_openai_openai-python_tags.json"}}
+        rec = cs.collect_one(None, src, out, "2026-11-05T00:00:00+08:00",
+                             "2026-11-06T12:00:00+08:00")
+
+        snap = out / "gh_openai_openai-python_tags_changelog.md"
+        self.assertTrue(snap.exists(), f"快照未落盘；目录内容 {sorted(p.name for p in out.iterdir())}")
+        self.assertIn("add a model option", snap.read_text(encoding="utf-8"))
+        self.assertEqual(rec["changelog_file"], snap.name)
+        self.assertIn("发布说明已落盘", rec["note"])
 
 
 if __name__ == "__main__":
