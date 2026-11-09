@@ -18,7 +18,8 @@
       ],
       "switch_signal": "单一tokenizer在理解与生成两端都不弱于双流方案",
       "landing": "模型",
-      "priority": "P1"
+      "priority": "P1",
+      "business_tier": 1
     },
     {
       "id": "M1.2",
@@ -33,7 +34,8 @@
       ],
       "switch_signal": "统一模型在理解基准上不低于同规模纯理解模型",
       "landing": "模型",
-      "priority": "P0"
+      "priority": "P0",
+      "business_tier": 1
     },
     {
       "id": "M1.3",
@@ -48,7 +50,8 @@
       ],
       "switch_signal": "潜空间推理在空间、物理任务上稳定超过文本思维链，且可监控性损失有补偿手段",
       "landing": "模型",
-      "priority": "P1"
+      "priority": "P1",
+      "business_tier": 1
     },
     {
       "id": "M2.1",
@@ -63,7 +66,8 @@
       ],
       "switch_signal": "混合结构在长程智能体任务上不弱于全注意力",
       "landing": "模型",
-      "priority": "P1"
+      "priority": "P1",
+      "business_tier": 1
     },
     {
       "id": "M2.2",
@@ -78,7 +82,8 @@
       ],
       "switch_signal": "超稀疏在同等激活量下持续追平更大的模型",
       "landing": "模型",
-      "priority": "P1"
+      "priority": "P1",
+      "business_tier": 1
     },
     {
       "id": "M2.3",
@@ -93,7 +98,8 @@
       ],
       "switch_signal": "扩散语言模型在推理与工具调用任务上追平自回归",
       "landing": "模型；系统实现见I1.1",
-      "priority": "P1"
+      "priority": "P1",
+      "business_tier": 1
     },
     {
       "id": "M2.4",
@@ -108,7 +114,8 @@
       ],
       "switch_signal": "自适应思考在同等效果下显著降低平均推理token",
       "landing": "模型",
-      "priority": "P1"
+      "priority": "P1",
+      "business_tier": 1
     },
     {
       "id": "M2.5",
@@ -123,7 +130,8 @@
       ],
       "switch_signal": "端侧2bit在推理任务上损失可接受；FP4训练数值稳定",
       "landing": "模型",
-      "priority": "P0"
+      "priority": "P0",
+      "business_tier": 1
     },
     {
       "id": "M3.1",
@@ -139,7 +147,8 @@
       ],
       "switch_signal": "端侧首要瓶颈从内存容量转为散热与带宽",
       "landing": "模型 → 模型与芯片协同",
-      "priority": "P0"
+      "priority": "P0",
+      "business_tier": 2
     },
     {
       "id": "M3.2",
@@ -155,7 +164,8 @@
       ],
       "switch_signal": "LPDDR6-PIM类近存计算进入标准与量产机型",
       "landing": "芯片+OS",
-      "priority": "P0"
+      "priority": "P0",
+      "business_tier": 2
     },
     {
       "id": "M4.1",
@@ -171,7 +181,8 @@
       ],
       "switch_signal": "端到端方案在误打断、误拒绝上超过级联+判决",
       "landing": "模型",
-      "priority": "P0"
+      "priority": "P0",
+      "business_tier": 1
     },
     {
       "id": "M4.2",
@@ -186,7 +197,8 @@
       ],
       "switch_signal": "端到端模型的副语言理解超过专用分类器",
       "landing": "模型",
-      "priority": "P1"
+      "priority": "P1",
+      "business_tier": 1
     },
     {
       "id": "M5.1",
@@ -201,7 +213,8 @@
       ],
       "switch_signal": "在世界模型环境中训练的策略可迁移到真实环境",
       "landing": "模型",
-      "priority": "P1"
+      "priority": "P1",
+      "business_tier": 1
     },
     {
       "id": "M5.2",
@@ -217,7 +230,8 @@
       ],
       "switch_signal": "后果预测进入执行链路，并带来可测的失败率下降",
       "landing": "模型；服务H3、H6、S1.3",
-      "priority": "P0"
+      "priority": "P0",
+      "business_tier": 1
     },
     {
       "id": "M5.3",
@@ -233,7 +247,8 @@
       ],
       "switch_signal": "零样本Sim2Real成功率稳定",
       "landing": "模型（延伸方向）",
-      "priority": "P2"
+      "priority": "P2",
+      "business_tier": 1
     },
     {
       "id": "M6.1",
@@ -248,7 +263,8 @@
       ],
       "switch_signal": "合成环境训练的能力在真实环境上不再明显打折",
       "landing": "模型训练配方",
-      "priority": "P0"
+      "priority": "P0",
+      "business_tier": 1
     },
     {
       "id": "M6.2",
@@ -263,7 +279,8 @@
       ],
       "switch_signal": "rubric与验证器奖励在开放任务上稳定且不被钻空子",
       "landing": "模型训练配方",
-      "priority": "P1"
+      "priority": "P1",
+      "business_tier": 1
     },
     {
       "id": "M6.3",
@@ -278,7 +295,8 @@
       ],
       "switch_signal": "能用早期曲线准确预测大规模RL结果",
       "landing": "模型训练配方",
-      "priority": "P1"
+      "priority": "P1",
+      "business_tier": 1
     },
     {
       "id": "M6.4",
@@ -294,7 +312,8 @@
       ],
       "switch_signal": "评测结果与线上表现显著相关",
       "landing": "评测体系",
-      "priority": "P0"
+      "priority": "P0",
+      "business_tier": 1
     },
     {
       "id": "M7.1",
@@ -309,7 +328,8 @@
       ],
       "switch_signal": "参数级更新在开放任务上出现可靠锚点；能力保持可以度量",
       "landing": "模型；与U3、H7跨层联动",
-      "priority": "P1"
+      "priority": "P1",
+      "business_tier": 1
     },
     {
       "id": "M8",
@@ -325,7 +345,8 @@
       ],
       "switch_signal": "当前代：免训练读logits的基线被专用模型稳定超越；下一代：基座模型单次前向直接输出可校准候选概率",
       "landing": "Harness决策节点 → 模型",
-      "priority": "P0"
+      "priority": "P0",
+      "business_tier": 1
     },
     {
       "id": "P1",
@@ -340,7 +361,8 @@
       ],
       "switch_signal": "移动端定位接近饱和，瓶颈从「找得到元素」转向「看得懂界面状态」",
       "landing": "Harness解析 → 模型",
-      "priority": "P0"
+      "priority": "P0",
+      "business_tier": 2
     },
     {
       "id": "P2",
@@ -356,7 +378,8 @@
       ],
       "switch_signal": "眼镜、耳机的常开功耗进入全天候区间",
       "landing": "OS+模型 → 芯片",
-      "priority": "P0"
+      "priority": "P0",
+      "business_tier": 2
     },
     {
       "id": "P3",
@@ -371,7 +394,8 @@
       ],
       "switch_signal": "同一情境表示被主动服务、交互端选择、隐私策略等多个下游复用",
       "landing": "AgentOS",
-      "priority": "P0"
+      "priority": "P0",
+      "business_tier": 2
     },
     {
       "id": "P4",
@@ -387,7 +411,8 @@
       ],
       "switch_signal": "可穿戴生理信号达到消费级精度，且与隐私约束取得平衡",
       "landing": "模型+设备",
-      "priority": "P1"
+      "priority": "P1",
+      "business_tier": 2
     },
     {
       "id": "P5",
@@ -402,7 +427,8 @@
       ],
       "switch_signal": "用真实行为数据训练的「何时介入」模型显著优于提示工程",
       "landing": "Harness → 模型",
-      "priority": "P0"
+      "priority": "P0",
+      "business_tier": 2
     },
     {
       "id": "U1",
@@ -418,7 +444,8 @@
       ],
       "switch_signal": "语义层维护成本低于检索式方案；应用开放数据接口的比例上升",
       "landing": "AgentOS",
-      "priority": "P0"
+      "priority": "P0",
+      "business_tier": 1
     },
     {
       "id": "U2",
@@ -433,7 +460,8 @@
       ],
       "switch_signal": "巩固产物，尤其是程序性知识，在后续任务中被高频复用",
       "landing": "Harness → 模型",
-      "priority": "P1"
+      "priority": "P1",
+      "business_tier": 1
     },
     {
       "id": "U3",
@@ -449,7 +477,8 @@
       ],
       "switch_signal": "参数化记忆具备可靠的覆盖与删除能力",
       "landing": "Harness → 模型",
-      "priority": "P0"
+      "priority": "P0",
+      "business_tier": 1
     },
     {
       "id": "U4",
@@ -465,7 +494,8 @@
       ],
       "switch_signal": "端侧常驻索引功耗可接受；视频分词器的压缩率与保真度达标",
       "landing": "模型+AgentOS",
-      "priority": "P1"
+      "priority": "P1",
+      "business_tier": 1
     },
     {
       "id": "U5",
@@ -480,7 +510,8 @@
       ],
       "switch_signal": "记忆误用率可度量且持续下降",
       "landing": "Harness → 模型",
-      "priority": "P1"
+      "priority": "P1",
+      "business_tier": 1
     },
     {
       "id": "U6",
@@ -495,7 +526,8 @@
       ],
       "switch_signal": "参数化记忆的删除可以被验证",
       "landing": "AgentOS",
-      "priority": "P0"
+      "priority": "P0",
+      "business_tier": 1
     },
     {
       "id": "H1",
@@ -511,7 +543,8 @@
       ],
       "switch_signal": "长程失败的主因从「状态丢失」转为「判断错误」",
       "landing": "Harness → AgentOS",
-      "priority": "P0"
+      "priority": "P0",
+      "business_tier": 1
     },
     {
       "id": "H2",
@@ -526,7 +559,8 @@
       ],
       "switch_signal": "学习式压缩稳定优于启发式；压缩后约束违规率降到零",
       "landing": "Harness → 模型",
-      "priority": "P0"
+      "priority": "P0",
+      "business_tier": 1
     },
     {
       "id": "H3",
@@ -542,7 +576,8 @@
       ],
       "switch_signal": "前瞻模拟在真实任务上带来可测增益",
       "landing": "Harness → 模型",
-      "priority": "P1"
+      "priority": "P1",
+      "business_tier": 1
     },
     {
       "id": "H4",
@@ -558,7 +593,8 @@
       ],
       "switch_signal": "头部应用开放可调用接口的比例；GUI路径的平台与应用政策收紧程度",
       "landing": "Harness → AgentOS（协议）",
-      "priority": "P0"
+      "priority": "P0",
+      "business_tier": 1
     },
     {
       "id": "H5",
@@ -574,7 +610,8 @@
       ],
       "switch_signal": "技能选择准确率不再随库规模下降",
       "landing": "高频技能 → 模型；技能治理 → AgentOS",
-      "priority": "P0"
+      "priority": "P0",
+      "business_tier": 1
     },
     {
       "id": "H6",
@@ -589,7 +626,8 @@
       ],
       "switch_signal": "虚报完成率可控；数字环境世界模型进入执行链路",
       "landing": "Harness → 模型",
-      "priority": "P0"
+      "priority": "P0",
+      "business_tier": 1
     },
     {
       "id": "H7",
@@ -605,7 +643,8 @@
       ],
       "switch_signal": "开放场景中出现可靠的改进锚点",
       "landing": "Harness元层",
-      "priority": "P1"
+      "priority": "P1",
+      "business_tier": 1
     },
     {
       "id": "H8",
@@ -621,7 +660,8 @@
       ],
       "switch_signal": "长时后台智能体能在手机功耗约束下稳定运行",
       "landing": "AgentOS",
-      "priority": "P0"
+      "priority": "P0",
+      "business_tier": 1
     },
     {
       "id": "H9",
@@ -641,7 +681,8 @@
       ],
       "switch_signal": "跨厂商智能体协议形成事实标准",
       "landing": "AgentOS",
-      "priority": "P0"
+      "priority": "P0",
+      "business_tier": 1
     },
     {
       "id": "H10",
@@ -656,7 +697,8 @@
       ],
       "switch_signal": "生成界面的完成效率与一致性不低于人工设计界面",
       "landing": "AgentOS（交互框架）",
-      "priority": "P1"
+      "priority": "P1",
+      "business_tier": 1
     },
     {
       "id": "B1.1",
@@ -672,7 +714,8 @@
       ],
       "switch_signal": "组合式、指代式查询命中率达到可用",
       "landing": "模型+AgentOS；依赖U1、U4",
-      "priority": "P1"
+      "priority": "P1",
+      "business_tier": 1
     },
     {
       "id": "B1.2",
@@ -687,7 +730,8 @@
       ],
       "switch_signal": "少样本、跨模态身份绑定的准确率达到可用",
       "landing": "模型+AgentOS",
-      "priority": "P1"
+      "priority": "P1",
+      "business_tier": 1
     },
     {
       "id": "B1.3",
@@ -702,7 +746,8 @@
       ],
       "switch_signal": "自动提取的叙事结构可直接驱动剪辑",
       "landing": "模型",
-      "priority": "P2"
+      "priority": "P2",
+      "business_tier": 1
     },
     {
       "id": "B2.1",
@@ -717,7 +762,8 @@
       ],
       "switch_signal": "偏好模型可直接用作RL奖励而不被钻空子",
       "landing": "模型",
-      "priority": "P1"
+      "priority": "P1",
+      "business_tier": 1
     },
     {
       "id": "B2.2",
@@ -732,7 +778,8 @@
       ],
       "switch_signal": "生成式推荐在长尾需求上优于两段式",
       "landing": "模型",
-      "priority": "P2"
+      "priority": "P2",
+      "business_tier": 1
     },
     {
       "id": "B3.1",
@@ -747,7 +794,8 @@
       ],
       "switch_signal": "意图编译的结果无需手工微调即可接受",
       "landing": "Harness → 模型",
-      "priority": "P2"
+      "priority": "P2",
+      "business_tier": 2
     },
     {
       "id": "B3.2",
@@ -760,7 +808,8 @@
       "leaves_related": [],
       "switch_signal": "生成式编辑的一致性达到可替代手工操作",
       "landing": "模型",
-      "priority": "P2"
+      "priority": "P2",
+      "business_tier": 2
     },
     {
       "id": "B3.3",
@@ -775,7 +824,8 @@
       ],
       "switch_signal": "自动成片接受率达到可用",
       "landing": "Harness（多智能体编排）",
-      "priority": "P2"
+      "priority": "P2",
+      "business_tier": 2
     },
     {
       "id": "B3.4",
@@ -790,7 +840,8 @@
       ],
       "switch_signal": "跨平台授权接口与来源凭证形成标准",
       "landing": "AgentOS+生态",
-      "priority": "P2"
+      "priority": "P2",
+      "business_tier": 2
     },
     {
       "id": "B4.1",
@@ -806,7 +857,8 @@
       ],
       "switch_signal": "「可维护性」（而不只是可写入性）有可靠方案",
       "landing": "Harness → 模型",
-      "priority": "P1"
+      "priority": "P1",
+      "business_tier": 2
     },
     {
       "id": "B4.2",
@@ -821,7 +873,8 @@
       ],
       "switch_signal": "形式化校验的效用损失可接受",
       "landing": "AgentOS",
-      "priority": "P1"
+      "priority": "P1",
+      "business_tier": 2
     },
     {
       "id": "B4.3",
@@ -836,7 +889,8 @@
       ],
       "switch_signal": "模型换代时领域harness的重写比例显著下降",
       "landing": "Harness（上移且变薄）",
-      "priority": "P1"
+      "priority": "P1",
+      "business_tier": 2
     },
     {
       "id": "B5.1",
@@ -852,7 +906,8 @@
       ],
       "switch_signal": "观点质量评测（rubric）与专家判断一致",
       "landing": "模型+Harness",
-      "priority": "P2"
+      "priority": "P2",
+      "business_tier": 2
     },
     {
       "id": "B5.2",
@@ -868,7 +923,8 @@
       ],
       "switch_signal": "项目级开发闭环在真实仓库中稳定",
       "landing": "模型+Harness",
-      "priority": "P2"
+      "priority": "P2",
+      "business_tier": 2
     },
     {
       "id": "I1.1",
@@ -883,7 +939,8 @@
       ],
       "switch_signal": "智能体负载成为主流后，首token时延与吞吐不再是主要成本指标",
       "landing": "推理系统",
-      "priority": "P1"
+      "priority": "P1",
+      "business_tier": 2
     },
     {
       "id": "I1.2",
@@ -899,7 +956,8 @@
       ],
       "switch_signal": "KV命中率取代吞吐，成为主成本指标",
       "landing": "推理系统",
-      "priority": "P1"
+      "priority": "P1",
+      "business_tier": 2
     },
     {
       "id": "I1.3",
@@ -914,7 +972,8 @@
       ],
       "switch_signal": "静态分配造成的资源浪费被兑现为实际收益",
       "landing": "推理系统",
-      "priority": "P2"
+      "priority": "P2",
+      "business_tier": 2
     },
     {
       "id": "I2.1",
@@ -929,7 +988,8 @@
       ],
       "switch_signal": "RL迭代周期从周级进入天级",
       "landing": "训练系统",
-      "priority": "P1"
+      "priority": "P1",
+      "business_tier": 2
     },
     {
       "id": "I2.2",
@@ -945,7 +1005,8 @@
       ],
       "switch_signal": "训练rollout与线上执行共用同一执行面",
       "landing": "基础设施",
-      "priority": "P1"
+      "priority": "P1",
+      "business_tier": 2
     },
     {
       "id": "I2.3",
@@ -960,7 +1021,8 @@
       ],
       "switch_signal": "训推一体在超节点上兑现资源收益",
       "landing": "基础设施",
-      "priority": "P2"
+      "priority": "P2",
+      "business_tier": 2
     },
     {
       "id": "I3.1",
@@ -976,7 +1038,8 @@
       ],
       "switch_signal": "路由错误（该上云未上云、该端侧处理却上云）可控",
       "landing": "AgentOS+云",
-      "priority": "P0"
+      "priority": "P0",
+      "business_tier": 2
     },
     {
       "id": "I3.2",
@@ -992,7 +1055,8 @@
       ],
       "switch_signal": "端云协同投机从论文走向产品",
       "landing": "推理系统（端+云）",
-      "priority": "P0"
+      "priority": "P0",
+      "business_tier": 2
     },
     {
       "id": "I3.3",
@@ -1008,7 +1072,8 @@
       ],
       "switch_signal": "跨端云的长程任务可中断、可续做",
       "landing": "AgentOS+云",
-      "priority": "P0"
+      "priority": "P0",
+      "business_tier": 2
     },
     {
       "id": "I4.1",
@@ -1023,7 +1088,8 @@
       ],
       "switch_signal": "自动生成算子性能稳定超过人工",
       "landing": "基础软件",
-      "priority": "P1"
+      "priority": "P1",
+      "business_tier": 2
     },
     {
       "id": "S1.1",
@@ -1038,7 +1104,8 @@
       ],
       "switch_signal": "自适应攻击下外置约束仍然成立；可证明约束的效用损失可接受",
       "landing": "AgentOS",
-      "priority": "P0"
+      "priority": "P0",
+      "business_tier": 3
     },
     {
       "id": "S1.2",
@@ -1053,7 +1120,8 @@
       ],
       "switch_signal": "任务级授权成为平台默认机制",
       "landing": "AgentOS",
-      "priority": "P0"
+      "priority": "P0",
+      "business_tier": 3
     },
     {
       "id": "S1.3",
@@ -1069,7 +1137,8 @@
       ],
       "switch_signal": "分级确认下误放行率与确认次数同时下降",
       "landing": "AgentOS（只有平台能提供）",
-      "priority": "P0"
+      "priority": "P0",
+      "business_tier": 3
     },
     {
       "id": "S1.4",
@@ -1085,7 +1154,8 @@
       ],
       "switch_signal": "长时后台智能体大规模上线",
       "landing": "AgentOS",
-      "priority": "P0"
+      "priority": "P0",
+      "business_tier": 3
     },
     {
       "id": "S2.1",
@@ -1100,7 +1170,8 @@
       ],
       "switch_signal": "智能体身份标准落地并被主要服务方采纳（标准窗口期）",
       "landing": "AgentOS+标准",
-      "priority": "P0"
+      "priority": "P0",
+      "business_tier": 3
     },
     {
       "id": "S2.2",
@@ -1116,7 +1187,9 @@
       ],
       "switch_signal": "语义级审查成为技能市场准入标准",
       "landing": "AgentOS+生态",
-      "priority": "P0"
+      "priority": "P0",
+      "business_tier": 3,
+      "tier_note": "供应链语义安全属安全议题，不是「工具治理」：治理的对象是上游发布方，不是在本机运行的第三方智能体（2026-11-09 用户裁定，与 S2.3 分开）"
     },
     {
       "id": "S2.3",
@@ -1132,7 +1205,9 @@
       ],
       "switch_signal": "应用侧声明协议成为平台规范",
       "landing": "AgentOS（只有平台能做）",
-      "priority": "P0"
+      "priority": "P0",
+      "business_tier": 1,
+      "tier_note": "端侧第三方智能体操作治理 = 工具治理：治理在自家设备上运行的第三方智能体，属 harness engineering 的一部分"
     },
     {
       "id": "S2.4",
@@ -1148,7 +1223,9 @@
       ],
       "switch_signal": "智能体执行结果进入责任认定场景（支付、法律）",
       "landing": "AgentOS",
-      "priority": "P1"
+      "priority": "P1",
+      "business_tier": 2,
+      "tier_note": "可追责执行记录落在 D2.1/D3.4，更像 infra 的可观测底账"
     },
     {
       "id": "S3.1",
@@ -1164,7 +1241,8 @@
       ],
       "switch_signal": "无攻击者情况下的过度分享率显著下降",
       "landing": "AgentOS",
-      "priority": "P0"
+      "priority": "P0",
+      "business_tier": 3
     },
     {
       "id": "S3.2",
@@ -1180,7 +1258,8 @@
       ],
       "switch_signal": "隐私承诺从政策声明变为技术可证明",
       "landing": "AgentOS+云",
-      "priority": "P0"
+      "priority": "P0",
+      "business_tier": 3
     },
     {
       "id": "S3.3",
@@ -1196,7 +1275,8 @@
       ],
       "switch_signal": "参数化记忆上线前具备可验证的删除路径",
       "landing": "AgentOS+模型",
-      "priority": "P1"
+      "priority": "P1",
+      "business_tier": 3
     },
     {
       "id": "S4.1",
@@ -1211,7 +1291,8 @@
       ],
       "switch_signal": "探针在长上下文、多轮等分布外场景保持可靠",
       "landing": "模型（端侧可低成本部署）",
-      "priority": "P0"
+      "priority": "P0",
+      "business_tier": 3
     },
     {
       "id": "S4.2",
@@ -1227,7 +1308,8 @@
       ],
       "switch_signal": "潜空间推理进入产品，原有CoT监控失效",
       "landing": "模型+AgentOS",
-      "priority": "P1"
+      "priority": "P1",
+      "business_tier": 3
     },
     {
       "id": "S4.3",
@@ -1242,7 +1324,8 @@
       ],
       "switch_signal": "智能体能力在关键任务上超过受信监控模型",
       "landing": "AgentOS",
-      "priority": "P1"
+      "priority": "P1",
+      "business_tier": 3
     },
     {
       "id": "S4.4",
@@ -1258,7 +1341,9 @@
       ],
       "switch_signal": "自演化机制进入产品",
       "landing": "AgentOS+硬件信任根",
-      "priority": "P0"
+      "priority": "P0",
+      "business_tier": 1,
+      "tier_note": "自演化机制进入产品，是 RSI 的切换信号本体"
     },
     {
       "id": "S4.5",
@@ -1274,7 +1359,9 @@
       ],
       "switch_signal": "可解释性定位直接指导一次训练修复并被验证",
       "landing": "模型研发流程",
-      "priority": "P1"
+      "priority": "P1",
+      "business_tier": 1,
+      "tier_note": "可解释性定位直接指导训练修复，偏模型内部理解"
     }
   ],
   "candidates": [
@@ -1338,5 +1425,6 @@
       "landing": "模型+设备",
       "priority": "观察"
     }
-  ]
+  ],
+  "business_tier_note": "business_tier 1/2/3 对应用户 2026-11-09 表述的业务优先级：tier-1 模型（理解/生成/推理）、harness engineering/RSI（含工具治理）、个性化记忆；tier-2 agent infra；tier-3 底层 AgentOS 与 agent 安全。tier 只用于召回配额、排序与留观门槛，**不参与评分维度**——业务优先级若进评分，一个 9 分且机制新颖度与战略相关度均为 2 的安全类事件会被制度性压到 A，而高价值的 infra/安全事件必须能评出来。带 tier_note 的条目是业务优先级与根技术组边界交叉之处，逐条裁定过，不要按组重算。"
 }
