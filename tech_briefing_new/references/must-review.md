@@ -93,3 +93,72 @@
 | 2026-10-31 | 建表：`HN_MIN_POINTS=50`、`ARXIV_TOP_K=40` | 2026-10-31 实测池 2323 条 → 清单 121 条，人工可执行 |
 | 2026-10-31 | `arxiv_score.high` 补防护机制词 17 个 | Masked Erosion 落在 K 外，缺的是词表不是 K |
 | 2026-11-02 | `ai_relevance.zh` 补 8 个词（开源、开放、基准测试、推理模型、决策模型、世界模型、形式化、注入攻击），并去掉重复的「智能体」 | 量子位「Jev新成果，再次引爆开源」未命中词表——表里只有「开源权重」没有「开源」，而该条目最终入选为事件 |
+
+## 2026-11-09 词表按业务优先级重排
+
+### 为什么改
+
+五轮产出复盘发现 high 层（权重 2）的主题配比与业务优先级倒挂：
+
+| | 改前 high 层 | 业务优先级目标 |
+|---|---|---|
+| tier-1 模型 / harness+RSI+工具治理 / 个性化记忆 | 其中记忆仅 1 词（`memory`） | ~54% |
+| tier-2 agent infra | 4 词（kv cache / kv-cache / speculative / sandbox） | ~33% |
+| tier-3 AgentOS / agent 安全 | **39 词** | ~13% |
+
+直接后果：个性化记忆的六条根技术（U1–U6：个人数据语义层、记忆形成与巩固、记忆形态与放置、
+多模态情景记忆、记忆调用策略、记忆治理）五轮一共只被命中 1 次；agent infra 类（I1–I4）0.14 倍覆盖。
+召回面上没有这两条线，评分再公平也评不出来。
+
+### 改了什么
+
+- 补 tier-1 个性化记忆 20 词：episodic memory、memory consolidat、consolidat、personaliz、
+  user model、user profil、preference learning、preference model、forgetting、
+  catastrophic forget、retention、memory governance、memory retrieval、semantic layer、
+  long-term memory、lifelong、continual learning、knowledge editing、model editing、
+  machine unlearning。另把原先归在安全词里的 `unlearn` 认定为记忆治理（U6「删除可验证」）。
+- 补 tier-1 harness / RSI / 工具治理 19 词：harness、task state、context compression、
+  context management、delegation、skill selection、skill librar、tool schema、tool selection、
+  mcp、checkpoint、recovery、replay、trajectory、scaffold、self-refine、curriculum、
+  meta-learning、agent workflow。
+- 补 tier-2 infra 17 词：disaggregat、prefill、decode、serving、scheduling、scheduler、
+  batching、offload、cache hit、paged attention、tensor parallel、expert parallel、async rl、
+  asynchronous rl、inference system、edge-cloud、端云。
+- 把 19 个通用安全泛词从 high 降到 med：verif、fact-check、audit、monitor、safeguard、
+  guardrail、defense、defence、robustness、degrad、erosion、redundan、acceptance gate、
+  mitigation、refusal、attack surface、containment、oversight、poison。
+  **保留**具体的攻击与失配机制词在 high：prompt injection、jailbreak、backdoor、data poison、
+  reward hack、sandbag、collusion、steganograph、subliminal、membership inference。
+  依据是命中面宽窄，不是立场——`monitor` 几乎任何论文都能命中，`sandbag` 只命中一类工作。
+
+high 75 → 112 词，med 41 → 60 词。
+
+### 回测（五轮历史候选池，旧词表 vs 新词表）
+
+| 窗口 | 截断分 旧→新 | 记忆类入选 旧→新 | infra 类入选 旧→新 |
+|---|---|---|---|
+| 11-01 | 6 → 6 | 7 → 10 | 0 → 2 |
+| 11-02 | 6 → 6 | 7 → 10 | 0 → 2 |
+| 11-03 | 15 → 17 | 3 → 8 | 4 → 8 |
+| 11-05 | 7 → 8 | 7 → 12 | 4 → 5 |
+
+已入选事件的回归：1 处，且确认是并列档边界而非被挤出——`2610.37657`（EV-05，B 级，
+prompt injection 防御）得 6 分、截断正好 6 分，`cut_inside_tie` 已自动报警；
+`--arxiv-top-k 48` 取整档后回到清单内。
+
+### 中途踩的坑：子串连锁升降
+
+第一版把 `benchmark` / `evaluation` / `eval` 一起从 high 降到 med，回测立刻挤出三个已入选事件
+（含两个 A 级）。原因有两层：一是 `eval` 是 `evaluation` 的子串，三词会连锁命中，整组降级
+一次损失 3 分；二是分类错了——评测属于 M6「学习信号」与 D1，是 tier-1，不是通用安全泛词。
+已全部恢复到 high。
+
+**同类风险的词组**（升降必须整组评估，不能逐个拍）：`eval`/`evaluation`、
+`defense`/`defence`、`red team`/`red-team`、`poison`/`data poison`、`supply chain`/`supply-chain`、
+`tool use`/`tool-use`、`computer use`/`computer-use`、`kv cache`/`kv-cache`、
+`weight space`/`weight-space`。
+
+### 没动的部分
+
+评级公式未改。业务优先级不进评分维度——否则一个 9 分 / 机制新颖度 2 / 战略相关度 2 的
+安全类事件会被制度性压到 A，而这正是要避免的。优先级只进召回与排序。
