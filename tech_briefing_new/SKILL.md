@@ -24,10 +24,6 @@ allowed-tools:
   - TaskUpdate
   - TaskList
   - TaskGet
-when_to_use: |
-  Use when the user references the tech briefing workflow or asks to regenerate today's briefing.
-  The skill handles the full pipeline: time window freezing, multi-source data collection,
-  candidate pool construction, abstraction/clustering/rating, HTML generation, and acceptance verification.
 ---
 
 # 多源技术热点简报生成
