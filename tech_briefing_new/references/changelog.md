@@ -380,3 +380,52 @@
   `freeze_window.py` 单独跑时在后者）。
 
 测试 339 → 411 条，全绿。
+
+## 2026-11-09（六项修复后首次实跑暴露的三处缺陷）
+
+### git 通道的「上一版」不能按版本号排序取
+
+- **问题**：`git_tags.py` 落盘的发布说明里，qwen-code 的分支式 tag `weaken-tool-error-shots`（8 月）
+  被拿 11 月的 v0.27.0 做对照，diff 方向整个反了——「新增行」其实是旧版本内容，还被当成那次发布的
+  说明落盘。比取不到更糟，因为它会被引用。同时 v0.27.0 自己因为紧邻 nightly 给出空 diff，
+  退化成 `chore(release): v0.27.0` 这种没有信息的提交正文。
+- **根因**：`tag_details` 用 `prevs = fetched[i+1]`，假设 `git ls-remote --sort=-v:refname` 的列表
+  位置就是版本先后。该排序按版本号，而 tag 的提交时刻并不单调；非版本号形态的 tag（分支式、
+  nightly）一混进来假设就破。
+- **约束**：先把所有 tag 的提交时刻取全，按时刻排序决定谁是谁的上一版；逐个往前试而不是只试一个
+  （`NOTES_PREV_TRIES = 4`），因为 nightly 不改 CHANGELOG、紧邻对照必然空。
+  加 `PrevTagByTimeTest`：断言任何 diff 的 `prev` 时刻严格早于 `tag`，断言空 diff 会继续往前找，
+  断言尝试次数有上限。
+
+### 测试里改模块属性必须还原
+
+- **问题**：`GitReleaseNotesTest`（上一轮新增）直接给 `git_tags.tag_details` 赋 lambda 且不还原，
+  同文件后面的 `PrevTagByTimeTest` 拿到那个 lambda，三个用例 KeyError。
+- **约束**：加 `_patch_git_tags(testcase, **attrs)` 辅助，统一用 `addCleanup` 还原；
+  该文件里所有裸赋值改为走它。测试之间不共享可变模块状态。
+
+### `--only` 部分重采不能覆盖整轮采集报告
+
+- **问题**：为修上面第一条重采了 5 个 git 源，`collect_report.json` 被覆盖成只剩 5 条记录，
+  其余 44 个源的覆盖审计（裁决分布、tier1 实体、缺口清单）静默销毁。而 .md 里的 8.1 数字
+  已按完整报告写好——门禁以「tier1 实体未出现在报告中」的形式报出来，否则不会被发现。
+- **约束**：`--only` 时读已有 `collect_report.json`，同 id 用新记录替换、其余保留，并打印合并条数。
+  这与 2026-11-06 记的「重新采集会重写快照」是同一类问题的更严重形态：那次丢的是可重取的快照，
+  这次丢的是本轮唯一的覆盖审计记录。
+
+### 同轮记下但未修
+
+- `gap_tasks.py` 不带 `--mark-done` 时从 report 重建任务表，会冲掉已结的案；
+  带 `--mark-done` 时读已有文件，所以单条结案安全。建议重建时也合并已有 status/evidence。
+- `unknown` 这个 resolution 不把任务置为 done（设计如此），所以 `surface_missing` 类
+  只能走 `partial_compensated`。
+- A/A+ 的四节深拆必须是 `#####` 小节，写成 `**挑战与问题。**` 会被门禁判缺节；
+  这条写法约束 `event-writing.md` 里没写明。
+- claim 的一手来源不可引时（JS 渲染页取不到正文）只能绑第三方转述，目前无字段区分，
+  靠 8.3 人工说明。建议 claim 加 `provenance`。
+
+测试 411 → 417 条，全绿。
+
+- 同轮还修了一处自己造成的测试陈旧：脚手架的快照常量名中途从 `SNAP_1` 改成按文件名生成
+  （`SNAP_ITNEWS_DONT_ASK_AGAIN_TXT`），但没同步改断言。改断言的同时补了「同名文件要得到
+  不同常量名」的用例。教训：改了生成格式要当场跑一次全量测试，不要等到提交前。

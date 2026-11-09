@@ -157,12 +157,25 @@ class ScaffoldTest(unittest.TestCase):
         self.assertIn('"event_key": "abc123"', out)
         self.assertIn("increment_of", out)
 
-    def test_snapshot_declarations(self):
-        f = self.root / "snap.html"
+    def test_snapshot_declarations_are_named_after_the_file(self):
+        """常量名按文件名生成。`SNAP_1`、`SNAP_7` 这种序号名在写 claim 时没法读，
+        而 E(SNAP_x, "原文") 正是人要逐条对着快照核的地方。"""
+        f = self.root / "itnews_dont_ask_again.txt"
         f.write_text("x", encoding="utf-8")
         out = sb.build_scaffold(self.raw, [("EV-01", "u1")], [str(f)], None)
-        self.assertIn("SNAP_1 = ", out)
+        self.assertIn("SNAP_ITNEWS_DONT_ASK_AGAIN_TXT = ", out)
+        self.assertNotIn("SNAP_1 = ", out)
         self.assertIn("ce.sha256_file", out)
+
+    def test_duplicate_basenames_get_distinct_names(self):
+        a = self.root / "a"; b = self.root / "b"
+        a.mkdir(); b.mkdir()
+        (a / "snap.html").write_text("x", encoding="utf-8")
+        (b / "snap.html").write_text("y", encoding="utf-8")
+        out = sb.build_scaffold(self.raw, [("EV-01", "u1")],
+                                [str(a / "snap.html"), str(b / "snap.html")], None)
+        self.assertIn("SNAP_SNAP_HTML = ", out)
+        self.assertIn("SNAP_SNAP_HTML_2 = ", out)
 
     def test_no_snapshots_gives_empty_sha_map(self):
         self.assertIn("SHA = {}", self._gen([("EV-01", "u1")]))

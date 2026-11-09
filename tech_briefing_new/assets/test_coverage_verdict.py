@@ -24,6 +24,19 @@ def rec(**kw):
     return base
 
 
+def _patch_git_tags(testcase, **attrs):
+    """替换 git_tags 的模块属性，并在用例结束后还原。
+
+    直接赋值不还原会污染同文件里后面的用例：2026-11-09 一轮，PrevTagByTimeTest
+    拿到的是 GitReleaseNotesTest 留下的 tag_details lambda，三个用例 KeyError。
+    """
+    import git_tags
+    for k, v in attrs.items():
+        testcase.addCleanup(setattr, git_tags, k, getattr(git_tags, k))
+        setattr(git_tags, k, v)
+    return git_tags
+
+
 class EmptyStateTest(unittest.TestCase):
     def test_well_formed_empty_feed_is_not_blind(self):
         v = source_verdict(rec(extract="empty", structure_ok=True))
@@ -136,18 +149,18 @@ class GitTagsCollectTest(unittest.TestCase):
         self.assertEqual(self.gt.collect("x/y")["status"], "empty")
 
     def test_tags_without_times_cannot_answer_window(self):
-        self.gt.list_tags = lambda *a, **k: (["v1", "v2"], "")
-        self.gt.tag_details = lambda *a, **k: {}
+        _patch_git_tags(self, list_tags=lambda *a, **k: (["v1", "v2"], ""),
+                        tag_details=lambda *a, **k: {})
         r = self.gt.collect("x/y")
         self.assertEqual(r["status"], "parse_failed")
         self.assertEqual([i["date_precision"] for i in r["items"]], ["none", "none"])
 
     def test_items_carry_second_precision_when_timed(self):
-        self.gt.list_tags = lambda *a, **k: (["v1"], "")
-        self.gt.tag_details = lambda *a, **k: {
-            "v1": {"time": "2026-11-01T20:51:31+00:00",
-                   "notes": "* **api:** add a model option",
-                   "notes_source": "CHANGELOG.md diff v0..v1"}}
+        _patch_git_tags(self, list_tags=lambda *a, **k: (["v1"], ""),
+                        tag_details=lambda *a, **k: {
+                            "v1": {"time": "2026-11-01T20:51:31+00:00",
+                                   "notes": "* **api:** add a model option",
+                                   "notes_source": "CHANGELOG.md diff v0..v1"}})
         r = self.gt.collect("x/y")
         self.assertEqual(r["status"], "ok")
         it = r["items"][0]
@@ -178,15 +191,15 @@ class GitReleaseNotesTest(unittest.TestCase):
     """
 
     def setUp(self):
-        import git_tags
-        self.gt = git_tags
-        self.gt.list_tags = lambda *a, **k: (["v2", "v1"], "")
-        self.gt.tag_details = lambda *a, **k: {
-            "v2": {"time": "2026-11-05T17:58:18+00:00",
-                   "notes": "* **api:** add a model option for Responses",
-                   "notes_source": "CHANGELOG.md diff v1..v2"},
-            "v1": {"time": "2026-11-04T02:16:58+00:00",
-                   "notes": "", "notes_source": ""}}
+        self.gt = _patch_git_tags(
+            self,
+            list_tags=lambda *a, **k: (["v2", "v1"], ""),
+            tag_details=lambda *a, **k: {
+                "v2": {"time": "2026-11-05T17:58:18+00:00",
+                       "notes": "* **api:** add a model option for Responses",
+                       "notes_source": "CHANGELOG.md diff v1..v2"},
+                "v1": {"time": "2026-11-04T02:16:58+00:00",
+                       "notes": "", "notes_source": ""}})
 
     def test_items_carry_release_notes(self):
         it = self.gt.collect("openai/openai-python")["items"][0]
@@ -211,7 +224,7 @@ class GitReleaseNotesTest(unittest.TestCase):
 
     def test_snapshot_present_even_when_times_missing(self):
         """取不到时刻仍判 parse_failed，但已拿到的发布说明不该一起丢掉。"""
-        self.gt.tag_details = lambda *a, **k: {}
+        _patch_git_tags(self, tag_details=lambda *a, **k: {})
         res = self.gt.collect("openai/openai-python")
         self.assertEqual(res["status"], "parse_failed")
         self.assertIn("notes_snapshot", res)
@@ -244,6 +257,86 @@ class GitReleaseNotesTest(unittest.TestCase):
         self.assertIn("add a model option", snap.read_text(encoding="utf-8"))
         self.assertEqual(rec["changelog_file"], snap.name)
         self.assertIn("发布说明已落盘", rec["note"])
+
+
+class PrevTagByTimeTest(unittest.TestCase):
+    """上一版必须按提交时刻选，不能用 ls-remote 的列表位置。
+
+    `git ls-remote --sort=-v:refname` 按版本号排序，而 tag 的提交时刻并不单调。
+    2026-11-09 第一次实跑就撞上：qwen-code 有个分支式 tag `weaken-tool-error-shots`
+    （8 月）排在首位，被拿 11 月的 v0.27.0 做对照，diff 方向整个反了——"新增行"
+    其实是旧版本的内容，还被当成那次发布的说明落盘。比取不到更糟，因为它会被引用。
+
+    另一半问题是 nightly tag 不改 CHANGELOG，紧邻的对照给出空 diff，正式版的说明
+    退化成 `chore(release): vX` 这种没有信息的提交正文；所以要往前多试几个。
+    """
+
+    def setUp(self):
+        # 时刻故意与版本号顺序不一致，复刻线上那组 tag
+        self.times = {
+            "weaken-tool-error-shots": "2026-08-13T05:13:23+00:00",
+            "v0.27.0": "2026-11-07T20:33:08+00:00",
+            "v0.26.9-nightly": "2026-11-08T01:29:35+00:00",
+            "v0.26.9": "2026-11-06T15:57:19+00:00",
+        }
+        # nightly 不改 CHANGELOG：只有跨正式版的 diff 才有新增行
+        self.changelog = {("v0.26.9", "v0.27.0"): "+## [0.26.9] Skill installation\n",
+                          ("v0.26.9", "v0.26.9-nightly"): ""}
+        self.diffs = []
+
+        def fake_run(cmd, timeout=30):
+            if cmd[:2] == ["git", "init"] or "remote" in cmd or "fetch" in cmd:
+                return True, ""
+            if "--format=%cI" in cmd:
+                return True, self.times.get(cmd[-1], "")
+            if "ls-tree" in cmd:
+                return True, "CHANGELOG.md\nREADME.md"
+            if "diff" in cmd:
+                prev, tag = cmd[cmd.index("diff") + 1], cmd[cmd.index("diff") + 2]
+                self.diffs.append((prev, tag))
+                return True, self.changelog.get((prev, tag), "")
+            if "--format=%B" in cmd:
+                return True, f"chore(release): {cmd[-1]}"
+            return False, ""
+
+        self.gt = _patch_git_tags(self, _run=fake_run)
+
+    def _details(self):
+        return self.gt.tag_details("QwenLM/qwen-code", list(self.times))
+
+    def test_release_diffs_against_the_previous_release_not_a_newer_tag(self):
+        d = self._details()
+        self.assertEqual(d["v0.27.0"]["notes_source"], "CHANGELOG.md diff v0.26.9..v0.27.0")
+        self.assertIn("Skill installation", d["v0.27.0"]["notes"])
+
+    def test_no_inverted_diff_against_a_newer_tag(self):
+        """回归：老 tag 绝不能拿更新的 tag 当对照。"""
+        self._details()
+        for prev, tag in self.diffs:
+            self.assertLess(self.times[prev], self.times[tag],
+                            f"对照方向反了: {prev}..{tag}")
+
+    def test_oldest_tag_falls_back_to_commit_body(self):
+        d = self._details()
+        self.assertEqual(d["weaken-tool-error-shots"]["notes_source"],
+                         "发布提交正文 weaken-tool-error-shots")
+
+    def test_walks_back_past_an_empty_diff(self):
+        """nightly 的紧邻对照是空 diff，要继续往前找而不是退化成提交正文。"""
+        self.changelog[("v0.27.0", "v0.26.9-nightly")] = ""
+        self.changelog[("v0.26.9", "v0.26.9-nightly")] = ""
+        self.changelog[("weaken-tool-error-shots", "v0.26.9-nightly")] = "+late hit\n"
+        d = self._details()
+        self.assertIn("late hit", d["v0.26.9-nightly"]["notes"])
+
+    def test_tries_are_bounded(self):
+        self.changelog.clear()
+        self._details()
+        per_tag = {}
+        for prev, tag in self.diffs:
+            per_tag[tag] = per_tag.get(tag, 0) + 1
+        self.assertTrue(all(v <= self.gt.NOTES_PREV_TRIES for v in per_tag.values()),
+                        per_tag)
 
 
 if __name__ == "__main__":

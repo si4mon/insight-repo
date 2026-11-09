@@ -94,6 +94,7 @@ def tag_times(repo: str, tags: list[str], timeout: int = 150) -> dict[str, str]:
 
 _CHANGELOG_RE = re.compile(r"^CHANGELOG(\.(md|rst|txt))?$", re.I)
 NOTES_MAX_CHARS = 4000      # 单个 tag 的发布说明上限，超出截断并标注
+NOTES_PREV_TRIES = 4        # 往前试几个对照（nightly 不改 CHANGELOG，会给空 diff）
 
 
 def _changelog_path(d: str, tag: str) -> str:
@@ -107,17 +108,28 @@ def _changelog_path(d: str, tag: str) -> str:
     return ""
 
 
-def _release_notes(d: str, tag: str, prev: str | None) -> tuple[str, str]:
-    """返回 (发布说明, 来源标记)。三级回退，拿不到返回空。"""
+def _release_notes(d: str, tag: str, prevs: list[str]) -> tuple[str, str]:
+    """返回 (发布说明, 来源标记)。三级回退，拿不到返回空。
+
+    prevs 是按提交时刻从近到远排好的前序 tag。不能用 `git ls-remote --sort=-v:refname`
+    的列表位置当"上一版"：那是按版本号排的，而 tag 的提交时刻并不单调。
+    2026-11-09 一轮实测，qwen-code 的分支式 tag `weaken-tool-error-shots`（8 月）
+    被拿 11 月的 v0.27.0 做对照，diff 方向整个反了，"新增行"其实是旧版本的内容，
+    还被当成那次发布的说明落盘——这比取不到更糟。
+
+    逐个往前试而不是只试一个：nightly tag 不改 CHANGELOG，紧邻的那个对照会给出
+    空 diff，于是正式版的说明退化成 `chore(release): vX` 这种没有信息的提交正文。
+    """
     path = _changelog_path(d, tag)
-    if path and prev:
+    for prev in (prevs[:NOTES_PREV_TRIES] if path else []):
         ok, out = _run(["git", "-C", d, "diff", prev, tag, "--", path], 60)
-        if ok:
-            added = [ln[1:] for ln in out.splitlines()
-                     if ln.startswith("+") and not ln.startswith("+++")]
-            text = "\n".join(added).strip()
-            if text:
-                return text[:NOTES_MAX_CHARS], f"{path} diff {prev}..{tag}"
+        if not ok:
+            continue
+        added = [ln[1:] for ln in out.splitlines()
+                 if ln.startswith("+") and not ln.startswith("+++")]
+        text = "\n".join(added).strip()
+        if text:
+            return text[:NOTES_MAX_CHARS], f"{path} diff {prev}..{tag}"
     ok, body = _run(["git", "-C", d, "log", "-1", "--format=%B", tag], 30)
     if ok and body.strip():
         return body.strip()[:NOTES_MAX_CHARS], f"发布提交正文 {tag}"
@@ -151,15 +163,17 @@ def tag_details(repo: str, tags: list[str], timeout: int = 150) -> dict[str, dic
             if _run(["git", "-C", d, "fetch", "-q", "--depth", "1",
                      "origin", "tag", t], timeout)[0]:
                 fetched.append(t)
-        for i, t in enumerate(fetched):
+        # 先把时刻全部取到，再按时刻排序决定谁是谁的上一版
+        times: dict[str, str] = {}
+        for t in fetched:
             ok, iso = _run(["git", "-C", d, "log", "-1", "--format=%cI", t], 30)
-            if not (ok and iso.strip()):
-                continue
-            # tags 按版本倒序，下一个就是上一版；它也必须在本地才能 diff
-            prev = fetched[i + 1] if i + 1 < len(fetched) else None
-            notes, src = _release_notes(d, t, prev)
-            out[t] = {"time": _to_utc(iso.strip()), "notes": notes,
-                      "notes_source": src}
+            if ok and iso.strip():
+                times[t] = _to_utc(iso.strip())
+        by_time = sorted(times, key=lambda t: times[t], reverse=True)
+        for i, t in enumerate(by_time):
+            prevs = by_time[i + 1:]          # 严格早于 t，从近到远
+            notes, src = _release_notes(d, t, prevs)
+            out[t] = {"time": times[t], "notes": notes, "notes_source": src}
     return out
 
 

@@ -709,6 +709,27 @@ def main() -> int:
         snap_path.write_text(json.dumps(snapshots, ensure_ascii=False, indent=2),
                              encoding="utf-8")
 
+    # --only 是部分重采。此前它会用这几个源的记录覆盖整轮的 collect_report.json，
+    # 把其余 44 个源的覆盖审计记录静默销毁——2026-11-09 一轮实际发生：重采 5 个 git 源后
+    # 报告只剩 5 条，tier1 实体审计、裁决分布、缺口清单全部失真，而 .md 里的数字已经按
+    # 完整报告写好了。部分重采必须与已有报告合并：同 id 用新记录替换，其余保留。
+    if args.only and (out_dir / "collect_report.json").exists():
+        try:
+            prev = json.loads((out_dir / "collect_report.json")
+                              .read_text(encoding="utf-8"))
+        except Exception:
+            prev = {}
+        prev_recs = prev.get("sources") or []
+        if prev_recs:
+            fresh = {r["id"] for r in records}
+            kept = [r for r in prev_recs if r.get("id") not in fresh]
+            print(f"--only 合并：本次重采 {len(records)} 个源，"
+                  f"保留此前 {len(kept)} 个源的记录")
+            records = records + kept
+            diffs = {**{r.get("id"): {"new_count": r.get("new_vs_snapshot") or 0,
+                                      "is_first_run": r.get("is_first_run") or False}
+                        for r in kept if r.get("id")}, **diffs}
+
     report = coverage.build_report(
         records,
         window_start=ws, window_end=we, scan_start=ss,

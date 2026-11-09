@@ -27,6 +27,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 import sys
 from pathlib import Path
 
@@ -39,6 +40,7 @@ import root_tech as rt
 import scoring
 
 HERE = Path(__file__).resolve().parent
+SNAP_DIR_WARN = 12          # 目录下超过这么多文件就提醒点名，别整目录声明
 SH_TZ = timezone(timedelta(hours=8))
 
 
@@ -126,11 +128,24 @@ def _sig_table() -> str:
     return "\n".join(lines)
 
 
+def _snap_name(path: str, taken: set[str]) -> str:
+    """按文件名生成常量名。`SNAP_7` 这种序号名在写 claim 时没法读，
+    而 claim 的 E(SNAP_x, "原文") 是人要逐条对着快照核的地方。"""
+    stem = re.sub(r"[^0-9A-Za-z]+", "_", Path(path).name).strip("_").upper()
+    base = f"SNAP_{stem}" or "SNAP"
+    name, n = base, 2
+    while name in taken:
+        name, n = f"{base}_{n}", n + 1
+    taken.add(name)
+    return name
+
+
 def header(window: dict, snapshots: list[str]) -> str:
-    names = [f"SNAP_{i}" for i in range(1, len(snapshots) + 1)]
+    taken: set[str] = set()
+    names = [_snap_name(p, taken) for p in snapshots]
     decls = "\n".join(f"{n} = {_py(p)}" for n, p in zip(names, snapshots))
-    sha = (f"SHA = {{f: ce.sha256_file(Path(f)) for f in ({', '.join(names)},)}}"
-           if names else "SHA = {}")
+    sha = ("SHA = {f: ce.sha256_file(Path(f)) for f in (\n    "
+           + ",\n    ".join(names) + ",\n)}" if names else "SHA = {}")
     ct = "  ".join(f"{c['id']} {c['name']}" for c in ev_mod.ONTOLOGY["change_types"])
     return f'''"""{window["run_date"]} 窗口的事件构建（scaffold_build.py 生成骨架）。
 
@@ -385,8 +400,16 @@ def main() -> int:
         snaps: list[str] = []
         for d in [x for x in args.snapshots.split(",") if x.strip()]:
             p = Path(d.strip())
-            snaps += sorted(str(f) for f in p.iterdir() if f.is_file()) if p.is_dir() \
-                else [str(p)]
+            if not p.is_dir():
+                snaps.append(str(p))
+                continue
+            found = sorted(str(f) for f in p.iterdir() if f.is_file())
+            if len(found) > SNAP_DIR_WARN:
+                print(f"! {p} 下有 {len(found)} 个文件，全部声明会让 SHA 表无法阅读、"
+                      f"每次构建都要重算哈希；只点名要引用的那几个文件更合适",
+                      file=sys.stderr)
+            snaps += found
+        snaps = list(dict.fromkeys(snaps))
         text = build_scaffold(Path(args.raw_dir), read_picks(Path(args.picks)),
                               snaps, Path(args.state) if args.state else None)
     if args.out:
