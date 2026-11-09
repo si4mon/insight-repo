@@ -55,12 +55,20 @@ def same_path(a: Path, b: Path) -> bool:
         return False
 
 
-def gate_blocker(src: Path) -> str:
+GATE_DEGRADED_MARK = "<!-- gate-degraded -->"   # 与 verify_gates 生成的降级头一致
+
+
+def gate_blocker(src: Path, allow_fail: bool = False) -> str:
     """没过门禁的稿子不许渲染。
 
     否则「手写统计、没跑过门禁」的 Markdown 也能产出一份看起来成稿的 HTML，
     而 HTML 是实际被阅读和转发的那一份——它一旦存在，就没人再去追门禁。
     返回空串表示放行，否则返回给人看的阻断原因。
+
+    allow_fail 是定时跑的兜底通道：门禁重试到上限仍不过时，与其静默不交付，
+    不如把本轮产出交出去——但必须一眼看得出是降级的。所以这条通道不是
+    「忽略失败」，而是「要求稿子自己带上 verify_gates 生成的降级头」：
+    Markdown 与 HTML 两份都会带着失败项清单，谁也不能拿到一份看着干净的降级稿。
     """
     gs = src.parent / ".gate_summary.json"
     hint = (f"  先跑: python3 verify_gates.py --md {src.name} ...\n"
@@ -75,10 +83,20 @@ def gate_blocker(src: Path) -> str:
     if data.get("md") != src.name:
         return (f"门禁摘要对应的是 {data.get('md')!r}，不是 {src.name!r}，拒绝渲染。\n{hint}")
     failed = data.get("failed") or []
-    if failed:
+    if failed and not allow_fail:
+        attempt, cap = data.get("attempt"), data.get("max_attempts")
+        tail = "\n修完重跑门禁。"
+        if attempt and cap and attempt >= cap:
+            tail = (f"\n已是第 {attempt}/{cap} 轮：要么继续修，要么按降级交付——"
+                    f"把 .gate_degraded_header.md 插到正文最前面，再加 --allow-gate-fail。")
         return ("门禁未通过，拒绝渲染。失败项：\n  - "
-                + "\n  - ".join(str(x) for x in failed[:8])
-                + f"\n修完重跑门禁。")
+                + "\n  - ".join(str(x) for x in failed[:8]) + tail)
+    if failed and allow_fail:
+        body = src.read_text(encoding="utf-8", errors="ignore")
+        if GATE_DEGRADED_MARK not in body:
+            return ("降级交付要求稿子自己带上降级头，否则产出的 HTML 看不出是降级的。\n"
+                    f"  把 {src.parent.name}/.gate_degraded_header.md 的内容插到"
+                    f" frontmatter 之后、正文最前面，然后重跑门禁（让 md 与摘要对上）再渲染。")
     # 门禁跑在旧稿上同样不算过：.md 改过就要重跑
     try:
         if src.stat().st_mtime > gs.stat().st_mtime + 1:
@@ -97,6 +115,9 @@ def main() -> int:
                     help="允许源文件不在 reports/ 下（破坏报告库索引一致性，仅用于排查）")
     ap.add_argument("--skip-gate-check", action="store_true",
                     help="跳过门禁摘要校验（只用于排查渲染器自身问题，产物不得当成稿）")
+    ap.add_argument("--allow-gate-fail", action="store_true",
+                    help="门禁重试到上限仍不过时按降级交付：要求稿子已带 verify_gates "
+                         "生成的降级头，产出的 Markdown 与 HTML 都带失败项清单")
     args = ap.parse_args()
 
     eng = engine_dir()
@@ -137,7 +158,7 @@ def main() -> int:
               file=sys.stderr)
         return 2
 
-    gate_err = "" if args.skip_gate_check else gate_blocker(src)
+    gate_err = "" if args.skip_gate_check else gate_blocker(src, args.allow_gate_fail)
     if gate_err:
         print(gate_err, file=sys.stderr)
         return 2

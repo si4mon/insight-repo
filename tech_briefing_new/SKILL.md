@@ -479,9 +479,24 @@ python "$ASSETS/render_report.py" --md "reports/<标题 slug>-<WINDOW_START_DATE
 不查排版。
 
 **门禁摘要**：`verify_gates.py` 跑完会在 `.md` 旁边写 `.gate_summary.json`（通过数、失败项、
-脚本 commit、时间）。`render_report.py` 拒绝渲染没有摘要、摘要有失败项、或 `.md` 在门禁之后
-被改过的稿子——HTML 是实际被阅读转发的那一份，它一旦存在就没人再去追门禁。
+轮次、脚本 commit、时间、`.md` 的 sha256）。`render_report.py` 拒绝渲染没有摘要、摘要有失败项、
+或 `.md` 在门禁之后被改过的稿子——HTML 是实际被阅读转发的那一份，它一旦存在就没人再去追门禁。
 只排查渲染器本身时可加 `--skip-gate-check`，那样的产物不得当成稿。
+**渲染一律走 `render_report.py`，不要直接调 `report_engine/render.mjs`**：闸门在包装器里，
+直接调引擎会绕过它，产出一份看不出有没有过门禁的 HTML（2026-11-09 一轮就这么绕过了）。
+
+**门禁重试上限与降级交付**（定时无人值守时必须有规定动作，否则会卡在「一直修」上）：
+
+- 轮次由 `verify_gates.py` 自己记在 `.gate_attempts.jsonl`（每次运行追加一行），
+  摘要里的 `attempt` 就是第几轮——不靠谁记得跑了几轮。上限 3 轮。
+- 前 2 轮失败：修正后重跑，与此前一致。
+- 第 3 轮仍失败：**按降级交付，不要静默不交付**。门禁会在 `.md` 旁边写
+  `.gate_degraded_header.md`（内容由失败项派生，不要手写）。把它整段插到 frontmatter 之后、
+  正文最前面，重跑一次门禁让 sha256 对上（这次带降级头的运行记为「交付前复核」，不占轮次），
+  然后 `render_report.py --md <稿> --allow-gate-fail` 渲染。
+- `--allow-gate-fail` 不是「忽略失败」：稿子没带降级头它会拒绝。这样 Markdown 与 HTML
+  两份都带着失败项清单，拿不到一份看着干净的降级稿。
+- RUNLOG 必须写明：第几轮、失败项、为什么修不动、哪些内容因此未经验证。
 
 **6b. 人工复核**（机器判不了的部分）：
 

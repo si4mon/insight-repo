@@ -22,6 +22,7 @@ Gate 校验器：把"必须满足的条件"变成机器可判的 pass/fail。
 退出码：0 全部通过；1 有 FAIL；2 参数错误
 """
 import argparse
+import hashlib
 import json
 import os
 import re
@@ -1173,6 +1174,40 @@ def check_event_body_presence(c: Check, md_path: Path | None, events_dir: Path |
           "无事实源的卡片: " + ", ".join(orphan[:6]))
 
 
+
+MAX_GATE_ATTEMPTS = 3      # 门禁重试上限；达到后按降级交付，不静默丢弃本轮产出
+GATE_DEGRADED_MARK = "<!-- gate-degraded -->"   # 降级交付头的哨兵，渲染器与轮次计数都认它
+
+
+def _degraded_header(summary: dict) -> str:
+    """生成降级交付时插在报告最前面的说明块。
+
+    内容由门禁结果派生，不手写——手写的"已知问题"说明会漏掉项、也会随时间失真。
+    降级交付的前提是读者一眼看到它是降级的：静默不交付和静默交付一份
+    看起来干净的稿子，后者更糟。
+    """
+    lines = [
+        GATE_DEGRADED_MARK,
+        "",
+        "> [WARNING]",
+        f"> **本稿未通过门禁，按降级交付。**第 {summary['attempt']} 轮校验仍有 "
+        f"{len(summary['failed_detail'])} 项未通过（上限 {summary['max_attempts']} 轮）。",
+        "> 下列检查项的结论不成立，涉及的内容未经验证，引用前请自行核对：",
+        ">",
+    ]
+    for f in summary["failed_detail"]:
+        detail = re.sub(r"\s+", " ", str(f.get("detail") or "")).strip()
+        lines.append(f"> - **{f['name']}**"
+                     + (f"：{detail[:200]}" if detail else ""))
+    lines += [
+        ">",
+        f"> 校验时间 {summary['checked_at']}，门禁脚本 {summary['script_commit']}，"
+        f"通过 {summary['passed']} 项 / 警告 {summary['warned']} 项。",
+        "",
+    ]
+    return "\n".join(lines)
+
+
 def _script_commit() -> str:
     """记录跑门禁时的脚本版本，便于回溯一份报告是用哪一版校验的。"""
     try:
@@ -1776,16 +1811,52 @@ def main():
     # 门禁摘要写到 .md 旁边：渲染器据此拒绝渲染未过门禁的稿子，
     # 让「没跑门禁的报告」无法产出 final 状态的 HTML。
     if md_path:
+        failed = [{"name": r["name"], "detail": r["detail"]}
+                  for r in c.results if r["status"] == "FAIL"]
+        attempts_path = md_path.parent / ".gate_attempts.jsonl"
+        prev = [ln for ln in attempts_path.read_text(encoding="utf-8").splitlines()
+                if ln.strip()] if attempts_path.exists() else []
+        # 稿子已经带了降级头，说明这次是交付前的复核（为了让 md_sha256 对上），
+        # 不是又一次修复尝试——否则轮次会比降级头里写的数字多 1，两处自相矛盾。
+        redeliver = GATE_DEGRADED_MARK in md_path.read_text(encoding="utf-8",
+                                                            errors="ignore")
+        attempt = len(prev) if (redeliver and prev) else len(prev) + 1
         summary = {
             "passed": sum(1 for r in c.results if r["status"] == "PASS"),
             "warned": sum(1 for r in c.results if r["status"] == "WARN"),
-            "failed": [r["name"] for r in c.results if r["status"] == "FAIL"],
+            "failed": [f["name"] for f in failed],
+            "failed_detail": failed,
+            "attempt": attempt,
+            "max_attempts": MAX_GATE_ATTEMPTS,
             "checked_at": datetime.now(SH_TZ).isoformat(timespec="seconds"),
             "script_commit": _script_commit(),
             "md": md_path.name,
+            # 稿子在门禁之后被改过就不该照这份摘要渲染；渲染器重算比对。
+            "md_sha256": hashlib.sha256(md_path.read_bytes()).hexdigest(),
+            "redeliver_check": redeliver,
         }
         (md_path.parent / ".gate_summary.json").write_text(
             json.dumps(summary, ensure_ascii=False, indent=2), encoding="utf-8")
+        # 轮次是事实而不是回忆：每次运行都追加一行，不依赖谁记得跑了几轮。
+        with attempts_path.open("a", encoding="utf-8") as f:
+            f.write(json.dumps({k: summary[k] for k in
+                                ("attempt", "checked_at", "passed", "warned",
+                                 "failed", "script_commit", "md_sha256")},
+                               ensure_ascii=False) + "\n")
+        if failed:
+            hdr = md_path.parent / ".gate_degraded_header.md"
+            if not redeliver:
+                hdr.write_text(_degraded_header(summary), encoding="utf-8")
+            print(f"\n第 {attempt}/{MAX_GATE_ATTEMPTS} 轮门禁未通过。")
+            if redeliver:
+                print("稿子已带降级头，这次是交付前复核；"
+                      "渲染加 --allow-gate-fail，并在 RUNLOG 写明失败项。")
+            elif attempt < MAX_GATE_ATTEMPTS:
+                print("修正后重跑。")
+            else:
+                print(f"已达重试上限：按降级交付——把 {hdr.name} 的内容插到报告正文最前面，"
+                      f"渲染时加 --allow-gate-fail，并在 RUNLOG 写明失败项。"
+                      f"不要静默不交付。")
 
     if args.json_out:
         Path(args.json_out).write_text(

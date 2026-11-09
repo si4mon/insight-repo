@@ -17,7 +17,7 @@ from pathlib import Path
 
 from taxonomy import TAXONOMY
 import testlib
-from verify_gates import (check_ch1_mainlines, Check, check_ct_labels,
+from verify_gates import (_degraded_header, check_ch1_mainlines, Check, check_ct_labels,
                           check_event_annotations, check_event_body_presence,
                           check_event_paths,
                           check_markdown, check_md_event_index, check_md_theses,
@@ -902,6 +902,57 @@ class EventBodyPresenceTest(unittest.TestCase):
         c = Check()
         check_event_body_presence(c, self.md, self.ev)
         self.assertEqual(_status(c, "能切出第 1–7 章正文"), "FAIL")
+
+
+class DegradedHeaderTest(unittest.TestCase):
+    """门禁失败时生成的降级交付头。
+
+    定时跑的兜底：重试到上限仍不过，与其静默不交付，不如把本轮产出交出去——
+    但读者必须一眼看出是降级的。所以这段说明由门禁结果派生而不是手写：
+    手写的「已知问题」会漏项，也会随稿子变动而失真。
+    """
+
+    def _summary(self, **kw):
+        base = {"attempt": 3, "max_attempts": 3, "passed": 89, "warned": 1,
+                "checked_at": "2026-11-09T10:45:58+08:00", "script_commit": "abc1234",
+                "failed_detail": [{"name": "第 1 章主线各引用 ≥2 个 EV",
+                                   "detail": "「主线一」只引用 1 个 EV"}]}
+        base.update(kw)
+        return base
+
+    def test_carries_the_sentinel_for_the_renderer(self):
+        """包装器靠这个哨兵确认稿子真带了降级头，才放行 --allow-gate-fail。"""
+        self.assertIn("<!-- gate-degraded -->", _degraded_header(self._summary()))
+
+    def test_uses_the_renderer_callout_syntax(self):
+        """渲染器认的是 > [WARNING]，不是 GitHub 的 > [!WARNING]；
+        写错了只会渲染成一段普通引用，警告就不显眼了。"""
+        out = _degraded_header(self._summary())
+        self.assertIn("> [WARNING]", out)
+        self.assertNotIn("[!WARNING]", out)
+
+    def test_lists_every_failure_with_detail(self):
+        out = _degraded_header(self._summary(failed_detail=[
+            {"name": "A", "detail": "细节甲"}, {"name": "B", "detail": "细节乙"}]))
+        for x in ("A", "细节甲", "B", "细节乙"):
+            self.assertIn(x, out)
+
+    def test_states_attempt_and_counts(self):
+        out = _degraded_header(self._summary())
+        self.assertIn("第 3 轮", out)
+        self.assertIn("上限 3 轮", out)
+        self.assertIn("abc1234", out)
+        self.assertIn("89", out)
+
+    def test_failure_without_detail_still_listed(self):
+        out = _degraded_header(self._summary(failed_detail=[{"name": "某项", "detail": ""}]))
+        self.assertIn("某项", out)
+
+    def test_detail_newlines_collapsed(self):
+        out = _degraded_header(self._summary(failed_detail=[
+            {"name": "X", "detail": "第一行\n第二行"}]))
+        self.assertNotIn("\n第二行", out)      # 多行 detail 会破坏引用块
+        self.assertIn("第一行 第二行", out)
 
 
 if __name__ == "__main__":

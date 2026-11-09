@@ -90,7 +90,7 @@ P3：issue / discussion / bug 默认仅作为旁证。
 A / A+ 事件的每条未丢弃 claim 必须绑定到快照里的原文片段：claims[].evidence = {snapshot, snapshot_sha256, quote}。snapshot_sha256 对不上说明快照在事后被换过；quote 在快照里匹配不到说明那句话不是从原文来的。只要求"快照文件存在"是不够的——抓了原文却凭印象写机制时，快照仍然在，对不上的是正文。比对由 claim_evidence.py 完成，门禁逐条校验。
 
 【15.2｜统计与主线】
-事件总数、A+/A 计数、Dashboard 各项、8.2 索引表、第 2 章 Top N 必须由同一份 events_run_<date>/ 派生（report_stats.py），不得手写；门禁用同一脚本复算比对。第 1 章每条主线至少引用 2 个 8.2 中的 EV 编号，且引用的 EV 评级不低于 B——一个事件撑不起"主线"，那是单个事件，写在卡片里就够了。门禁通过后把摘要（通过数、失败项、脚本 commit）写在 .md 旁边，渲染器拒绝渲染没有门禁摘要、摘要有失败项、或 .md 在门禁之后被改过的稿子。
+事件总数、A+/A 计数、Dashboard 各项、8.2 索引表、第 2 章 Top N 必须由同一份 events_run_<date>/ 派生（report_stats.py），不得手写；门禁用同一脚本复算比对。第 1 章每条主线至少引用 2 个 8.2 中的 EV 编号，且引用的 EV 评级不低于 B——一个事件撑不起"主线"，那是单个事件，写在卡片里就够了。门禁通过后把摘要（通过数、失败项、轮次、脚本 commit、.md 的 sha256）写在 .md 旁边，渲染器拒绝渲染没有门禁摘要、摘要有失败项、或 .md 在门禁之后被改过的稿子；闸门在 render_report.py 里，直接调 report_engine/render.mjs 会绕过它。门禁重试上限 3 轮（轮次由 verify_gates 记在 .gate_attempts.jsonl，不靠记忆），第 3 轮仍失败按降级交付：插入门禁生成的降级头、重跑门禁对齐 sha256、再 --allow-gate-fail 渲染，Markdown 与 HTML 两份都带失败项清单——静默不交付和静默交付一份看着干净的稿子，后者更糟。
 
 【15.3｜连续演进的事情用增量，不要拆成多个事件】
 同一桩事情在后续窗口又走了一步时，挂成已有事件的增量，不要新建一个事件，也不要绕成「章 5 的 Active Event + 另建一个带 contradicts 的事件」——后者语义是错的。写法：事件 JSON 里给 `increment_of = {"event_key": <已在库的事件>, "delta": "这次又发生了什么"}`，入库时自动挂上；事后补记用 `thesis_registry.py append-increment`。增量自带 source 与 first_publish，所以后续动作即使来自另一个 URL（配对 SDK 的另一个仓库）也挂在同一个事件下。registry 的 `report` 会把本轮的增量单独列出，第 5 章的 Active Event 与第 7 章的收敛叙述据此书写。判断"是不是已有事件"不靠记忆：P1 阶段 `thesis_registry.py seen` 已经给出答案。

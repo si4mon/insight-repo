@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""渲染引擎单测：五级标题、首字下沉只用于拉丁字母、本地图片内嵌、缺图失败、输出与 .md 同名。
+"""渲染引擎单测：五级标题、首字下沉只用于拉丁字母、本地图片内嵌、缺图失败、输出与 .md 同名，
+以及包装器的门禁闸门（无摘要 / 有失败项 / 门禁后改稿 一律拒绝；--allow-gate-fail 走降级交付）。
 
 需要 node；没有 node 时整组跳过。
   python -m unittest test_render_engine -v
@@ -152,6 +153,46 @@ class RenderEngineTest(unittest.TestCase):
         r = self._wrap(src)
         self.assertEqual(r.returncode, 2)
         self.assertIn("不是", r.stderr)
+
+    def test_degraded_delivery_requires_the_degraded_header(self):
+        """--allow-gate-fail 不是「忽略失败」：稿子必须自己带降级头，
+        否则产出的 HTML 看不出是降级的，比不交付更糟。"""
+        src = self._draft()
+        self._gate_ok(src, failed=["统计可由事件目录复算"])
+        r = self._wrap(src, "--allow-gate-fail")
+        self.assertEqual(r.returncode, 2)
+        self.assertIn("降级头", r.stderr)
+        self.assertFalse(src.with_suffix(".html").exists())
+
+    def test_degraded_delivery_renders_with_the_header(self):
+        src = self._draft()
+        src.write_text(src.read_text(encoding="utf-8").replace(
+            "## 章", "<!-- gate-degraded -->\n\n> [WARNING]\n> 本稿未通过门禁。\n\n## 章"),
+            encoding="utf-8")
+        self._gate_ok(src, failed=["统计可由事件目录复算"])
+        r = self._wrap(src, "--allow-gate-fail")
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        html = src.with_suffix(".html").read_text(encoding="utf-8")
+        self.assertIn("本稿未通过门禁", html)
+
+    def test_attempt_cap_is_named_in_the_refusal(self):
+        """到达上限时的提示要指向降级交付，而不是只说「修完重跑」——
+        无人值守时没人能把「一直修」执行下去。"""
+        src = self._draft()
+        (src.parent / ".gate_summary.json").write_text(
+            json.dumps({"md": src.name, "passed": 1, "failed": ["某项"],
+                        "attempt": 3, "max_attempts": 3}), encoding="utf-8")
+        r = self._wrap(src)
+        self.assertEqual(r.returncode, 2)
+        self.assertIn("第 3/3 轮", r.stderr)
+        self.assertIn("--allow-gate-fail", r.stderr)
+
+    def test_passing_gate_still_rejects_allow_flag_noise(self):
+        """门禁通过时加不加 --allow-gate-fail 都照常渲染，不要求降级头。"""
+        src = self._draft()
+        self._gate_ok(src)
+        r = self._wrap(src, "--allow-gate-fail")
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
 
     def test_skip_gate_check_is_an_explicit_escape_hatch(self):
         src = self._draft()
