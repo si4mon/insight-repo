@@ -555,6 +555,37 @@ def check_scoring(c: Check, events_dir: Path | None, pairwise_path: Path | None)
                 f"未声明（按 technical 处理，不受硬上限约束）: "
                 f"{', '.join(unclassed[:6])}")
 
+    # 业务优先级（business_tier）只能在分差 ≤1 的成对裁定里当判据，不能把事件跨评级或
+    # 跨分档搬动——tier 是呈现次序的问题，不是价值的问题。高价值的 infra / 安全事件
+    # 必须照样优先呈现，所以这里反向校验每条裁定：赢家的总分不得低于对手 2 分及以上，
+    # 评级也不得更低。
+    # 注意这段必须在「没有近分对就提前返回」之前跑：要防的恰好是分差 ≥2 却被裁定的情形，
+    # 那种对根本不在 pair_candidates 里。
+    if pairwise_path and pairwise_path.exists():
+        try:
+            pdata = json.loads(pairwise_path.read_text(encoding="utf-8"))
+        except Exception:
+            pdata = {}
+        rank = {"A+": 3, "A": 2, "B": 1, "C": 0}
+        bad = []
+        for d in pdata.get("decisions") or []:
+            pr = d.get("pair") or []
+            if len(pr) != 2 or d.get("winner") not in pr:
+                continue
+            w = d["winner"]
+            lo = pr[0] if pr[1] == w else pr[1]
+            ew, el = events.get(w), events.get(lo)
+            if not (ew and el and ew.get("scoring") and el.get("scoring")):
+                continue
+            tw, tl = scoring.total(ew["scoring"]), scoring.total(el["scoring"])
+            rw, rl = rank.get(ew.get("rating"), -1), rank.get(el.get("rating"), -1)
+            if rw < rl:
+                bad.append(f"{w}({ew.get('rating')}) 排在 {lo}({el.get('rating')}) 前")
+            elif tl - tw >= 2:
+                bad.append(f"{w}({tw} 分) 排在 {lo}({tl} 分) 前，分差 {tl - tw} ≥ 2")
+        c.add("trace", "成对裁定未把低价值事件排到高价值之前", not bad,
+              "；".join(bad[:4]) + ("（tier 只能裁同评级且分差 ≤1 的对）" if bad else ""))
+
     # 成对比较：分差 ≤1 的相邻对必须有裁定，否则 Top N 的次序仍是绝对分直排
     evs = [{**ev, "event_id": eid} for eid, ev in sorted(events.items())
            if ev.get("scoring")]

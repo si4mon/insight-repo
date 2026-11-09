@@ -18,6 +18,7 @@ from pathlib import Path
 from taxonomy import TAXONOMY
 import testlib
 from verify_gates import (_degraded_header, check_ch1_mainlines, Check, check_ct_labels,
+                          check_scoring,
                           check_event_annotations, check_event_body_presence,
                           check_event_paths,
                           check_markdown, check_md_event_index, check_md_theses,
@@ -953,6 +954,83 @@ class DegradedHeaderTest(unittest.TestCase):
             {"name": "X", "detail": "第一行\n第二行"}]))
         self.assertNotIn("\n第二行", out)      # 多行 detail 会破坏引用块
         self.assertIn("第一行 第二行", out)
+
+
+class PairwiseValueGuardTest(unittest.TestCase):
+    """成对裁定不能把低价值事件排到高价值之前。
+
+    业务优先级（business_tier）只影响 Top N 的呈现次序，不影响评级与召回。但"次序"
+    与"价值"在实现上只隔一步：裁定的 why 是自由文本，没有约束时一句「tier-1 优先」
+    就能把 A 级安全事件排到 B 级模型事件之后，优先级于是悄悄变成了降权。
+    这条检查的对象是裁定本身，防的是规则被 why 字段绕过。
+    """
+
+    def setUp(self):
+        self._tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self._tmp.cleanup)
+        self.ev = Path(self._tmp.name) / "events_run_2026-11-08"
+        self.ev.mkdir()
+        self.pw = self.ev / "pairwise.json"
+
+    def _write(self, eid, rating, scores):
+        dims = ("source_authority", "magnitude", "mechanism_novelty",
+                "quantitative_evidence", "strategic_adjacency")
+        ev = {"rating": rating, "primary_path": "D3.1", "event_title": eid,
+              "first_publish_shanghai": "2026-11-08T10:00:00+08:00",
+              "scoring": {d: {"score": v, "evidence": "x"} for d, v in zip(dims, scores)}}
+        (self.ev / f"{eid}.json").write_text(json.dumps(ev, ensure_ascii=False),
+                                             encoding="utf-8")
+
+    def _decide(self, pair, winner, why="tier-1 优先"):
+        self.pw.write_text(json.dumps(
+            {"decisions": [{"pair": list(pair), "winner": winner, "why": why}]},
+            ensure_ascii=False), encoding="utf-8")
+
+    def _run(self):
+        c = Check()
+        check_scoring(c, self.ev, self.pw)
+        return _status(c, "成对裁定未把低价值事件排到高价值之前")
+
+    def test_tier_may_break_a_one_point_tie(self):
+        """分差 1 分之内算噪声，用业务优先级裁决是允许的。"""
+        self._write("EV-01", "B", (1, 1, 1, 1, 1))   # 5
+        self._write("EV-02", "B", (1, 2, 1, 1, 1))   # 6
+        self._decide(("EV-01", "EV-02"), "EV-01")
+        self.assertEqual(self._run(), "PASS")
+
+    def test_equal_scores_may_be_broken_by_tier(self):
+        self._write("EV-01", "B", (1, 1, 1, 1, 1))
+        self._write("EV-02", "B", (1, 1, 1, 1, 1))
+        self._decide(("EV-01", "EV-02"), "EV-01")
+        self.assertEqual(self._run(), "PASS")
+
+    def test_cannot_win_across_rating_bands(self):
+        """A 级安全事件被 B 级模型事件压到后面 —— 正是要防的那一步。"""
+        self._write("EV-01", "B", (2, 2, 1, 1, 1))   # 7
+        self._write("EV-02", "A", (2, 2, 1, 1, 2))   # 8
+        self._decide(("EV-01", "EV-02"), "EV-01")
+        self.assertEqual(self._run(), "FAIL")
+
+    def test_cannot_win_with_two_point_deficit(self):
+        self._write("EV-01", "B", (1, 1, 1, 1, 0))   # 4
+        self._write("EV-02", "B", (2, 2, 1, 1, 0))   # 6
+        self._decide(("EV-01", "EV-02"), "EV-01")
+        self.assertEqual(self._run(), "FAIL")
+
+    def test_higher_value_winner_always_fine(self):
+        self._write("EV-01", "A", (2, 2, 1, 1, 2))
+        self._write("EV-02", "C", (0, 1, 0, 0, 0))
+        self._decide(("EV-01", "EV-02"), "EV-01")
+        self.assertEqual(self._run(), "PASS")
+
+    def test_malformed_decision_is_skipped_not_crashed(self):
+        self._write("EV-01", "B", (1, 1, 1, 1, 1))
+        self._write("EV-02", "B", (1, 1, 1, 1, 1))
+        self.pw.write_text(json.dumps({"decisions": [
+            {"pair": ["EV-01"], "winner": "EV-01", "why": "x"},
+            {"pair": ["EV-01", "EV-99"], "winner": "EV-01", "why": "x"}]}),
+            encoding="utf-8")
+        self.assertEqual(self._run(), "PASS")
 
 
 if __name__ == "__main__":

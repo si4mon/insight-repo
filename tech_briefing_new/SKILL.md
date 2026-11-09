@@ -285,6 +285,20 @@ EOF
 `{"decisions":[{"pair":["EV-03","EV-05"],"winner":"EV-05","why":"…"}]}`。
 门禁要求每一对都有 `winner` 与 `why`。
 
+**业务优先级（business_tier）只在这一步起作用。** `data/root_tech.json` 每条根技术带
+`business_tier`：tier-1 模型 / harness+RSI+工具治理 / 个性化记忆，tier-2 agent infra，
+tier-3 AgentOS 与 agent 安全。取事件命中的根技术里最靠前的 tier。规则：
+
+- Top N 的主键是**评级**，次键是**总分**。评级高者永远在前。
+- 同评级且总分相差 ≤1 时（也就是落进 `pair_candidates` 的那些对），tier 靠前者优先呈现，
+  理由写进 `why`——这比"机制优先于规模"这类临场说法可复现。
+- 证据强度与机制可核对性**仍优先于 tier**：一手原文可逐行核对的事件，即使 tier 靠后也该在前。
+- tier **不参与五维评分、不改评级、不影响召回面**，也不得把事件跨评级或跨分档（分差 ≥2）搬动。
+  tier 解决的是呈现次序，不是价值高低。
+- **A / A+ 无论属哪个 tier 都进今日必看。** 高价值的 infra 与安全类事件必须照样优先呈现。
+
+门禁反向校验每条裁定：赢家的评级不得更低、总分不得低对手 2 分及以上，否则打红。
+
 **claim 级证据**。A/A+ 的每条 claim 绑到快照里的原文片段：
 ```bash
 python "$ASSETS/claim_evidence.py" --hash raw_<date>/<源文件>        # 取 sha256

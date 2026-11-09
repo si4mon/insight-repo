@@ -119,7 +119,7 @@
     ]
   },
   "arxiv_score": {
-    "_doc": "arXiv 打分词表。high 2 分 / med 1 分，只决定是否进必审清单，不决定评级。两层的主题配比要对齐业务优先级：tier-1 模型 / harness+RSI+工具治理 / 个性化记忆，tier-2 agent infra，tier-3 AgentOS 与 agent 安全。2026-11-09 复盘发现倒挂：high 层 39 个安全词、1 个记忆词，于是个性化记忆六条根技术五轮只命中 1 次。本次把通用安全泛词（verif/monitor/audit 等命中面过宽的）降到 med，保留具体攻击与失配机制词，并补齐记忆、harness、infra 三线。改动要记在 references/must-review.md。 注意子串连锁：eval 是 evaluation 的子串、defense/defence 与 red team/red-team 同义并列，整组升降会造成数分级跳——2026-11-09 回测时把 benchmark/evaluation/eval 一起降级，三个已入选事件（含两个 A 级）被挤出清单，已恢复。",
+    "_doc": "arXiv 打分词表。high 2 分 / med 1 分，只决定是否进必审清单，不决定评级，也不决定呈现次序。召回端的原则是**只做加法**：词表管的是「能不能被看见」，看不见就无从呈现。2026-11-09 第一版曾把 19 个通用安全泛词从 high 降到 med 以平衡主题配比，回测显示安全类条目的入选数四轮合计从 34 掉到 24（-29%，其中 11-03 一轮从 11 腰斩到 5）——高价值的安全与 infra 事件必须照样能被召回并优先呈现，所以全部恢复。业务优先级只影响 Top N 的呈现次序（见 task_def），不影响召回面、不影响评级。本轮补齐的是此前缺失的两条线：个性化记忆（原 high 层只有 memory 一个词，导致 U1–U6 六条根技术五轮只命中 1 次）与 agent infra（原只有 4 词）。注意子串连锁：eval 是 evaluation 的子串，defense/defence、red team/red-team、poison/data poison、supply chain/supply-chain、tool use/tool-use、computer use/computer-use、kv cache/kv-cache、weight space/weight-space 同义并列，整组升降会造成数分级跳——第一版把 benchmark/evaluation/eval 一起降级，三个已入选事件（含两个 A 级）被挤出清单。",
     "high": [
       "eval",
       "evaluation",
@@ -232,7 +232,26 @@
       "asynchronous rl",
       "inference system",
       "edge-cloud",
-      "端云"
+      "端云",
+      "verif",
+      "fact-check",
+      "audit",
+      "monitor",
+      "safeguard",
+      "guardrail",
+      "defense",
+      "defence",
+      "robustness",
+      "degrad",
+      "erosion",
+      "redundan",
+      "acceptance gate",
+      "mitigation",
+      "refusal",
+      "attack surface",
+      "containment",
+      "oversight",
+      "poison"
     ],
     "med": [
       "reinforcement learning",
@@ -275,26 +294,7 @@
       "open weights",
       "open-weight",
       "reproducib",
-      "replicat",
-      "verif",
-      "fact-check",
-      "audit",
-      "monitor",
-      "safeguard",
-      "guardrail",
-      "defense",
-      "defence",
-      "robustness",
-      "degrad",
-      "erosion",
-      "redundan",
-      "acceptance gate",
-      "mitigation",
-      "refusal",
-      "attack surface",
-      "containment",
-      "oversight",
-      "poison"
+      "replicat"
     ]
   }
 }
