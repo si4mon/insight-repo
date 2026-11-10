@@ -221,3 +221,78 @@ tier-2 仍是半饥饿状态——词表已补 22 个 infra 词，但词表只�
 
 **定下来的原则：词表只做加法。** 词表管的是「能不能被看见」，看不见就无从呈现；
 主题配比不平衡要靠补齐缺失的线来纠，不靠压低已有的线。high 131 词 / med 41 词。
+
+---
+
+## 2026-11-10 补主动性线（proactivity）
+
+### 为什么改
+
+补之前的词表（high 131 / med 41）里主动性相关词是 **0**。拿六篇核心文献的真实摘要
+（export.arxiv.org 返回，不是复述）回测，旧词表给的分是：
+
+| 文献 | 旧分 | 新分 | 新增命中 |
+|---|---|---|---|
+| 立场论文 2605.06717（autonomy vs proactivity） | 7 | 15 | proactiv, interrupt, insight policy, unsolicited |
+| ProAgentBench 2602.04482（28,528 真实事件） | 14 | 20 | proactiv, anticipat, intervention, assistance |
+| PARE Bench 2604.00842（Proposal Rate） | 8 | 15 | proactiv, intervention timing, anticipat |
+| Proactive Agent 2410.12361 | **6** | 11 | proactiv, anticipat, assistance |
+| UniClawBench 2607.08768 | 16 | 18 | proactiv |
+| KnowU-Bench 2604.08455 | 21 | 28 | proactiv, when to intervene, intervention, silent |
+
+各轮实际截断线是 7 / 7 / 8 / 18。2410.12361 原本 6 分，**连最低的 7 分线都到不了**，
+整条看不见；其余几篇全靠 agent、eval、benchmark 这些通用词擦边过线，等于主动性这个
+维度对打分器完全不存在。
+
+遗留的限制要说清楚：立场论文补词后 15 分，仍过不了重日的 18 分线。它是观点类文献、
+没有定量结果，光靠词表救不回来——这条要靠 `evidence_form: expert` 那条通路，不是打分。
+
+### 改了什么
+
+纯加法，不动任何已有词的层级。high 131 → 155，med 41 → 52。
+
+- **high（24 个）**：proactiv、interrupt、missed opportunity、alert fatigue、notif、
+  attention budget、when to assist、when to intervene、intervention timing、opportune、
+  opportunity detection、silence、insight policy、situational、situation-aware、
+  proposal rate、unsolicited、ambient agent、personal agent、personal assistant、
+  information overload、triage、anticipat、timeliness。
+  定层依据：在 4600 条 arXiv 语料上实测命中率 0.00%–0.67%，与现有 high 层的中位数
+  0.24% 同量级（现有 high 里本就有 10 个词命中率为 0.00%）。`proactiv` 只命中 9 条。
+- **med（11 个）**：intervention（2.70%，多为因果推断/医学干预）、salien（多为
+  saliency map）、assistance、assistive、silent（会命中 silent failure）、
+  follow-up、digest、ambient、dismiss、inbox、reminder。
+- **ai_relevance**：en +9、zh +11（个人助理、主动提醒、主动服务、主动性、信息过滤、
+  事务管理、待办、通知、个人智能体、记忆 等）。这张表的口径是「宁宽勿窄」，中文
+  personal agent 类产品报道（蚂蚁灵光一类）此前在这里完全没有钩子。
+
+子串连锁按 11-09 那次的教训逐条去重：只留 `interrupt`（覆盖 interruption /
+interruption cost）、只留 `notif`（覆盖 notification(s)）、`silence` 不配 `silent`。
+`test_review_terms_proactivity.py` 里有一条测试专门锁这个。
+
+### 踩的坑：固定名额让「只做加法」在选择层失效
+
+词表只做加法，但清单是 `ARXIV_TOP_K` 固定名额，所以新词必然挤掉同等数量的原有条目。
+五轮回测：
+
+| 轮次 | 池 | 截断线 | K=40 丢失 | K=44 丢失 | K=48 丢失 |
+|---|---|---|---|---|---|
+| 11-02 | 1874 | 7 | 2 | 0 | 0 |
+| 11-03 | 2186 | 7 | 2 | 0 | 0 |
+| test | 4398 | 18 | 6 | 4 | 0 |
+| 11-06 | 2856 | 8 | 1 | 0 | 0 |
+| 合计 | | | **11** | 4 | **0** |
+
+被挤掉的 11 条里有 **两条是已发布事件**：11-02 简报的 Sparse Text Diffusion、
+11-05 简报的 ScamWorld。这是真回归，不是无害置换。所以 `ARXIV_TOP_K` 由 40 提到 **48**
+（让五轮归零的最小值），代价是必审清单涨 5~8%（472 → 504 条）。
+
+顺带的收益：上一节记的「安全类 -9% 是名额被挤占的结果（清单仍是 top-40）」也随之缓解，
+同词表下安全类条目 24 → 27。
+
+**补充到原则里**：召回端只做加法，而且**加词必须连带复核 K**——词表是加法，名额不是。
+
+### 新词在历史池里的实际收获
+
+四轮池里命中主动性词的条目只有 5 条，K=40 和 K=48 都是 5 条。这不是改动无效，而是
+这个方向在日更量里本就稀薄（4600 条里 `proactiv` 仅 9 条）。改动的价值在六篇已知文献
+的分数上（见上表），以及以后此类条目不再因为 0 命中而沉底，不在历史池的条目数上。

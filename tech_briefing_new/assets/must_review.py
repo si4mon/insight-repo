@@ -28,7 +28,11 @@ import build_pool
 
 # 这些阈值决定人工复核的工作量，改动要同步 references/must-review.md
 HN_MIN_POINTS = 50      # HN 条目进清单的最低分数
-ARXIV_TOP_K = 40        # arXiv 按打分取前 K 篇
+ARXIV_TOP_K = 48        # arXiv 按打分取前 K 篇
+# 2026-11-10 由 40 提到 48：K 是固定名额，所以"词表只做加法"在选择层并不自动成立——
+# 补 34 个主动性词后，五轮回测显示新词挤掉同等数量的原有条目，其中两条是已发布事件
+# （11-02 的 Sparse Text Diffusion、11-05 的 ScamWorld）。K=48 是让五轮回归全部归零的
+# 最小值（44 时 test 轮仍丢 4 条），代价是必审清单涨 5~8%。以后再加词必须连带复核 K。
 
 TIERS = ("T1_official", "T2_hf_papers", "T3_hn", "T4_techmeme",
          "T5_cn_media", "T6_arxiv")

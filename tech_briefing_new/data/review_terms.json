@@ -73,7 +73,16 @@
       "on-device",
       "edge inference",
       "neocloud",
-      "supercomputer"
+      "supercomputer",
+      "proactiv",
+      "notification",
+      "personal agent",
+      "personal assistant",
+      "assistant",
+      "triage",
+      "reminder",
+      "inbox",
+      "ambient"
     ],
     "zh": [
       "人工智能",
@@ -115,11 +124,22 @@
       "决策模型",
       "世界模型",
       "形式化",
-      "注入攻击"
+      "注入攻击",
+      "个人助理",
+      "助理",
+      "主动提醒",
+      "主动服务",
+      "主动性",
+      "信息过滤",
+      "事务管理",
+      "待办",
+      "通知",
+      "个人智能体",
+      "记忆"
     ]
   },
   "arxiv_score": {
-    "_doc": "arXiv 打分词表。high 2 分 / med 1 分，只决定是否进必审清单，不决定评级，也不决定呈现次序。召回端的原则是**只做加法**：词表管的是「能不能被看见」，看不见就无从呈现。2026-11-09 第一版曾把 19 个通用安全泛词从 high 降到 med 以平衡主题配比，回测显示安全类条目的入选数四轮合计从 34 掉到 24（-29%，其中 11-03 一轮从 11 腰斩到 5）——高价值的安全与 infra 事件必须照样能被召回并优先呈现，所以全部恢复。业务优先级只影响 Top N 的呈现次序（见 task_def），不影响召回面、不影响评级。本轮补齐的是此前缺失的两条线：个性化记忆（原 high 层只有 memory 一个词，导致 U1–U6 六条根技术五轮只命中 1 次）与 agent infra（原只有 4 词）。注意子串连锁：eval 是 evaluation 的子串，defense/defence、red team/red-team、poison/data poison、supply chain/supply-chain、tool use/tool-use、computer use/computer-use、kv cache/kv-cache、weight space/weight-space 同义并列，整组升降会造成数分级跳——第一版把 benchmark/evaluation/eval 一起降级，三个已入选事件（含两个 A 级）被挤出清单。",
+    "_doc": "arXiv 打分词表。high 2 分 / med 1 分，只决定是否进必审清单，不决定评级，也不决定呈现次序。召回端的原则是**只做加法**：词表管的是「能不能被看见」，看不见就无从呈现。2026-11-09 第一版曾把 19 个通用安全泛词从 high 降到 med 以平衡主题配比，回测显示安全类条目的入选数四轮合计从 34 掉到 24（-29%，其中 11-03 一轮从 11 腰斩到 5）——高价值的安全与 infra 事件必须照样能被召回并优先呈现，所以全部恢复。业务优先级只影响 Top N 的呈现次序（见 task_def），不影响召回面、不影响评级。本轮补齐的是此前缺失的两条线：个性化记忆（原 high 层只有 memory 一个词，导致 U1–U6 六条根技术五轮只命中 1 次）与 agent infra（原只有 4 词）。注意子串连锁：eval 是 evaluation 的子串，defense/defence、red team/red-team、poison/data poison、supply chain/supply-chain、tool use/tool-use、computer use/computer-use、kv cache/kv-cache、weight space/weight-space 同义并列，整组升降会造成数分级跳——第一版把 benchmark/evaluation/eval 一起降级，三个已入选事件（含两个 A 级）被挤出清单。 2026-11-10 补主动性线：此前 131 个 high + 41 个 med 里主动性相关词为 0，实测三篇核心文献只靠 agent/eval 擦边（最重要的那篇立场论文只得 3 分，各轮截断线 7–18 分），等于对这个方向完全失明。新增词按命中面定层：高特异度的进 high（proactiv 在 4600 条语料里仅 9 条，与现有 high 层 0.24% 的中位数同量级），intervention（2.70%，多为因果/医学干预）与 salien（多为 saliency map）等语义漂移词进 med。",
     "high": [
       "eval",
       "evaluation",
@@ -251,7 +271,31 @@
       "attack surface",
       "containment",
       "oversight",
-      "poison"
+      "poison",
+      "proactiv",
+      "interrupt",
+      "missed opportunity",
+      "alert fatigue",
+      "notif",
+      "attention budget",
+      "when to assist",
+      "when to intervene",
+      "intervention timing",
+      "opportune",
+      "opportunity detection",
+      "silence",
+      "insight policy",
+      "situational",
+      "situation-aware",
+      "proposal rate",
+      "unsolicited",
+      "ambient agent",
+      "personal agent",
+      "personal assistant",
+      "information overload",
+      "triage",
+      "anticipat",
+      "timeliness"
     ],
     "med": [
       "reinforcement learning",
@@ -294,7 +338,18 @@
       "open weights",
       "open-weight",
       "reproducib",
-      "replicat"
+      "replicat",
+      "intervention",
+      "assistance",
+      "assistive",
+      "silent",
+      "follow-up",
+      "digest",
+      "salien",
+      "ambient",
+      "dismiss",
+      "inbox",
+      "reminder"
     ]
   }
 }
