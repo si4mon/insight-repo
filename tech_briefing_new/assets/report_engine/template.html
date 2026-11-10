@@ -1022,6 +1022,55 @@ h4 {
   margin: var(--s-8) 0 var(--s-3);
 }
 
+/* 事件卡。读者最容易迷失的不是标题不够大，而是"这段还属于上一个事件吗"——
+   所以边界靠一个可扫视的方框成立，而不是靠 h4 与正文的字号差。 */
+.event-card {
+  position: relative;
+  margin: var(--s-8) 0;
+  padding: var(--s-6) var(--s-6) var(--s-4) calc(var(--s-6) + 3px);
+  border: 1px solid var(--rule);
+  border-radius: 10px;
+  background: var(--bg-elevated);
+}
+.event-card::before {
+  content: "";
+  position: absolute;
+  left: 0; top: 0; bottom: 0;
+  width: 3px;
+  border-radius: 10px 0 0 10px;
+  background: var(--accent);
+}
+.event-card > h4:first-child { margin-top: 0; }
+/* 卡内表格与引用块本来是按正文底色设计的，落在抬高底色上要换一档 */
+.event-card table th { background: var(--bg); }
+.event-card pre, .event-card code { background: var(--bg); }
+
+/* 双层标题：第一层是实体/关键词，第二层是这条事件的判断 */
+.event-card__kw {
+  display: block;
+  font-family: var(--font-ui);
+  font-size: 0.8125rem;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  line-height: 1.3;
+  color: var(--accent);
+  margin-bottom: var(--s-1);
+}
+.event-card__sum {
+  display: block;
+  font-family: var(--font-body);
+  font-size: 1.25rem;
+  font-weight: 600;
+  line-height: 1.3;
+  letter-spacing: -0.006em;
+  color: var(--text);
+}
+
+@media (max-width: 640px) {
+  .event-card { padding: var(--s-4) var(--s-4) var(--s-3) calc(var(--s-4) + 3px); }
+  .event-card__sum { font-size: 1.125rem; }
+}
+
 h5, h6 {
   font-family: var(--font-ui);
   font-size: 0.75rem;

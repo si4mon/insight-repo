@@ -90,7 +90,7 @@ P3：issue / discussion / bug 默认仅作为旁证。
 A / A+ 事件的每条未丢弃 claim 必须绑定到快照里的原文片段：claims[].evidence = {snapshot, snapshot_sha256, quote}。snapshot_sha256 对不上说明快照在事后被换过；quote 在快照里匹配不到说明那句话不是从原文来的。只要求"快照文件存在"是不够的——抓了原文却凭印象写机制时，快照仍然在，对不上的是正文。比对由 claim_evidence.py 完成，门禁逐条校验。
 
 【15.2｜统计与主线】
-事件总数、A+/A 计数、Dashboard 各项、8.2 索引表、第 2 章 Top N 必须由同一份 events_run_<date>/ 派生（report_stats.py），不得手写；门禁用同一脚本复算比对。第 1 章每条主线至少引用 2 个 8.2 中的 EV 编号，且引用的 EV 评级不低于 B——一个事件撑不起"主线"，那是单个事件，写在卡片里就够了。门禁通过后把摘要（通过数、失败项、轮次、脚本 commit、.md 的 sha256）写在 .md 旁边，渲染器拒绝渲染没有门禁摘要、摘要有失败项、或 .md 在门禁之后被改过的稿子；闸门在 render_report.py 里，直接调 report_engine/render.mjs 会绕过它。门禁重试上限 3 轮（轮次由 verify_gates 记在 .gate_attempts.jsonl，不靠记忆），第 3 轮仍失败按降级交付：插入门禁生成的降级头、重跑门禁对齐 sha256、再 --allow-gate-fail 渲染，Markdown 与 HTML 两份都带失败项清单——静默不交付和静默交付一份看着干净的稿子，后者更糟。
+事件总数、A+/A 计数、Dashboard 各项、8.2 索引表、第 2 章 Top N 必须由同一份 events_run_<date>/ 派生（report_stats.py），不得手写；门禁用同一脚本复算比对。第 1 章每条主线至少引用 2 个 8.2 中的 EV 编号，且引用的 EV 评级不低于 B——一个事件撑不起"主线"，那是单个事件，写在卡片里就够了。门禁通过后把摘要（通过数、失败项、轮次、脚本 commit、.md 的 sha256）写在 .md 旁边，渲染器拒绝渲染没有门禁摘要、摘要有失败项、或 .md 在门禁之后被改过的稿子；闸门在 render_report.py 里，直接调 report_engine/render.mjs 会绕过它。门禁重试上限 3 轮（轮次由 verify_gates 记在 .gate_attempts.jsonl，不靠记忆），第 3 轮仍失败按降级交付：把门禁生成的降级节**追加到正文最末尾**（第 8 章之后，标题「门禁未通过项与影响」，逐项给出失败内容与它对本稿的影响）、重跑门禁对齐 sha256、再 --allow-gate-fail 渲染，Markdown 与 HTML 两份都带失败项清单。不放在开头：降级项绝大多数是采集与覆盖缺口，读者当场无法处置，只影响他怎么引用正文，属于读完之后要知道的事；但它必须出现——静默不交付和静默交付一份看着干净的稿子，后者更糟。
 
 【15.3｜连续演进的事情用增量，不要拆成多个事件】
 同一桩事情在后续窗口又走了一步时，挂成已有事件的增量，不要新建一个事件，也不要绕成「章 5 的 Active Event + 另建一个带 contradicts 的事件」——后者语义是错的。写法：事件 JSON 里给 `increment_of = {"event_key": <已在库的事件>, "delta": "这次又发生了什么"}`，入库时自动挂上；事后补记用 `thesis_registry.py append-increment`。增量自带 source 与 first_publish，所以后续动作即使来自另一个 URL（配对 SDK 的另一个仓库）也挂在同一个事件下。registry 的 `report` 会把本轮的增量单独列出，第 5 章的 Active Event 与第 7 章的收敛叙述据此书写。判断"是不是已有事件"不靠记忆：P1 阶段 `thesis_registry.py seen` 已经给出答案。
@@ -110,6 +110,10 @@ A / A+ 事件的每条未丢弃 claim 必须绑定到快照里的原文片段：
 
 【16.1｜候选池丢弃日志与漏检回溯】
 候选池中被丢弃的 Tier-1 来源条目及共振命中条目，逐条记录：条目、来源、召回通道、首发时刻、是否位于 TARGET_WINDOW、处置、理由。丢弃理由为封闭集合，只能取：未验证、重复、低影响、首发早于 WINDOW_START、首发晚于 WINDOW_END、Active Event 非新事件、错误年份、媒体转载误判、已并入其他事件、技术命题未发生变化。不得无理由丢弃。
+
+【16.2｜tier-1 命中项不得以「未验证」结案】
+必审条目的标题命中 data/review_terms.json 的 tier1_guard 词表（对应 business_tier=1 的三条业务主线：模型核心、harness engineering/RSI 含工具治理、个性化记忆，外加主动介入决策 P5）时，处置不得是 discarded + 未验证。可以不写成事件，但不能无声消失：降到第 5 章留一个线索位，或者给出真正说明情况的理由（首发早于 WINDOW_START、重复、低影响、技术命题未发生变化等）。门禁项「tier-1 命中项未被『未验证』静默丢弃」。
+起因：2026-11-09 那轮 76 条必审里约 50 条共用「未验证」结案，Flex-RSI、BOXBOX（均为 RSI/harness 自改进）与 Knowing When to Intervene（主动介入，正是 P5 的切换信号原文）就此消失；而同一轮里 ERNIE Evolve（同属 RSI）被评为 A 并立了 TH-0001。同一命题的三份证据，一份立命题、两份没看就丢，不自洽。「未验证」是合法理由，但当它覆盖大半个清单时，台账就从判断记录退化成没时间的记录，不可审计。该词表刻意不收 memory / reasoning / tool use 这类裸词——实测会把拦截面从 24% 推到 37%，门禁过宽就会被绕开。
 漏检回溯 P6：每次运行对照前一次扫描窗口的注意力聚合源头条、专家讨论、当前网络热点、上一份简报，识别可能漏检项。漏检根因为封闭集合，只能取：源面未覆盖、召回通道未命中、代理拦截、解析失败、窗口覆盖不完整、抽象提升失败、价值误判、日期边界、时区换算错误、官方原文未回溯、搜索结果年份污染、动态页面未读取。并据此更新 assets/sources.py、known_vocabulary、thesis registry（retire / merge / revise 决策）；变化类型体系属于 thesis_ontology.json，由人工维护。8.3 必须使用表格呈现。
 
 【17｜HTML】

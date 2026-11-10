@@ -783,7 +783,7 @@ def _md_layout(text: str) -> dict:
             eid = _md_card_event(title, body)
             if not eid:
                 continue
-            card = {"eid": eid, "decl": _md_card_decl(body), "body": body}
+            card = {"eid": eid, "title": title, "decl": _md_card_decl(body), "body": body}
             if cur:
                 columns[cur].append(card)
             elif chapter == 2:
@@ -1066,6 +1066,7 @@ def check_must_review(c: Check, mr_path: Path | None, trace_path: Path | None,
                 ev_urls[u] = f.stem
 
     missing, illegal, bad_ev, bad_reason, misfiled = [], [], [], [], []
+    tier1_dropped = []
     for it in items:
         uid = it.get("uid") or ""
         e = disp.get(uid)
@@ -1082,8 +1083,11 @@ def check_must_review(c: Check, mr_path: Path | None, trace_path: Path | None,
                     (ev_ids and e["ev"] not in ev_ids):
                 bad_ev.append(f"{label}→{e.get('ev')!r}")
         elif d == "discarded":
-            if legal_reason and (e.get("reason") or "").strip() not in legal_reason:
+            reason = (e.get("reason") or "").strip()
+            if legal_reason and reason not in legal_reason:
                 bad_reason.append(f"{label}={e.get('reason')!r}")
+            if reason == "未验证" and _tier1_guard_hit(it.get("title") or ""):
+                tier1_dropped.append(f"{label}（命中 {_tier1_guard_hit(it.get('title') or '')}）")
         elif d == "chapter5" and not (e.get("reason") or "").strip():
             bad_reason.append(f"{label}=第5章未写归属")
 
@@ -1097,6 +1101,9 @@ def check_must_review(c: Check, mr_path: Path | None, trace_path: Path | None,
           f"{len(missing)} 条未填: " + "; ".join(missing[:4]) if missing else
           f"{len(items)} 条全部留痕")
     c.add("collection", "处置取值合法", not illegal, "; ".join(illegal[:4]))
+    c.add("collection", "tier-1 命中项未被「未验证」静默丢弃", not tier1_dropped,
+          f"{len(tier1_dropped)} 条命中 tier-1 业务主线却以「未验证」结案，"
+          f"至少要降到第 5 章留线索位: " + "; ".join(tier1_dropped[:4]))
     c.add("collection", "入选/并入指向存在的 EV", not bad_ev, "; ".join(bad_ev[:4]))
     c.add("collection", "丢弃理由取自封闭集合", not bad_reason,
           "; ".join(bad_reason[:4]))
@@ -1205,38 +1212,138 @@ def check_event_body_presence(c: Check, md_path: Path | None, events_dir: Path |
           "无事实源的卡片: " + ", ".join(orphan[:6]))
 
 
+_TIER1_GUARD_CACHE: list[str] | None = None
+
+
+def _tier1_guard_words() -> list[str]:
+    """data/review_terms.json 的 tier1_guard 词表，小写。读不到就返回空表（不拦）。"""
+    global _TIER1_GUARD_CACHE
+    if _TIER1_GUARD_CACHE is None:
+        try:
+            import json as _json
+            d = _json.loads((Path(__file__).resolve().parents[1] / "data" /
+                             "review_terms.json").read_text(encoding="utf-8"))
+            g = d.get("tier1_guard") or {}
+            _TIER1_GUARD_CACHE = [w.lower() for w in
+                                  (list(g.get("en") or []) + list(g.get("zh") or []))]
+        except Exception:
+            _TIER1_GUARD_CACHE = []
+    return _TIER1_GUARD_CACHE
+
+
+def _tier1_guard_hit(title: str) -> str:
+    """标题命中 tier-1 业务主线时返回命中的那个词，否则返回空串。
+
+    守卫的由来：2026-11-09 那轮 76 条必审里约 50 条共用「未验证」结案，
+    其中 Flex-RSI、BOXBOX（都是 RSI/harness 自改进）和 Knowing When to Intervene
+    （主动介入，正是根技术 P5 的切换信号原文）就这样消失了——而同一轮里
+    ERNIE Evolve（同属 RSI）被评为 A 并立了 TH-0001。同一命题的三份证据，
+    一份立命题、两份没看就丢，这是不自洽的。
+
+    「未验证」本是封闭集里的合法理由，但当它覆盖大半个清单时，台账就从
+    判断记录退化成没时间的记录，不可审计。所以只对 tier-1 命中项加约束：
+    可以不写成事件，但不能无声消失——降到第 5 章留个线索位，或者给出
+    真正说明情况的理由（首发早于 WINDOW_START、重复、低影响等）。
+    """
+    t = (title or "").lower()
+    for w in _tier1_guard_words():
+        if w in t:
+            return w
+    return ""
+
+
+CARD_TITLE_BAR = "｜"      # 全角竖线 U+FF5C；渲染器按它把卡片标题拆成关键词层与总结层
+
+
+def check_card_titles(c: Check, md_path: Path | None):
+    """事件卡标题必须写成 `关键词｜一句总结`（references/event-writing.md）。
+
+    竖线不是装饰：渲染器按它把标题分两层排版，前半用强调色小字、后半用标题字号。
+    少了竖线，整张卡退化成一行与正文字号接近的粗体，读者扫视时认不出卡与卡的边界——
+    这正是 11-09 那稿被指出"不同技术事件之间隔离不清晰，容易迷失"的直接原因。
+    """
+    if not (md_path and md_path.exists()):
+        return
+    lay = _md_layout(md_path.read_text(encoding="utf-8", errors="ignore"))
+    cards = [card for cards in lay["columns"].values() for card in cards] + lay["focus"]
+    if not cards:
+        return
+    bad = []
+    for card in cards:
+        t = (card.get("title") or "").strip()
+        i = t.find(CARD_TITLE_BAR)
+        if i <= 0 or i >= len(t) - 1:
+            bad.append(f"{card['eid']}（{t[:40]}）")
+    c.add("md", "事件卡标题为「关键词｜总结」双层式", not bad,
+          "缺全角竖线或竖线一侧为空: " + "; ".join(bad[:6]))
+
+
 
 MAX_GATE_ATTEMPTS = 3      # 门禁重试上限；达到后按降级交付，不静默丢弃本轮产出
-GATE_DEGRADED_MARK = "<!-- gate-degraded -->"   # 降级交付头的哨兵，渲染器与轮次计数都认它
+GATE_DEGRADED_MARK = "<!-- gate-degraded -->"   # 降级交付节的哨兵，渲染器与轮次计数都认它
 
 
-def _degraded_header(summary: dict) -> str:
-    """生成降级交付时插在报告最前面的说明块。
+# 门禁分类 → 这类检查没通过时，对读者意味着什么。
+# 读者要的不是"哪个函数报了错"，而是"这份稿子的哪一部分不能信"。
+_DEGRADED_IMPACT = {
+    "collection": "本轮召回不完整：可能有窗口内事件根本没被采到，"
+                  "事件总数是下限而非全量。缺失面见第 8 章。",
+    "coverage":   "信息源覆盖有缺口：某些源的窗口未闭合，"
+                  "「本轮无更新」对这些源不成立，只能读作「未检索到」。",
+    "md":         "正文结构不合规：章节、栏目或卡片的呈现约定被破坏，"
+                  "按结构定位内容（如按栏目找事件）可能落空。",
+    "taxonomy":   "技术分类归属不可靠：事件挂到的栏目或根技术可能不成立，"
+                  "不要据此做跨轮的方向统计。",
+    "trace":      "留痕或排序结论不可靠：候选处置、成对裁定或 Top N 次序"
+                  "未通过校验，排名不代表价值次序。",
+    "registry":   "跨轮账本未对齐：技术命题的新建/增量状态可能有误，"
+                  "不要据此判断某条命题是否首次出现。",
+    "html":       "渲染产物未达标：自包含、视觉或文件命名有问题，"
+                  "影响归档与离线阅读，不影响正文结论。",
+}
+_DEGRADED_IMPACT_DEFAULT = "该项结论不成立，涉及内容未经验证。"
+
+
+def _degraded_section(summary: dict) -> str:
+    """生成降级交付时附在报告末尾的说明节。
 
     内容由门禁结果派生，不手写——手写的"已知问题"说明会漏掉项、也会随时间失真。
-    降级交付的前提是读者一眼看到它是降级的：静默不交付和静默交付一份
-    看起来干净的稿子，后者更糟。
+
+    位置在末尾而不是开头：放在最前面占住了读者第一眼，但其中绝大多数失败项
+    （采集缺口、覆盖不完整）读者当场无法处置，只能影响他怎么引用正文，
+    所以它属于"读完之后要知道的事"。前提仍然是必须出现——静默不交付，
+    和静默交付一份看起来干净的稿子，后者更糟。
     """
+    n = len(summary["failed_detail"])
     lines = [
         GATE_DEGRADED_MARK,
         "",
+        "## 门禁未通过项与影响",
+        "",
         "> [WARNING]",
-        f"> **本稿未通过门禁，按降级交付。**第 {summary['attempt']} 轮校验仍有 "
-        f"{len(summary['failed_detail'])} 项未通过（上限 {summary['max_attempts']} 轮）。",
-        "> 下列检查项的结论不成立，涉及的内容未经验证，引用前请自行核对：",
-        ">",
+        f"> **本稿按降级交付。**第 {summary['attempt']} 轮校验仍有 {n} 项未通过"
+        f"（上限 {summary['max_attempts']} 轮），已达重试上限。"
+        "下列检查项的结论不成立，引用相关内容前请自行核对。",
+        "",
+        "| 未通过的检查 | 失败内容 | 对本稿的影响 |",
+        "|---|---|---|",
     ]
     for f in summary["failed_detail"]:
-        detail = re.sub(r"\s+", " ", str(f.get("detail") or "")).strip()
-        lines.append(f"> - **{f['name']}**"
-                     + (f"：{detail[:200]}" if detail else ""))
+        detail = re.sub(r"\s+", " ", str(f.get("detail") or "")).strip() or "—"
+        impact = _DEGRADED_IMPACT.get(f.get("gate") or "", _DEGRADED_IMPACT_DEFAULT)
+        lines.append(f"| {f['name']} | {detail[:180]} | {impact} |")
     lines += [
-        ">",
-        f"> 校验时间 {summary['checked_at']}，门禁脚本 {summary['script_commit']}，"
+        "",
+        f"校验时间 {summary['checked_at']}，门禁脚本 {summary['script_commit']}，"
         f"通过 {summary['passed']} 项 / 警告 {summary['warned']} 项。",
         "",
     ]
     return "\n".join(lines)
+
+
+def _degraded_header(summary: dict) -> str:
+    """旧名保留：降级块已改为附在末尾，内容相同。"""
+    return _degraded_section(summary)
 
 
 def _script_commit() -> str:
@@ -1820,6 +1927,7 @@ def main():
             check_ch1_mainlines(c, md_path, events_dir)
             check_ct_labels(c, md_path)
             check_event_body_presence(c, md_path, events_dir)
+            check_card_titles(c, md_path)
             html_sibling = md_path.with_suffix(".html")
             if html_sibling.exists():
                 check_html_lightweight(c, html_sibling, report)
@@ -1847,8 +1955,8 @@ def main():
         attempts_path = md_path.parent / ".gate_attempts.jsonl"
         prev = [ln for ln in attempts_path.read_text(encoding="utf-8").splitlines()
                 if ln.strip()] if attempts_path.exists() else []
-        # 稿子已经带了降级头，说明这次是交付前的复核（为了让 md_sha256 对上），
-        # 不是又一次修复尝试——否则轮次会比降级头里写的数字多 1，两处自相矛盾。
+        # 稿子已经带了降级节，说明这次是交付前的复核（为了让 md_sha256 对上），
+        # 不是又一次修复尝试——否则轮次会比降级节里写的数字多 1，两处自相矛盾。
         redeliver = GATE_DEGRADED_MARK in md_path.read_text(encoding="utf-8",
                                                             errors="ignore")
         attempt = len(prev) if (redeliver and prev) else len(prev) + 1
@@ -1875,19 +1983,19 @@ def main():
                                  "failed", "script_commit", "md_sha256")},
                                ensure_ascii=False) + "\n")
         if failed:
-            hdr = md_path.parent / ".gate_degraded_header.md"
+            hdr = md_path.parent / ".gate_degraded_section.md"
             if not redeliver:
-                hdr.write_text(_degraded_header(summary), encoding="utf-8")
+                hdr.write_text(_degraded_section(summary), encoding="utf-8")
             print(f"\n第 {attempt}/{MAX_GATE_ATTEMPTS} 轮门禁未通过。")
             if redeliver:
-                print("稿子已带降级头，这次是交付前复核；"
+                print("稿子已带降级节，这次是交付前复核；"
                       "渲染加 --allow-gate-fail，并在 RUNLOG 写明失败项。")
             elif attempt < MAX_GATE_ATTEMPTS:
                 print("修正后重跑。")
             else:
-                print(f"已达重试上限：按降级交付——把 {hdr.name} 的内容插到报告正文最前面，"
-                      f"渲染时加 --allow-gate-fail，并在 RUNLOG 写明失败项。"
-                      f"不要静默不交付。")
+                print(f"已达重试上限：按降级交付——把 {hdr.name} 的内容追加到报告正文最末尾"
+                      f"（第 8 章之后，作为最后一节），渲染时加 --allow-gate-fail，"
+                      f"并在 RUNLOG 写明失败项。不要静默不交付，也不要放到正文开头。")
 
     if args.json_out:
         Path(args.json_out).write_text(

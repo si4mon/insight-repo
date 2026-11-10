@@ -17,6 +17,7 @@ from pathlib import Path
 
 from taxonomy import TAXONOMY
 import testlib
+import verify_gates
 from verify_gates import (_degraded_header, check_ch1_mainlines, Check, check_ct_labels,
                           check_scoring,
                           check_event_annotations, check_event_body_presence,
@@ -906,7 +907,7 @@ class EventBodyPresenceTest(unittest.TestCase):
 
 
 class DegradedHeaderTest(unittest.TestCase):
-    """门禁失败时生成的降级交付头。
+    """门禁失败时生成的降级交付节（2026-11-10 起附在正文末尾，不再插在开头）。
 
     定时跑的兜底：重试到上限仍不过，与其静默不交付，不如把本轮产出交出去——
     但读者必须一眼看出是降级的。所以这段说明由门禁结果派生而不是手写：
@@ -922,7 +923,7 @@ class DegradedHeaderTest(unittest.TestCase):
         return base
 
     def test_carries_the_sentinel_for_the_renderer(self):
-        """包装器靠这个哨兵确认稿子真带了降级头，才放行 --allow-gate-fail。"""
+        """包装器靠这个哨兵确认稿子真带了降级节，才放行 --allow-gate-fail。"""
         self.assertIn("<!-- gate-degraded -->", _degraded_header(self._summary()))
 
     def test_uses_the_renderer_callout_syntax(self):
@@ -1035,3 +1036,130 @@ class PairwiseValueGuardTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)
+
+
+class DegradedSectionPlacementTest(unittest.TestCase):
+    """降级说明改为末尾节（2026-11-10）。
+
+    反馈是「放在最上面没有什么价值，除非有办法解决」——降级项绝大多数是采集与
+    覆盖缺口，读者当场无法处置，只影响他怎么引用正文。所以位置挪到末尾，
+    同时每项必须说清对本稿的影响，否则读者拿到的只是一串检查项名字。
+    """
+
+    def _summary(self, failed):
+        return {"attempt": 3, "max_attempts": 3, "failed_detail": failed,
+                "passed": 88, "warned": 0, "checked_at": "2026-11-10T03:11:00+08:00",
+                "script_commit": "abc1234"}
+
+    def test_section_has_a_heading_so_it_reads_as_the_last_section(self):
+        out = verify_gates._degraded_section(self._summary(
+            [{"gate": "collection", "name": "critical 源全部可用", "detail": "hn_newest"}]))
+        self.assertIn("## 门禁未通过项与影响", out)
+        self.assertTrue(out.startswith(verify_gates.GATE_DEGRADED_MARK),
+                        "哨兵必须在节首，渲染包装器靠它放行 --allow-gate-fail")
+
+    def test_every_row_states_an_impact(self):
+        """只列检查项名字等于没说——每行必须给出对本稿的影响。"""
+        failed = [{"gate": g, "name": f"检查{g}", "detail": "d"}
+                  for g in ("collection", "coverage", "md", "taxonomy",
+                            "trace", "registry", "html")]
+        out = verify_gates._degraded_section(self._summary(failed))
+        for g in ("collection", "coverage", "md", "taxonomy", "trace", "registry", "html"):
+            self.assertIn(verify_gates._DEGRADED_IMPACT[g], out, f"{g} 缺影响说明")
+
+    def test_unknown_gate_falls_back_rather_than_crashing(self):
+        out = verify_gates._degraded_section(self._summary(
+            [{"gate": "something_new", "name": "N", "detail": "d"}]))
+        self.assertIn(verify_gates._DEGRADED_IMPACT_DEFAULT, out)
+
+    def test_impact_differs_by_gate(self):
+        """采集缺口和渲染未达标对读者的意义完全不同，不能共用一句话。"""
+        self.assertNotEqual(verify_gates._DEGRADED_IMPACT["collection"],
+                            verify_gates._DEGRADED_IMPACT["html"])
+
+
+class Tier1GuardTest(unittest.TestCase):
+    """tier-1 命中项不得以「未验证」结案（task_def 16.2）。
+
+    2026-11-09 那轮的真实漏判：76 条必审里约 50 条共用「未验证」，
+    Flex-RSI、BOXBOX、Knowing When to Intervene 三条就此消失，
+    而同一轮 ERNIE Evolve（同属 RSI）被评 A 并立了 TH-0001。
+    """
+
+    REAL_MISSES = [
+        "Flex-RSI: Benchmarking Recursive Self-Improvement of Frontier Agents",
+        "BOXBOX: Recursive Harness Self-Improvement for Long-Running Performance Optimization",
+        "Knowing When to Intervene: Causal Evaluation of AI Agents",
+    ]
+
+    def test_catches_the_three_known_misses(self):
+        for t in self.REAL_MISSES:
+            self.assertTrue(verify_gates._tier1_guard_hit(t), f"漏掉 {t[:40]}")
+
+    def test_lets_unrelated_items_through(self):
+        """守卫过宽就会被绕开，所以与 tier-1 无关的条目必须放行。"""
+        for t in ["MorphSched: Workload-Aware Adaptive Scheduler Generation for Linux",
+                  "Fold Epic Paper Airplanes",
+                  "AdaAlloc: Adaptive Visual Token Allocation for Long-Video Question Answering"]:
+            self.assertEqual(verify_gates._tier1_guard_hit(t), "", f"误拦 {t[:40]}")
+
+    def test_bare_broad_words_are_not_in_the_list(self):
+        """memory / reasoning / tool use 这类裸词会把拦截面推到 37%，不能收。"""
+        words = verify_gates._tier1_guard_words()
+        for w in ("memory", "reasoning", "tool use", "agent", "benchmark", "eval"):
+            self.assertNotIn(w, words, f"{w!r} 过宽，会让门禁被绕开")
+
+    def test_gate_fails_when_a_tier1_hit_is_discarded_as_unverified(self):
+        with tempfile.TemporaryDirectory() as d:
+            root = Path(d)
+            mr = {"items": [{"uid": "u1", "title": self.REAL_MISSES[0],
+                             "url": "https://arxiv.org/abs/2611.08946"}]}
+            (root / "must_review.json").write_text(json.dumps(mr, ensure_ascii=False),
+                                                   encoding="utf-8")
+            trace = {"dispositions": {"u1": {"disposition": "discarded",
+                                             "reason": "未验证"}}}
+            (root / "must_review_trace.json").write_text(
+                json.dumps(trace, ensure_ascii=False), encoding="utf-8")
+            c = Check()
+            verify_gates.check_must_review(c, root / "must_review.json",
+                                           root / "must_review_trace.json", None)
+            named = [r for r in c.results
+                     if r["name"] == "tier-1 命中项未被「未验证」静默丢弃"]
+            self.assertTrue(named, "门禁项没跑起来")
+            self.assertEqual(named[0]["status"], "FAIL")
+
+    def test_gate_passes_when_demoted_to_chapter5(self):
+        """降到第 5 章留线索位就是合规出口。"""
+        with tempfile.TemporaryDirectory() as d:
+            root = Path(d)
+            mr = {"items": [{"uid": "u1", "title": self.REAL_MISSES[2], "url": "https://x/1"}]}
+            (root / "must_review.json").write_text(json.dumps(mr, ensure_ascii=False),
+                                                   encoding="utf-8")
+            trace = {"dispositions": {"u1": {"disposition": "chapter5",
+                                             "reason": "主动介入，对应根技术 P5，留线索位"}}}
+            (root / "must_review_trace.json").write_text(
+                json.dumps(trace, ensure_ascii=False), encoding="utf-8")
+            c = Check()
+            verify_gates.check_must_review(c, root / "must_review.json",
+                                           root / "must_review_trace.json", None)
+            named = [r for r in c.results
+                     if r["name"] == "tier-1 命中项未被「未验证」静默丢弃"]
+            self.assertEqual(named[0]["status"], "PASS")
+
+    def test_other_discard_reasons_are_still_allowed(self):
+        """给出真正说明情况的理由（如首发早于窗口）仍可丢弃。"""
+        with tempfile.TemporaryDirectory() as d:
+            root = Path(d)
+            mr = {"items": [{"uid": "u1", "title": self.REAL_MISSES[1], "url": "https://x/1"}]}
+            (root / "must_review.json").write_text(json.dumps(mr, ensure_ascii=False),
+                                                   encoding="utf-8")
+            trace = {"dispositions": {"u1": {"disposition": "discarded",
+                                             "reason": "首发早于 WINDOW_START"}}}
+            (root / "must_review_trace.json").write_text(
+                json.dumps(trace, ensure_ascii=False), encoding="utf-8")
+            c = Check()
+            verify_gates.check_must_review(c, root / "must_review.json",
+                                           root / "must_review_trace.json", None)
+            named = [r for r in c.results
+                     if r["name"] == "tier-1 命中项未被「未验证」静默丢弃"]
+            self.assertEqual(named[0]["status"], "PASS")

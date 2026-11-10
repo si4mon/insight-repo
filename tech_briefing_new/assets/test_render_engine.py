@@ -155,13 +155,13 @@ class RenderEngineTest(unittest.TestCase):
         self.assertIn("不是", r.stderr)
 
     def test_degraded_delivery_requires_the_degraded_header(self):
-        """--allow-gate-fail 不是「忽略失败」：稿子必须自己带降级头，
+        """--allow-gate-fail 不是「忽略失败」：稿子必须自己带降级节，
         否则产出的 HTML 看不出是降级的，比不交付更糟。"""
         src = self._draft()
         self._gate_ok(src, failed=["统计可由事件目录复算"])
         r = self._wrap(src, "--allow-gate-fail")
         self.assertEqual(r.returncode, 2)
-        self.assertIn("降级头", r.stderr)
+        self.assertIn("降级节", r.stderr)
         self.assertFalse(src.with_suffix(".html").exists())
 
     def test_degraded_delivery_renders_with_the_header(self):
@@ -188,7 +188,7 @@ class RenderEngineTest(unittest.TestCase):
         self.assertIn("--allow-gate-fail", r.stderr)
 
     def test_passing_gate_still_rejects_allow_flag_noise(self):
-        """门禁通过时加不加 --allow-gate-fail 都照常渲染，不要求降级头。"""
+        """门禁通过时加不加 --allow-gate-fail 都照常渲染，不要求降级节。"""
         src = self._draft()
         self._gate_ok(src)
         r = self._wrap(src, "--allow-gate-fail")
@@ -202,3 +202,116 @@ class RenderEngineTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)
+
+
+@unittest.skipIf(NODE is None, "node 不可用")
+class EventCardTest(unittest.TestCase):
+    """事件卡的视觉隔离与双层标题。
+
+    2026-11-10 补入。11-09 那稿的反馈是「不同技术事件之间隔离不清晰，容易迷失，
+    不知道已经到下一个技术事件了」——h4 与正文字号差不足以构成边界，所以每张卡
+    包进 article.event-card，靠方框和左侧强调条成立。
+    """
+
+    def _render(self, md: str) -> str:
+        with tempfile.TemporaryDirectory() as d:
+            src = Path(d) / "t.md"
+            out = Path(d) / "t.html"
+            src.write_text("---\ntitle: T\ndate: 2026-11-10\nstatus: draft\n"
+                           "summary: s\n---\n\n" + md, encoding="utf-8")
+            r = subprocess.run([NODE, str(RENDER_JS), str(src), str(out), "--no-open"],
+                               capture_output=True, text=True)
+            self.assertEqual(r.returncode, 0, r.stderr)
+            return out.read_text(encoding="utf-8")
+
+    def test_each_card_is_wrapped_and_closed(self):
+        html = self._render(
+            "## 2 今日必看\n\n"
+            "#### A 模型｜第一条\n\n**A · EV-01**\n\n正文一。\n\n"
+            "##### 机制与架构\n\n小节仍属第一张卡。\n\n"
+            "#### B 模型｜第二条\n\n**A · EV-02**\n\n正文二。\n")
+        self.assertEqual(html.count('<article class="event-card">'), 2)
+        # 第一张卡必须在第二张卡开始前闭合，否则两条事件会套在一起
+        first = html.index('<article class="event-card">')
+        second = html.index('<article class="event-card">', first + 1)
+        self.assertIn("</article>", html[first:second])
+
+    def test_higher_heading_closes_the_card(self):
+        """下一个 ### / ## 必须结束上一张卡，否则卡会吃掉整节。"""
+        html = self._render(
+            "## 3 模型\n\n### 3.3 多模态\n\n"
+            "#### A｜一条\n\n**B · EV-01**\n\n正文。\n\n"
+            "### 3.4 其他\n\n普通段落，不该在卡里。\n")
+        card = html.index('<article class="event-card">')
+        close = html.index("</article>", card)
+        self.assertNotIn("普通段落", html[card:close])
+
+    def test_two_layer_title_split(self):
+        html = self._render("#### ERNIE Evolve｜双循环接成生产闭环\n\n**A · EV-01**\n\n正文。\n")
+        self.assertIn('<span class="event-card__kw">ERNIE Evolve</span>', html)
+        self.assertIn('双循环接成生产闭环</span>', html)
+        self.assertIn('event-card__sum', html)
+
+    def test_title_without_bar_still_renders(self):
+        """老稿子没有竖线，必须退化成单层而不是报错或吞掉标题。"""
+        html = self._render("#### 没有竖线的标题\n\n**B · EV-01**\n\n正文。\n")
+        self.assertIn("没有竖线的标题", html)
+        self.assertIn('<article class="event-card">', html)
+
+    def test_section_nesting_stays_valid(self):
+        """article 嵌在 section 内，关卡必须早于关 section。"""
+        html = self._render(
+            "## 2 今日必看\n\n#### A｜一条\n\n**A · EV-01**\n\n正文。\n\n"
+            "## 3 模型技术热点\n\n另一节。\n")
+        import html.parser as hp
+
+        class P(hp.HTMLParser):
+            def __init__(self):
+                super().__init__()
+                self.stack, self.bad = [], []
+
+            def handle_starttag(self, tag, attrs):
+                if tag in ("section", "article"):
+                    self.stack.append(tag)
+
+            def handle_endtag(self, tag):
+                if tag in ("section", "article"):
+                    if not self.stack or self.stack[-1] != tag:
+                        self.bad.append(tag)
+                    else:
+                        self.stack.pop()
+
+        p = P()
+        p.feed(html)
+        self.assertEqual(p.bad, [], "section/article 交叉嵌套")
+        self.assertEqual(p.stack, [], "有未闭合的 section/article")
+
+
+@unittest.skipIf(NODE is None, "node 不可用")
+class HtmlCommentTest(unittest.TestCase):
+    """独占一行的 HTML 注释必须渲染成真注释，不能漏成可见文本。
+
+    2026-11-10 发现：渲染器只认 @report-comment，其余 HTML 注释掉进段落分支被转义，
+    于是门禁的降级哨兵 `<!-- gate-degraded -->` 直接印在了页面上（11-09 那稿可见）。
+    哨兵要留在 HTML 里供机器识别，但不该让读者看到。
+    """
+
+    def _render(self, md: str) -> str:
+        with tempfile.TemporaryDirectory() as d:
+            src, out = Path(d) / "t.md", Path(d) / "t.html"
+            src.write_text("---\ntitle: T\ndate: 2026-11-10\nstatus: draft\n"
+                           "summary: s\n---\n\n" + md, encoding="utf-8")
+            r = subprocess.run([NODE, str(RENDER_JS), str(src), str(out), "--no-open"],
+                               capture_output=True, text=True)
+            self.assertEqual(r.returncode, 0, r.stderr)
+            return out.read_text(encoding="utf-8")
+
+    def test_sentinel_is_a_real_comment_not_visible_text(self):
+        html = self._render("<!-- gate-degraded -->\n\n## 门禁未通过项与影响\n\n正文。\n")
+        self.assertNotIn("&lt;!--", html, "注释被转义成了可见文本")
+        self.assertIn("<!-- gate-degraded -->", html, "哨兵必须留在 HTML 里供机器识别")
+
+    def test_report_comment_markers_still_work(self):
+        """通用注释处理不能吃掉 @report-comment 这条既有通路。"""
+        html = self._render("正文一段。\n")
+        self.assertIn("article", html)

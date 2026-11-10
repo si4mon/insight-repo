@@ -351,5 +351,40 @@
       "inbox",
       "reminder"
     ]
+  },
+  "tier1_guard": {
+    "_doc": "命中这里的必审条目不允许以「未验证」结案（task_def 16.2）。词表对应 business_tier=1 的三条业务主线：模型核心、harness engineering/RSI（含工具治理）、个性化记忆，外加主动介入决策（根技术 P5）。校准：拿 2026-11-09 那轮 8.3 里 41 条真实丢弃条目回测，命中 10 条（24%），三条已知漏判（Flex-RSI、BOXBOX、Knowing When to Intervene）全部抓到。刻意不收 memory / reasoning / tool use 这类裸词——命中率会升到 37%，门禁过宽就会被绕开，起不到守卫作用。",
+    "en": [
+      "self-improv",
+      "self-evolv",
+      "recursive self",
+      "harness",
+      "rsi",
+      "when to intervene",
+      "when to assist",
+      "proactiv",
+      "knowledge editing",
+      "model editing",
+      "machine unlearning",
+      "long-term memory",
+      "agent memory",
+      "memory consolidat",
+      "personaliz",
+      "user model",
+      "preference learning"
+    ],
+    "zh": [
+      "自进化",
+      "自我改进",
+      "自改进",
+      "递归自我",
+      "个性化记忆",
+      "长期记忆",
+      "主动介入",
+      "主动提醒",
+      "偏好学习",
+      "知识编辑",
+      "工具治理"
+    ]
   }
 }

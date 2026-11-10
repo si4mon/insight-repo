@@ -249,6 +249,18 @@ function renderHeading(level, text, blockId = '') {
   const anchor = `<a class="heading-anchor" href="#${id}" aria-label="Link to ${escapeHtml(text)}">#</a>`;
   const attrs = blockId ? reportBlockAttr(blockId) : '';
   if (level === 1) return { html: `<h1${attrs}>${inline(text)}</h1>`, id, level };
+  // h4 是事件卡标题。约定写法 `关键词｜一句总结`：前半取自原始标题的实体/关键词，
+  // 后半是这条事件的判断。分两层排版，扫视时先看到是谁、再看到结论。
+  // 没有全角竖线的 h4 按原样渲染，老稿子不受影响。
+  if (level === 4) {
+    const bar = text.indexOf('｜');
+    if (bar > 0 && bar < text.length - 1) {
+      const kw = text.slice(0, bar).trim();
+      const sum = text.slice(bar + 1).trim();
+      return { html: `<h4${attrs}><span class="event-card__kw">${inline(kw)}</span>`
+                   + `<span class="event-card__sum">${inline(sum)}</span></h4>`, id, level };
+    }
+  }
   if (level >= 4) return { html: `<h${level}${attrs}>${inline(text)}</h${level}>`, id, level };
   return { html: `<h${level} id="${id}"${attrs}>${inline(text)}${anchor}</h${level}>`, id, level };
 }
@@ -307,6 +319,12 @@ function tokenize(md) {
       if (comment) out.push({ type: 'reportComment', comment });
       continue;
     }
+
+    // 独占一行的普通 HTML 注释。不这样处理的话它会掉进段落分支被转义成可见文本——
+    // 门禁的降级哨兵 <!-- gate-degraded --> 就是这样漏到页面上的。
+    // 原样输出成真注释：HTML 里仍然可机读，读者看不到。
+    const htmlComment = line.match(/^\s*<!--([\s\S]*?)-->\s*$/);
+    if (htmlComment) { out.push({ type: 'htmlComment', text: htmlComment[1] }); i++; continue; }
 
     // footnote def
     const fnDef = line.match(/^\[\^([^\]]+)\]:\s*(.*)$/);
@@ -449,6 +467,7 @@ function render(tokens) {
   let lastHeadingLevel = 0;
   let pendingSectionLede = false;
   let inSection = false;
+  let inCard = false;
   let reportBlockCounter = 0;
   let pendingReportComments = [];
 
@@ -462,6 +481,12 @@ function render(tokens) {
   for (let i = 0; i < tokens.length; i++) {
     const t = tokens[i];
 
+    if (t.type === 'htmlComment') {
+      // 去掉内部的 -- 以免提前闭合注释；内容来自我们自己的生成器，这里只做形式保证
+      html += `\n<!--${String(t.text).replace(/--+/g, '-')}-->\n`;
+      continue;
+    }
+
     if (t.type === 'reportComment') {
       pendingReportComments.push(t.comment);
       continue;
@@ -470,6 +495,9 @@ function render(tokens) {
     if (t.type === 'heading') {
       const blockId = nextReportBlock();
       const comments = takeReportComments();
+      // 事件卡边界：任何 h4 或更高层级的标题都结束上一张卡。
+      // article 嵌在 section 内，所以必须先关卡再关 section。
+      if (t.level <= 4 && inCard) { html += '\n</article>\n'; inCard = false; }
       const h = renderHeading(t.level, t.text, blockId);
       if (t.level === 2) {
         if (inSection) html += '</section>';
@@ -482,6 +510,7 @@ function render(tokens) {
         const id = slug(t.text);
         headings.push({ level: 3, id, text: t.text, parent: headings.findLast(x => x.level === 2)?.id });
       }
+      if (t.level === 4) { html += '\n<article class="event-card">\n'; inCard = true; }
       html += withReportComments(h.html, comments, blockId);
       lastHeadingLevel = t.level;
       continue;
@@ -598,6 +627,7 @@ function render(tokens) {
     // fnDef handled separately at end
   }
 
+  if (inCard) html += '\n</article>\n';
   if (inSection) html += '</section>';
   return { html, headings };
 }
