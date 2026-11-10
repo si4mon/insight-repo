@@ -230,10 +230,11 @@ class EventCardTest(unittest.TestCase):
             "#### A 模型｜第一条\n\n**A · EV-01**\n\n正文一。\n\n"
             "##### 机制与架构\n\n小节仍属第一张卡。\n\n"
             "#### B 模型｜第二条\n\n**A · EV-02**\n\n正文二。\n")
-        self.assertEqual(html.count('<article class="event-card">'), 2)
+        # 标签上会带 data-layer / data-rating，所以匹配到类名为止
+        self.assertEqual(html.count('<article class="event-card"'), 2)
         # 第一张卡必须在第二张卡开始前闭合，否则两条事件会套在一起
-        first = html.index('<article class="event-card">')
-        second = html.index('<article class="event-card">', first + 1)
+        first = html.index('<article class="event-card"')
+        second = html.index('<article class="event-card"', first + 1)
         self.assertIn("</article>", html[first:second])
 
     def test_higher_heading_closes_the_card(self):
@@ -242,7 +243,7 @@ class EventCardTest(unittest.TestCase):
             "## 3 模型\n\n### 3.3 多模态\n\n"
             "#### A｜一条\n\n**B · EV-01**\n\n正文。\n\n"
             "### 3.4 其他\n\n普通段落，不该在卡里。\n")
-        card = html.index('<article class="event-card">')
+        card = html.index('<article class="event-card"')
         close = html.index("</article>", card)
         self.assertNotIn("普通段落", html[card:close])
 
@@ -256,7 +257,7 @@ class EventCardTest(unittest.TestCase):
         """老稿子没有竖线，必须退化成单层而不是报错或吞掉标题。"""
         html = self._render("#### 没有竖线的标题\n\n**B · EV-01**\n\n正文。\n")
         self.assertIn("没有竖线的标题", html)
-        self.assertIn('<article class="event-card">', html)
+        self.assertIn('<article class="event-card"', html)
 
     def test_section_nesting_stays_valid(self):
         """article 嵌在 section 内，关卡必须早于关 section。"""
@@ -315,3 +316,56 @@ class HtmlCommentTest(unittest.TestCase):
         """通用注释处理不能吃掉 @report-comment 这条既有通路。"""
         html = self._render("正文一段。\n")
         self.assertIn("article", html)
+
+
+@unittest.skipIf(NODE is None, "node 不可用")
+class CardFacetTest(unittest.TestCase):
+    """卡片按 change_object 上色、按 rating 定轻重（2026-11-10）。
+
+    只让一个维度管色相：两个维度都上色，读者一个都认不出来。
+    「尚未披露」走中性灰——信息缺失不该被画成一个类别。
+    """
+
+    LAYERS = [("Model", "model"), ("Harness", "harness"), ("运行平台", "platform"),
+              ("交互·应用", "interaction"), ("尚未披露", "undisclosed")]
+
+    def _render(self, md: str) -> str:
+        with tempfile.TemporaryDirectory() as d:
+            src, out = Path(d) / "t.md", Path(d) / "t.html"
+            src.write_text("---\ntitle: T\ndate: 2026-11-10\nstatus: draft\n"
+                           "summary: s\n---\n\n" + md, encoding="utf-8")
+            r = subprocess.run([NODE, str(RENDER_JS), str(src), str(out), "--no-open"],
+                               capture_output=True, text=True)
+            self.assertEqual(r.returncode, 0, r.stderr)
+            return out.read_text(encoding="utf-8")
+
+    def test_each_layer_becomes_a_data_attribute(self):
+        for zh, slug in self.LAYERS:
+            html = self._render(f"#### X｜一条\n\n**A · Frontier · EV-01 · {zh}**\n\n正文。\n")
+            self.assertIn(f'data-layer="{slug}"', html, f"{zh} 没映射成 {slug}")
+
+    def test_rating_becomes_a_data_attribute(self):
+        for r in ("A+", "A", "B", "C"):
+            html = self._render(f"#### X｜一条\n\n**{r} · Early Signal · EV-01 · Model**\n\n正文。\n")
+            self.assertIn(f'data-rating="{r}"', html, f"评级 {r} 没取到")
+
+    def test_card_without_layer_stays_neutral(self):
+        """老稿子没有层字段，退回中性样式而不是报错。"""
+        html = self._render("#### X｜一条\n\n**B · Early Signal · EV-01**\n\n正文。\n")
+        # data-layer 在样式表里本来就有，所以只看 article 标签本身
+        tag = re.search(r'<article class="event-card"[^>]*>', html)
+        self.assertIsNotNone(tag)
+        self.assertNotIn("data-layer=", tag.group(0))
+
+    def test_every_layer_has_a_hue_defined(self):
+        """渲染出的页面里必须有每一层的色相定义，否则属性白设。"""
+        html = self._render("#### X｜一条\n\n**A · Frontier · EV-01 · Model**\n\n正文。\n")
+        for _, slug in self.LAYERS:
+            self.assertIn(f'[data-layer="{slug}"]', html, f"{slug} 没有色相定义")
+
+    def test_undisclosed_is_not_given_a_hue(self):
+        """「尚未披露」是信息缺失，给它色相等于把缺失说成了分类。"""
+        html = self._render("#### X｜一条\n\n**C · Early · EV-01 · 尚未披露**\n\n正文。\n")
+        m = re.search(r'\.event-card\[data-layer="undisclosed"\]\s*\{([^}]*)\}', html)
+        self.assertIsNotNone(m, "找不到 undisclosed 的定义")
+        self.assertNotIn("oklch", m.group(1), "不该给它一个彩色色相")

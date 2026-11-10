@@ -1254,6 +1254,53 @@ def _tier1_guard_hit(title: str) -> str:
 
 CARD_TITLE_BAR = "｜"      # 全角竖线 U+FF5C；渲染器按它把卡片标题拆成关键词层与总结层
 
+CARD_LAYERS = ("Model", "Harness", "运行平台", "交互·应用", "尚未披露")
+
+
+def _md_card_layer(body: str) -> str:
+    """从卡片标记区取 change_object。取不到返回空串。"""
+    for seg in re.findall(r'\*\*([^*]+)\*\*', body[:200]):
+        if "EV-" not in seg:
+            continue
+        for v in CARD_LAYERS:
+            if v in seg:
+                return v
+    return ""
+
+
+def check_card_layers(c: Check, md_path: Path | None, events_dir: Path | None):
+    """卡片标记行必须写 change_object，且与事件 JSON 一致。
+
+    渲染器按它给卡片上色（Model/Harness/运行平台/交互·应用 四个色相，
+    「尚未披露」走中性灰——信息缺失不该被画成一个类别）。
+    标记行与事件 JSON 不一致时，颜色就会说谎：读者按颜色判断"这个变化发生在哪一层"，
+    而那个判断来自一个没人核对过的字段。所以这里对账，而不是只检查写没写。
+
+    「交互·应用」里的点是全角间隔号 U+00B7，与标记行的分隔符同形。
+    取值时按整串匹配而不是按分隔符切，否则这个值会被切成两半。
+    """
+    if not (md_path and md_path.exists()):
+        return
+    events = _load_events(events_dir)
+    lay = _md_layout(md_path.read_text(encoding="utf-8", errors="ignore"))
+    cards = [card for cards in lay["columns"].values() for card in cards] + lay["focus"]
+    if not cards:
+        return
+    missing, mismatch = [], []
+    for card in cards:
+        got = _md_card_layer(card.get("body") or "")
+        if not got:
+            missing.append(card["eid"])
+            continue
+        want = (events.get(card["eid"]) or {}).get("change_object") or ""
+        if want and got != want:
+            mismatch.append(f"{card['eid']} 稿内写 {got}，事件 JSON 是 {want}")
+    c.add("md", "卡片标记行写明 change_object", not missing,
+          "缺层标注（渲染器将退回中性色）: " + ", ".join(missing[:6]))
+    c.add("taxonomy", "卡片层标注与事件 JSON 一致", not mismatch,
+          "; ".join(mismatch[:4]))
+
+
 
 def check_card_titles(c: Check, md_path: Path | None):
     """事件卡标题必须写成 `关键词｜一句总结`（references/event-writing.md）。
@@ -1928,6 +1975,7 @@ def main():
             check_ct_labels(c, md_path)
             check_event_body_presence(c, md_path, events_dir)
             check_card_titles(c, md_path)
+            check_card_layers(c, md_path, events_dir)
             html_sibling = md_path.with_suffix(".html")
             if html_sibling.exists():
                 check_html_lightweight(c, html_sibling, report)

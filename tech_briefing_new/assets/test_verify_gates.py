@@ -1163,3 +1163,60 @@ class Tier1GuardTest(unittest.TestCase):
             named = [r for r in c.results
                      if r["name"] == "tier-1 命中项未被「未验证」静默丢弃"]
             self.assertEqual(named[0]["status"], "PASS")
+
+
+class CardLayerTest(unittest.TestCase):
+    """卡片标记行的 change_object 与渲染配色（2026-11-10）。
+
+    渲染器按 change_object 给卡片上色。标记行与事件 JSON 不一致时颜色会说谎——
+    读者按颜色判断「这个变化发生在哪一层」，而那个判断来自没人核对过的字段。
+    """
+
+    def _card(self, decl: str) -> str:
+        # 卡片要落在第 2 章才会被 _md_layout 收进 focus，所以前面补一个 ## 占位
+        return (f"## 1 本轮结论\n\n略。\n\n## 2 今日必看\n\n"
+                f"#### A｜一条\n\n**{decl}**\n\n正文。\n")
+
+    def test_extracts_each_layer(self):
+        for v in verify_gates.CARD_LAYERS:
+            got = verify_gates._md_card_layer(f"**A · Frontier · EV-01 · {v} · 归属 4.5**")
+            self.assertEqual(got, v)
+
+    def test_interaction_layer_survives_the_separator(self):
+        """「交互·应用」里的点与标记行分隔符同形，按分隔符切会把它切成两半。"""
+        self.assertEqual(
+            verify_gates._md_card_layer("**B · Early Signal · EV-04 · 交互·应用**"),
+            "交互·应用")
+
+    def test_ignores_marker_without_ev(self):
+        """只认带 EV 编号的那一行，正文里出现层名不算声明。"""
+        self.assertEqual(verify_gates._md_card_layer("**这不是标记行 Model**"), "")
+
+    def _run(self, decl, change_object):
+        with tempfile.TemporaryDirectory() as d:
+            root = Path(d)
+            md = root / "r.md"
+            md.write_text("---\ntitle: T\ndate: 2026-11-10\n---\n\n" + self._card(decl),
+                          encoding="utf-8")
+            ev = root / "events"
+            ev.mkdir()
+            (ev / "EV-01.json").write_text(
+                json.dumps({"event_id": "EV-01", "rating": "A",
+                            "change_object": change_object}, ensure_ascii=False),
+                encoding="utf-8")
+            c = Check()
+            verify_gates.check_card_layers(c, md, ev)
+            return {r["name"]: r["status"] for r in c.results}
+
+    def test_mismatch_with_event_json_fails(self):
+        r = self._run("A · Frontier · EV-01 · Model", "Harness")
+        self.assertEqual(r["卡片层标注与事件 JSON 一致"], "FAIL")
+
+    def test_match_passes(self):
+        r = self._run("A · Frontier · EV-01 · Harness", "Harness")
+        self.assertEqual(r["卡片层标注与事件 JSON 一致"], "PASS")
+        self.assertEqual(r["卡片标记行写明 change_object"], "PASS")
+
+    def test_missing_layer_fails(self):
+        r = self._run("A · Frontier · EV-01", "Model")
+        self.assertEqual(r["卡片标记行写明 change_object"], "FAIL")

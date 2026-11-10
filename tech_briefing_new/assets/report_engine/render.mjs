@@ -244,6 +244,36 @@ function renderCallout(tag, body, blockId = '') {
   </blockquote>`;
 }
 
+
+// 事件卡的视觉维度。色相编码 change_object（变化发生在架构的哪一层），
+// 轻重编码 rating。只让一个维度管色相：两个维度都上色会糊成一团。
+// 「尚未披露」刻意不给色相——它不是一个类别，是信息缺失。
+const CARD_LAYERS = [
+  ['Model', 'model'],
+  ['Harness', 'harness'],
+  ['运行平台', 'platform'],
+  ['交互·应用', 'interaction'],
+  ['尚未披露', 'undisclosed'],
+];
+
+// 从卡片标记行 `**A · Frontier Signal · EV-01 · Model · 归属 4.5**` 取层与评级。
+// 取不到就返回空：老稿子没有这个字段，按中性样式渲染，不报错。
+function cardFacets(tokens, from) {
+  for (let k = from; k < tokens.length; k++) {
+    const t = tokens[k];
+    if (t.type === 'heading') break;              // 没到标记行就进了下一节
+    if (t.type !== 'p') continue;
+    const m = String(t.text).match(/\*\*([^*]+)\*\*/);
+    if (!m) continue;
+    const seg = m[1];
+    if (!/EV-\d/.test(seg)) continue;             // 只认带 EV 编号的那一行
+    const layer = (CARD_LAYERS.find(([zh]) => seg.includes(zh)) || [])[1] || '';
+    const rating = (seg.match(/(?:^|\s|·)\s*(A\+|A|B|C)\s*(?:·|$)/) || [])[1] || '';
+    return { layer, rating };
+  }
+  return { layer: '', rating: '' };
+}
+
 function renderHeading(level, text, blockId = '') {
   const id = slug(text);
   const anchor = `<a class="heading-anchor" href="#${id}" aria-label="Link to ${escapeHtml(text)}">#</a>`;
@@ -510,7 +540,13 @@ function render(tokens) {
         const id = slug(t.text);
         headings.push({ level: 3, id, text: t.text, parent: headings.findLast(x => x.level === 2)?.id });
       }
-      if (t.level === 4) { html += '\n<article class="event-card">\n'; inCard = true; }
+      if (t.level === 4) {
+        const f = cardFacets(tokens, i + 1);
+        const attrs = (f.layer ? ` data-layer="${f.layer}"` : '')
+                    + (f.rating ? ` data-rating="${escapeHtml(f.rating)}"` : '');
+        html += `\n<article class="event-card"${attrs}>\n`;
+        inCard = true;
+      }
       html += withReportComments(h.html, comments, blockId);
       lastHeadingLevel = t.level;
       continue;
