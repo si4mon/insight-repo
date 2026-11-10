@@ -363,9 +363,82 @@ class CardFacetTest(unittest.TestCase):
         for _, slug in self.LAYERS:
             self.assertIn(f'[data-layer="{slug}"]', html, f"{slug} 没有色相定义")
 
-    def test_undisclosed_is_not_given_a_hue(self):
-        """「尚未披露」是信息缺失，给它色相等于把缺失说成了分类。"""
+    def test_undisclosed_stays_achromatic(self):
+        """「尚未披露」是信息缺失，给它色相等于把缺失说成了分类。
+
+        它仍然要有自己的底色（否则会变成唯一一张看不出边界的卡），
+        但彩度必须接近 0——判定的是彩度，不是用不用 oklch。
+        """
         html = self._render("#### X｜一条\n\n**C · Early · EV-01 · 尚未披露**\n\n正文。\n")
         m = re.search(r'\.event-card\[data-layer="undisclosed"\]\s*\{([^}]*)\}', html)
         self.assertIsNotNone(m, "找不到 undisclosed 的定义")
-        self.assertNotIn("oklch", m.group(1), "不该给它一个彩色色相")
+        chromas = [float(c) for _, c in
+                   re.findall(r"oklch\(\s*([0-9.]+)\s+([0-9.]+)", m.group(1))]
+        self.assertTrue(chromas, "没解析到 oklch 值")
+        self.assertLess(max(chromas), 0.010,
+                        f"彩度 {max(chromas)} 太高，会被读成一个颜色类别")
+
+    def test_colored_layers_actually_carry_chroma(self):
+        """反过来：四个真实层的彩度必须明显高于中性档，否则等于没上色。"""
+        html = self._render("#### X｜一条\n\n**A · Frontier · EV-01 · Model**\n\n正文。\n")
+        for slug in ("model", "harness", "platform", "interaction"):
+            m = re.search(rf'\.event-card\[data-layer="{slug}"\]\s*\{{([^}}]*)\}}', html)
+            self.assertIsNotNone(m, f"找不到 {slug}")
+            chromas = [float(c) for _, c in
+                       re.findall(r"oklch\(\s*([0-9.]+)\s+([0-9.]+)", m.group(1))]
+            self.assertGreater(max(chromas), 0.05, f"{slug} 彩度不足，等于没上色")
+
+
+class CardContrastTest(unittest.TestCase):
+    """卡片底色与页面底色的明度差（2026-11-10）。
+
+    反馈「卡片颜色和背景太接近」。第一版把 B/C 卡的底色设成 var(--bg)——
+    与页面完全同色，只剩 1px 边框；而历史事件里 B+C 占 51/75，等于大多数卡片没有底。
+    第二版改成带色相的浅底后实测浅色模式弱档 ΔL 仍只有 0.019，还在可辨阈值以下。
+
+    这里直接校验 template.html 里声明的 oklch 明度（CSS 的 oklch L 就是 OKLab L），
+    不渲染不截图：阈值是契约，跑一次 0.01 秒，能挡住以后被悄悄调回去。
+    """
+
+    THRESHOLD = 0.030   # ΔL≈0.02 勉强可辨，≥0.03 明确可辨
+
+    @classmethod
+    def setUpClass(cls):
+        cls.css = (HERE / "report_engine" / "template.html").read_text(encoding="utf-8")
+
+    def _page_L(self, dark: bool) -> float:
+        """取 :root 或 [data-theme="dark"] 里 --bg 的明度。"""
+        block = self.css.split('[data-theme="dark"]')[1 if dark else 0]
+        m = re.search(r"--bg:\s*oklch\(\s*([0-9.]+)", block)
+        self.assertIsNotNone(m, f"找不到 {'暗' if dark else '亮'}色 --bg")
+        return float(m.group(1))
+
+    def test_every_card_fill_is_distinguishable_from_the_page(self):
+        page_light, page_dark = self._page_L(False), self._page_L(True)
+        fills = re.findall(r"--card-fill(?:-quiet)?:\s*oklch\(\s*([0-9.]+)", self.css)
+        self.assertGreaterEqual(len(fills), 12, "底色声明数量不对，可能有漏改")
+        weak = []
+        for L in (float(x) for x in fills):
+            # 亮色档靠近 1、暗色档靠近 0，按哪个页面底色更近来归属
+            page = page_light if abs(L - page_light) < abs(L - page_dark) else page_dark
+            if abs(L - page) < self.THRESHOLD:
+                weak.append((L, page, round(abs(L - page), 3)))
+        self.assertEqual(weak, [],
+                         f"这些底色与页面明度差不足 {self.THRESHOLD}: {weak}")
+
+    def test_no_card_fill_equals_the_page_background(self):
+        """第一版的具体病因：底色直接写 var(--bg)。"""
+        block = re.search(r"\.event-card\[data-rating=\"B\"\][\s\S]{0,200}?\}", self.css)
+        self.assertIsNotNone(block)
+        self.assertNotIn("background: var(--bg);", block.group(0),
+                         "B/C 卡又用回了页面底色")
+
+    def test_rating_bar_width_targets_the_pseudo_element(self):
+        """选择器列表里漏掉 ::before 会把 width 加在卡片本身上，把整张卡压成一条。"""
+        for m in re.finditer(r"([^{}]*)\{\s*width:\s*\d+px[^}]*\}", self.css):
+            sel = m.group(1)
+            if "event-card" in sel and "data-rating" in sel:
+                for part in sel.split(","):
+                    if "data-rating" in part:
+                        self.assertIn("::before", part,
+                                      f"这个选择器会把宽度加在卡片上: {part.strip()}")

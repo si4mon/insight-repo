@@ -1025,12 +1025,17 @@ h4 {
 /* 事件卡。读者最容易迷失的不是标题不够大，而是"这段还属于上一个事件吗"——
    所以边界靠一个可扫视的方框成立，而不是靠 h4 与正文的字号差。 */
 .event-card {
+  /* 没有 data-layer 的老稿子走这组中性默认值。不设的话它会落回 --bg-elevated，
+     与页面只差 0.027 明度，又变回"看不出边界"那个问题。 */
+  --card-fill: oklch(0.930 0.006 85);
+  --card-fill-quiet: oklch(0.936 0.005 85);
+  --card-edge: oklch(0.845 0.008 85);
   position: relative;
   margin: var(--s-8) 0;
   padding: var(--s-6) var(--s-6) var(--s-4) calc(var(--s-6) + 3px);
-  border: 1px solid var(--rule);
+  border: 1px solid var(--card-edge, var(--rule));
   border-radius: 10px;
-  background: var(--bg-elevated);
+  background: var(--card-fill, var(--bg-elevated));
 }
 .event-card::before {
   content: "";
@@ -1047,17 +1052,59 @@ h4 {
    明度与彩度固定（亮 0.50/0.125、暗 0.74/0.12），只变色相，
    这样五个层属于同一族，不会把这套暖色系统撑破。
    层名在标记行里是可见文本，所以颜色不是唯一载体，灰度打印与色觉差异下仍可读。 */
-.event-card[data-layer="model"]       { --card-hue: oklch(0.50 0.125  35); }
-.event-card[data-layer="harness"]     { --card-hue: oklch(0.50 0.125 250); }
-.event-card[data-layer="platform"]    { --card-hue: oklch(0.50 0.125 155); }
-.event-card[data-layer="interaction"] { --card-hue: oklch(0.50 0.125 310); }
-/* 「尚未披露」不是一个类别，是信息缺失——给它色相等于把缺失说成了分类 */
-.event-card[data-layer="undisclosed"] { --card-hue: var(--text-faint); }
+/* 每层三个值：--card-hue 是强调色（文字与左条），--card-fill 是卡片底色，
+   --card-edge 是边框。底色也带本层色相的低彩度，所以颜色编码在整张卡上成立，
+   不是只有左边一条线。明度差是关键：页面亮底 0.972，卡片压到 0.93（A/A+）
+   与 0.952（B/C），拉开到肉眼能分；上一版把 B/C 设成 var(--bg)，
+   与页面完全同色，只剩 1px 边框——而历史事件里 B+C 占 51/75，等于大多数卡片没有底。 */
+.event-card[data-layer="model"] {
+  --card-hue: oklch(0.48 0.145  35); --card-fill: oklch(0.930 0.030  35);
+  --card-fill-quiet: oklch(0.936 0.024  35); --card-edge: oklch(0.845 0.045  35);
+}
+.event-card[data-layer="harness"] {
+  --card-hue: oklch(0.48 0.145 250); --card-fill: oklch(0.930 0.030 250);
+  --card-fill-quiet: oklch(0.936 0.024 250); --card-edge: oklch(0.845 0.045 250);
+}
+.event-card[data-layer="platform"] {
+  --card-hue: oklch(0.46 0.130 155); --card-fill: oklch(0.930 0.030 155);
+  --card-fill-quiet: oklch(0.936 0.024 155); --card-edge: oklch(0.845 0.045 155);
+}
+.event-card[data-layer="interaction"] {
+  --card-hue: oklch(0.48 0.145 310); --card-fill: oklch(0.930 0.030 310);
+  --card-fill-quiet: oklch(0.936 0.024 310); --card-edge: oklch(0.845 0.045 310);
+}
+/* 「尚未披露」不是一个类别，是信息缺失——给它色相等于把缺失说成了分类。
+   但底色仍要与页面拉开，否则它会变成唯一一张看不见边界的卡。 */
+.event-card[data-layer="undisclosed"] {
+  --card-hue: oklch(0.55 0 0); --card-fill: oklch(0.930 0.006 85);
+  --card-fill-quiet: oklch(0.936 0.005 85); --card-edge: oklch(0.845 0.008 85);
+}
 
-[data-theme="dark"] .event-card[data-layer="model"]       { --card-hue: oklch(0.74 0.12  35); }
-[data-theme="dark"] .event-card[data-layer="harness"]     { --card-hue: oklch(0.74 0.12 250); }
-[data-theme="dark"] .event-card[data-layer="platform"]    { --card-hue: oklch(0.74 0.12 155); }
-[data-theme="dark"] .event-card[data-layer="interaction"] { --card-hue: oklch(0.74 0.12 310); }
+[data-theme="dark"] .event-card[data-layer="model"] {
+  --card-hue: oklch(0.78 0.130  35); --card-fill: oklch(0.215 0.030  35);
+  --card-fill-quiet: oklch(0.175 0.018  35); --card-edge: oklch(0.345 0.055  35);
+}
+[data-theme="dark"] .event-card[data-layer="harness"] {
+  --card-hue: oklch(0.78 0.130 250); --card-fill: oklch(0.215 0.030 250);
+  --card-fill-quiet: oklch(0.175 0.018 250); --card-edge: oklch(0.345 0.055 250);
+}
+[data-theme="dark"] .event-card[data-layer="platform"] {
+  --card-hue: oklch(0.78 0.130 155); --card-fill: oklch(0.215 0.030 155);
+  --card-fill-quiet: oklch(0.175 0.018 155); --card-edge: oklch(0.345 0.055 155);
+}
+[data-theme="dark"] .event-card[data-layer="interaction"] {
+  --card-hue: oklch(0.78 0.130 310); --card-fill: oklch(0.215 0.030 310);
+  --card-fill-quiet: oklch(0.175 0.018 310); --card-edge: oklch(0.345 0.055 310);
+}
+[data-theme="dark"] .event-card {
+  --card-fill: oklch(0.215 0.006 260);
+  --card-fill-quiet: oklch(0.175 0.004 260);
+  --card-edge: oklch(0.345 0.008 260);
+}
+[data-theme="dark"] .event-card[data-layer="undisclosed"] {
+  --card-hue: oklch(0.70 0 0); --card-fill: oklch(0.215 0.006 260);
+  --card-fill-quiet: oklch(0.175 0.004 260); --card-edge: oklch(0.345 0.008 260);
+}
 
 .event-card::before { background: var(--card-hue, var(--accent)); }
 
@@ -1065,19 +1112,21 @@ h4 {
    强调条收窄——翻页时重要的那几张先被眼睛抓到，而不是九张一样重。 */
 .event-card[data-rating="B"],
 .event-card[data-rating="C"] {
-  background: var(--bg);
-  border-color: var(--rule);
+  background: var(--card-fill-quiet, var(--bg));
 }
 .event-card[data-rating="B"]::before,
-.event-card[data-rating="C"]::before { width: 2px; opacity: 0.65; }
-.event-card[data-rating="B"] table th,
-.event-card[data-rating="C"] table th { background: var(--bg-elevated); }
+.event-card[data-rating="C"]::before { width: 3px; opacity: 0.7; }
 
-.event-card[data-rating="A"],
-.event-card[data-rating="A+"] { border-color: var(--rule-strong); }
+/* 两个选择器都要带 ::before——漏掉一个就会把 width 加在卡片本身上 */
+.event-card[data-rating="A"]::before,
+.event-card[data-rating="A+"]::before { width: 5px; }
 /* 卡内表格与引用块本来是按正文底色设计的，落在抬高底色上要换一档 */
-.event-card table th { background: var(--bg); }
-.event-card pre, .event-card code { background: var(--bg); }
+/* 卡内表格头与代码块：用半透明白/黑压一层，跟着卡片底色走，
+   写死某个变量的话在有色卡上会突兀 */
+.event-card table th { background: color-mix(in oklch, var(--bg) 70%, transparent); }
+.event-card pre, .event-card code {
+  background: color-mix(in oklch, var(--bg) 75%, transparent);
+}
 
 /* 双层标题：第一层是实体/关键词，第二层是这条事件的判断 */
 .event-card__kw {
