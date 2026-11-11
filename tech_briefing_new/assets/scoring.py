@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""五维评分与评级派生。
+"""四维评分与评级派生。
 
 为什么评级不能由模型直接给：2026-10-30 同一窗口，三份报告对同一批事件给出的
 评级分布是 A+1/A7、A+1/A6、A+1/A8，但重叠的事件只有 4 个——不是标准严不严的
@@ -15,13 +15,24 @@ from __future__ import annotations
 import re
 from urllib.parse import urlsplit
 
+# 打分维度，满分 2 分一项。
+#
+# 2026-11-11 移除 source_authority。它测的是「我们有没有够到一手首发源」——
+# 那是采集质量，不是事件价值，而且采集越好它越饱和：11-10 那轮窗口内有货的源
+# 从 12 个涨到 22 个，于是 21 个事件的权威分全是 2，维度方差归零，A 率被推到 62%
+# （历史 31%~42%）。试过改判据救它：只按独立佐证计分的话，75 条历史事件里
+# 65 条恰好只有 1 个独立源（首发纪律本来就要求归并到单一首发），方差从 0.249
+# 掉到 0.127，更差。
+#
+# 它真正的角色是准入条件：没有可定位的一手首发就根本不该成为事件。
+# 所以保留为校验（见 validate 里的首发准入检查），不再参与打分。
 DIMENSIONS = (
-    "source_authority",       # 首发源的权威性与独立性
     "magnitude",              # 影响面
     "mechanism_novelty",      # 机制新颖度
     "quantitative_evidence",  # 可核量化证据
     "strategic_adjacency",    # 战略相关度（按根技术清单，见 references/root-tech-scoring.md）
 )
+MAX_TOTAL = 2 * len(DIMENSIONS)      # 8
 
 # 事件类别。后四类是"非技术命题"类，受硬上限约束。
 EVENT_CLASSES = {
@@ -95,12 +106,21 @@ def independent_sources(urls: list[str]) -> list[str]:
 
 
 def source_authority(independent: list[str], first_party: bool) -> int:
-    """一手官方首发，或 ≥2 个独立首发源 → 2；单一非一手源 → 1；无可定位首发 → 0。"""
+    """首发源的权威档位。2026-11-11 起不再参与打分，仅用于准入判断与留痕。
+
+    一手官方首发，或 ≥2 个独立首发源 → 2；单一非一手源 → 1；无可定位首发 → 0。
+    0 分意味着这条根本不该成为事件（见 first_release_admissible）。
+    """
     if not independent:
         return 0
     if first_party or len(independent) >= 2:
         return 2
     return 1
+
+
+def first_release_admissible(independent: list[str], first_party: bool) -> bool:
+    """准入：必须有可定位的一手首发。这取代了原来给它打分的做法。"""
+    return source_authority(independent, first_party) > 0
 
 
 def total(scores: dict) -> int:
@@ -118,14 +138,18 @@ def derive_rating(scores: dict, event_class: str = "technical",
     nov = _s(scores, "mechanism_novelty")
     adj = _s(scores, "strategic_adjacency")
 
-    if t >= 9 and nov == 2 and adj == 2:
-        rating, why = "A+", f"总分 {t}，机制新颖度与战略相关度均为 2"
-    elif t >= 8 and nov >= 1 and adj >= 1:
-        rating, why = "A", f"总分 {t}，机制新颖度 {nov}、战略相关度 {adj} 均 ≥1"
-    elif t >= 4:
-        rating, why = "B", f"总分 {t}"
+    # 2026-11-11 随 source_authority 移除重标：满分由 10 降到 8。
+    # 不是把旧阈值减 2 了事——权威分历史上 0/1/2 都出现过，减去的量因事件而异，
+    # 所以阈值是拿 96 条历史事件回测定的：A+≥8 / A≥7 / B≥3 时，六轮历史的
+    # A 率落在 17%~33%（旧口径 31%~42%），C 率 23%（旧 20%），分布最接近原状。
+    if t >= 8 and nov == 2 and adj == 2:
+        rating, why = "A+", f"总分 {t}/{MAX_TOTAL}，机制新颖度与战略相关度均为 2"
+    elif t >= 7 and nov >= 1 and adj >= 1:
+        rating, why = "A", f"总分 {t}/{MAX_TOTAL}，机制新颖度 {nov}、战略相关度 {adj} 均 ≥1"
+    elif t >= 3:
+        rating, why = "B", f"总分 {t}/{MAX_TOTAL}"
     else:
-        rating, why = "C", f"总分 {t}"
+        rating, why = "C", f"总分 {t}/{MAX_TOTAL}"
 
     # 硬上限：非技术命题类事件不因"影响大"而升到技术简报的高位。
     # Intel 暴跌的 Magnitude 与 Quantitative Evidence 都能拿满分，但它没有
@@ -146,7 +170,7 @@ def validate(ev: dict) -> list[str]:
     errs: list[str] = []
     sc = ev.get("scoring")
     if not isinstance(sc, dict):
-        return [f"{eid}: 缺少 scoring 块（五维评分）"]
+        return [f"{eid}: 缺少 scoring 块（四维评分）"]
 
     for d in DIMENSIONS:
         cell = sc.get(d)
@@ -177,10 +201,19 @@ def validate(ev: dict) -> list[str]:
             errs.append(f"{eid}: independent_sources 多报 {extra}，"
                         f"按链接归并只有 {computed}")
 
-    sa = _s(sc, "source_authority")
-    if sa == 2 and len(computed) < 2 and not ev.get("first_party_source"):
-        errs.append(f"{eid}: source_authority=2 需要一手官方首发或 ≥2 个独立首发源，"
-                    f"归并后只有 {computed}")
+    # 首发准入。2026-11-11 前这是 source_authority 的打分校验；维度移除后
+    # 它变成准入条件：没有可定位的一手首发，这条根本不该成为事件。
+    if not first_release_admissible(computed, bool(ev.get("first_party_source"))):
+        errs.append(f"{eid}: 没有可定位的一手首发（independent_sources 归并后为空，"
+                    f"且未标 first_party_source），不构成事件")
+    # 事件 JSON 里仍可留 source_authority 作为留痕，但它不再进总分；
+    # 若留了，取值要与归并结果一致，否则留痕会说谎。
+    if "source_authority" in sc:
+        declared_sa = _s(sc, "source_authority")
+        real_sa = source_authority(computed, bool(ev.get("first_party_source")))
+        if declared_sa != real_sa:
+            errs.append(f"{eid}: source_authority 留痕写 {declared_sa}，"
+                        f"按归并后的首发源应为 {real_sa}（该值不再参与总分）")
 
     # Strategic Adjacency 由根技术命中列表派生，不由模型自报。
     # 判据见 references/root-tech-scoring.md：命中切换信号 2 分、当前代进展 1 分。

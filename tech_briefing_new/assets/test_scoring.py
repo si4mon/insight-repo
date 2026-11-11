@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""五维评分、评级派生、证据独立性的测试。"""
+"""四维评分、评级派生、证据独立性的测试。"""
 from __future__ import annotations
 
 import sys
@@ -59,20 +59,27 @@ class DeriveTest(unittest.TestCase):
         self.assertEqual(sc.derive_rating(s)[0], "A")
 
     def test_a_needs_both_at_least_one(self):
-        s = mk(source_authority=2, magnitude=2, mechanism_novelty=2,
+        s = mk(magnitude=2, mechanism_novelty=2,
                quantitative_evidence=2, strategic_adjacency=0)
-        self.assertEqual(sc.total(s), 8)
+        self.assertEqual(sc.total(s), 6)
         self.assertEqual(sc.derive_rating(s)[0], "B",
                          "战略相关度为 0 时，高总分也不进 A")
 
-    def test_seven_is_below_the_a_band(self):
-        """一份大厂模型技术报告（权威+量化满分、机制与相关度各 1）总分 7，是 B 不是 A。"""
-        s = mk(source_authority=2, magnitude=1, mechanism_novelty=1,
+    def test_below_the_a_band(self):
+        """一份大厂模型技术报告（量化满分、机制与相关度各 1）四维总分 5，是 B 不是 A。
+
+        2026-11-11 移除权威维度后重算：原来这个锚点靠权威的 2 分凑到 7，
+        正是"权威满分不足以进 A"要说明的事；现在权威不计分，锚点本身没变——
+        量化满分加上机制/相关度各 1，仍然进不了 A。
+        """
+        s = mk(magnitude=1, mechanism_novelty=1,
                quantitative_evidence=2, strategic_adjacency=1)
-        self.assertEqual(sc.total(s), 7)
+        self.assertEqual(sc.total(s), 5)
         self.assertEqual(sc.derive_rating(s)[0], "B")
         s["magnitude"]["score"] = 2
-        self.assertEqual(sc.derive_rating(s)[0], "A")
+        self.assertEqual(sc.derive_rating(s)[0], "B", "影响面升到 2 也只有 6 分")
+        s["mechanism_novelty"]["score"] = 2
+        self.assertEqual(sc.derive_rating(s)[0], "A", "机制升到 2 才够 7 分进 A")
 
     def test_bands(self):
         self.assertEqual(sc.derive_rating(mk())[0], "B")       # 5
@@ -124,15 +131,22 @@ class ValidateTest(unittest.TestCase):
         ev = self.base(independent_sources=["phorion.io", "cursor.com"])
         self.assertIn("多报", " ".join(sc.validate(ev)))
 
-    def test_authority_two_on_single_secondary_source_reported(self):
+    def test_source_authority_trace_must_match_the_merged_sources(self):
+        """权威值不再计分，但若留在 JSON 里作留痕，就不能与归并结果矛盾。"""
         ev = self.base()
-        ev["scoring"]["source_authority"]["score"] = 2
-        self.assertIn("≥2 个独立首发源", " ".join(sc.validate(ev)))
+        ev["scoring"]["source_authority"] = {"score": 2, "evidence": "e"}
+        self.assertIn("不再参与总分", " ".join(sc.validate(ev)))
 
-    def test_authority_two_allowed_for_first_party(self):
+    def test_source_authority_trace_ok_for_first_party(self):
         ev = self.base(first_party_source=True)
-        ev["scoring"]["source_authority"]["score"] = 2
-        self.assertNotIn("独立首发源", " ".join(sc.validate(ev)))
+        ev["scoring"]["source_authority"] = {"score": 2, "evidence": "e"}
+        self.assertNotIn("不再参与总分", " ".join(sc.validate(ev)))
+
+    def test_event_without_locatable_first_release_is_rejected(self):
+        """准入：没有可定位的一手首发就不该成为事件。"""
+        ev = self.base(independent_sources=[])
+        ev["source"] = ""
+        self.assertIn("不构成事件", " ".join(sc.validate(ev)))
 
     def test_adjacency_without_root_tech_reported(self):
         ev = self.base(root_tech=[])
@@ -163,7 +177,7 @@ class NormalizeIntegrationTest(unittest.TestCase):
         out, errs = normalize_event(ev, "EV-01")
         self.assertEqual(errs, [])
         self.assertEqual(out["rating"], "A+")
-        self.assertIn("总分 10", out["rating_basis"])
+        self.assertIn("总分 8/8", out["rating_basis"])
         self.assertEqual(out["independent_sources"], ["phorion.io"])
 
     def test_rating_without_scoring_is_an_error(self):
@@ -173,7 +187,7 @@ class NormalizeIntegrationTest(unittest.TestCase):
               "evidence_form": "product", "date_precision": "second",
               "rating": "A", "scoring": None}
         _, errs = normalize_event(ev, "EV-02")
-        self.assertIn("评级必须由五维评分派生", " ".join(errs))
+        self.assertIn("评级必须由四维评分派生", " ".join(errs))
 
 
 class PairwiseTest(unittest.TestCase):

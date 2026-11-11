@@ -10,7 +10,7 @@ from events import canonical_source, event_key, normalize_dir, normalize_event
 
 import testlib
 
-# 评级由五维评分派生、战略相关度由根技术命中派生，所以固定装置要带这两块。
+# 评级由四维评分派生、战略相关度由根技术命中派生，所以固定装置要带这两块。
 GOOD = testlib.decorate(
     {"event_title": "t", "source": "https://www.example.com/post/", "entity": "OpenAI",
      "first_publish_shanghai": "2026-10-30T10:00:00+08:00", "rating": "a+",

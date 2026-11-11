@@ -22,6 +22,7 @@ Gate 校验器：把"必须满足的条件"变成机器可判的 pass/fail。
 退出码：0 全部通过；1 有 FAIL；2 参数错误
 """
 import argparse
+import collections
 import hashlib
 import json
 import os
@@ -520,7 +521,7 @@ def check_root_tech_list(c: Check):
 
 
 def check_scoring(c: Check, events_dir: Path | None, pairwise_path: Path | None):
-    """评级必须由五维评分派生，且评分块自洽。
+    """评级必须由四维评分派生，且评分块自洽。
 
     2026-10-30 回测：一份报告把 OpenAI 融资缩水、Intel 暴跌、S&P 下调 Meta 评为
     A/B，与 Cursor 投毒并列。手给评级时没有任何机制能拦住这一类，所以评级改为
@@ -543,7 +544,7 @@ def check_scoring(c: Check, events_dir: Path | None, pairwise_path: Path | None)
             continue
         errs += scoring.validate(ev)
 
-    c.add("trace", "事件都有五维评分块", not no_block,
+    c.add("trace", "事件都有四维评分块", not no_block,
           f"缺评分块: {', '.join(no_block[:6])}")
     c.add("trace", "评级可由评分派生且评分自洽", not errs, "; ".join(errs[:4]))
 
@@ -626,6 +627,66 @@ def check_scoring(c: Check, events_dir: Path | None, pairwise_path: Path | None)
 
 _MD_HEADING = re.compile(r'^(#{1,6})\s+(.*?)\s*$', re.M)
 _REQUIRED_DEEP_SECTIONS = ("挑战与问题", "机制与架构", "效果与定量", "对比其他方案的价值")
+
+
+
+# 打分维度从 scoring.py 取，避免两处各写一份而漂移
+try:
+    import scoring as _scoring
+    SCORING_DIMENSIONS = tuple(_scoring.DIMENSIONS)
+except Exception:
+    SCORING_DIMENSIONS = ("magnitude", "mechanism_novelty",
+                          "quantitative_evidence", "strategic_adjacency")
+
+SCORING_MIN_EVENTS = 8      # 事件太少时分布本来就可能集中，不判
+SCORING_MAX_SAME_TOTAL = 0.50   # 同一合计占比上限
+
+
+def check_scoring_discrimination(c: Check, events_dir: Path | None):
+    """这一轮的打分有没有在区分事件。
+
+    起因是 2026-11-10 那轮：21 个事件的 source_authority 全是 2，维度方差归零，
+    A 率被推到 62%（历史 31%~42%），12 个事件卡在同一个合计上——而那个合计
+    恰好压在 A 的门槛。单看每张卡都自洽，单看规则也没违反，但整轮打分没有
+    在区分任何东西，评级于是失去意义。
+
+    两条判据都拿六轮历史标定过，零误报：
+    - 恒定维度：历史上从未出现过（11-10 首次出现 source_authority 恒定）。
+    - 同分占比：历史最高 42%（11-05），11-10 是 57%。上限取 50%。
+
+    这条检查不管分打得对不对——那要人看；它只管分有没有在分。
+    """
+    events = _load_events(events_dir)
+    rows = []
+    for ev in events.values():
+        sc_ = ev.get("scoring") or ev.get("scores") or {}
+        vals = []
+        for d in SCORING_DIMENSIONS:
+            v = sc_.get(d)
+            v = v.get("score") if isinstance(v, dict) else v
+            if v is None:
+                vals = None
+                break
+            vals.append(int(v))
+        if vals:
+            rows.append(vals)
+    if len(rows) < SCORING_MIN_EVENTS:
+        return
+    flat = []
+    for i, d in enumerate(SCORING_DIMENSIONS):
+        if len({r[i] for r in rows}) == 1:
+            flat.append(f"{d}（全部事件都是 {rows[0][i]} 分）")
+    c.add("taxonomy", "没有在本轮失去区分度的打分维度", not flat,
+          "这些维度这一轮没有区分任何事件，评级实际由其余维度决定: "
+          + "; ".join(flat))
+
+    totals = collections.Counter(sum(r) for r in rows)
+    top, n = totals.most_common(1)[0]
+    share = n / len(rows)
+    c.add("taxonomy", "打分未在单一合计上堆积", share <= SCORING_MAX_SAME_TOTAL,
+          f"{n}/{len(rows)}（{share:.0%}）个事件合计同为 {top} 分，"
+          f"超过 {SCORING_MAX_SAME_TOTAL:.0%}；分数紧贴同一档说明是朝门槛凑的，"
+          f"不是测出来的")
 
 
 def _md_frontmatter(text: str) -> dict:
@@ -1953,6 +2014,7 @@ def main():
     check_publish_precision(c, events_dir)
     check_scoring(c, events_dir,
                   (events_dir / "pairwise.json") if events_dir else None)
+    check_scoring_discrimination(c, events_dir)
     check_claim_evidence(c, events_dir, args.snapshot_roots)
 
     if report_path and report_path.exists():

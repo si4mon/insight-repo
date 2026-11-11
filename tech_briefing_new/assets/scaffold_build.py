@@ -3,7 +3,7 @@
 """为一轮简报生成 build.py 骨架，并把已知事实预填进每个事件桩位。
 
 为什么需要：build.py 每轮手写 516–723 行，是单轮最大的人工开销。其中绝大多数
-行是判断内容（标题、key_data、机制叙述、五维评分的证据串），生成不了，也不该
+行是判断内容（标题、key_data、机制叙述、四维评分的证据串），生成不了，也不该
 生成。但有四类纯机械劳动每轮重复，而且都出过错：
 
   1. 样板头尾约 70 行（import、SHA 表、E/S/RT 辅助、SIG 表、规范化落盘）；
@@ -174,7 +174,7 @@ def E(s, q):
 
 
 def S(sc, **e):
-    """五维评分。顺序: {", ".join(scoring.DIMENSIONS)}"""
+    """四维评分。顺序: {", ".join(scoring.DIMENSIONS)}"""
     a, m, n, q, j = sc
     return {{"source_authority": {{"score": a, "evidence": e["sa"]}},
             "magnitude": {{"score": m, "evidence": e["mag"]}},

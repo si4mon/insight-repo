@@ -974,7 +974,8 @@ class PairwiseValueGuardTest(unittest.TestCase):
         self.pw = self.ev / "pairwise.json"
 
     def _write(self, eid, rating, scores):
-        dims = ("source_authority", "magnitude", "mechanism_novelty",
+        # 2026-11-11 起只有四维（权威已移除），元组按 影响/机制/量化/战略
+        dims = ("magnitude", "mechanism_novelty",
                 "quantitative_evidence", "strategic_adjacency")
         ev = {"rating": rating, "primary_path": "D3.1", "event_title": eid,
               "first_publish_shanghai": "2026-11-08T10:00:00+08:00",
@@ -994,39 +995,39 @@ class PairwiseValueGuardTest(unittest.TestCase):
 
     def test_tier_may_break_a_one_point_tie(self):
         """分差 1 分之内算噪声，用业务优先级裁决是允许的。"""
-        self._write("EV-01", "B", (1, 1, 1, 1, 1))   # 5
-        self._write("EV-02", "B", (1, 2, 1, 1, 1))   # 6
+        self._write("EV-01", "B", (1, 1, 1, 1))   # 4
+        self._write("EV-02", "B", (2, 1, 1, 1))   # 5
         self._decide(("EV-01", "EV-02"), "EV-01")
         self.assertEqual(self._run(), "PASS")
 
     def test_equal_scores_may_be_broken_by_tier(self):
-        self._write("EV-01", "B", (1, 1, 1, 1, 1))
-        self._write("EV-02", "B", (1, 1, 1, 1, 1))
+        self._write("EV-01", "B", (1, 1, 1, 1))   # 4
+        self._write("EV-02", "B", (1, 1, 1, 1))   # 4
         self._decide(("EV-01", "EV-02"), "EV-01")
         self.assertEqual(self._run(), "PASS")
 
     def test_cannot_win_across_rating_bands(self):
         """A 级安全事件被 B 级模型事件压到后面 —— 正是要防的那一步。"""
-        self._write("EV-01", "B", (2, 2, 1, 1, 1))   # 7
-        self._write("EV-02", "A", (2, 2, 1, 1, 2))   # 8
+        self._write("EV-01", "B", (2, 1, 1, 1))   # 5
+        self._write("EV-02", "A", (2, 2, 1, 2))   # 7
         self._decide(("EV-01", "EV-02"), "EV-01")
         self.assertEqual(self._run(), "FAIL")
 
     def test_cannot_win_with_two_point_deficit(self):
-        self._write("EV-01", "B", (1, 1, 1, 1, 0))   # 4
-        self._write("EV-02", "B", (2, 2, 1, 1, 0))   # 6
+        self._write("EV-01", "B", (1, 1, 1, 0))   # 3
+        self._write("EV-02", "B", (2, 2, 1, 0))   # 5
         self._decide(("EV-01", "EV-02"), "EV-01")
         self.assertEqual(self._run(), "FAIL")
 
     def test_higher_value_winner_always_fine(self):
-        self._write("EV-01", "A", (2, 2, 1, 1, 2))
-        self._write("EV-02", "C", (0, 1, 0, 0, 0))
+        self._write("EV-01", "A", (2, 2, 1, 2))   # 7
+        self._write("EV-02", "C", (0, 0, 0, 0))   # 0
         self._decide(("EV-01", "EV-02"), "EV-01")
         self.assertEqual(self._run(), "PASS")
 
     def test_malformed_decision_is_skipped_not_crashed(self):
-        self._write("EV-01", "B", (1, 1, 1, 1, 1))
-        self._write("EV-02", "B", (1, 1, 1, 1, 1))
+        self._write("EV-01", "B", (1, 1, 1, 1))
+        self._write("EV-02", "B", (1, 1, 1, 1))
         self.pw.write_text(json.dumps({"decisions": [
             {"pair": ["EV-01"], "winner": "EV-01", "why": "x"},
             {"pair": ["EV-01", "EV-99"], "winner": "EV-01", "why": "x"}]}),
@@ -1220,3 +1221,63 @@ class CardLayerTest(unittest.TestCase):
     def test_missing_layer_fails(self):
         r = self._run("A · Frontier · EV-01", "Model")
         self.assertEqual(r["卡片标记行写明 change_object"], "FAIL")
+
+
+class ScoringDiscriminationTest(unittest.TestCase):
+    """这一轮的打分有没有在区分事件（2026-11-11）。
+
+    起因：11-10 那轮 21 个事件的 source_authority 全是 2，12 个事件卡在同一合计上，
+    A 率 62%（历史 31%~42%）。单看每张卡都自洽、单看规则也没违反，但整轮打分
+    没有在区分任何东西。这条检查不管分打得对不对，只管分有没有在分。
+    """
+
+    def _run(self, rows):
+        d = Path(tempfile.mkdtemp())
+        self.addCleanup(lambda: __import__("shutil").rmtree(d, ignore_errors=True))
+        for i, vals in enumerate(rows, 1):
+            (d / f"EV-{i:02d}.json").write_text(json.dumps(
+                {"event_id": f"EV-{i:02d}",
+                 "scoring": {k: {"score": x, "evidence": "e"}
+                             for k, x in zip(verify_gates.SCORING_DIMENSIONS, vals)}},
+                ensure_ascii=False), encoding="utf-8")
+        c = Check()
+        verify_gates.check_scoring_discrimination(c, d)
+        return {r["name"]: r["status"] for r in c.results}
+
+    def test_constant_dimension_fails(self):
+        """某个维度全轮同值 = 这个维度这一轮没在区分任何事件。"""
+        rows = [[2, m, q, a] for m in (1, 2) for q in (0, 1, 2) for a in (1, 2)]
+        r = self._run(rows)
+        self.assertEqual(r["没有在本轮失去区分度的打分维度"], "FAIL")
+
+    def test_varied_dimensions_pass(self):
+        rows = [[m, n, q, a] for m in (1, 2) for n in (0, 1, 2) for q in (1, 2) for a in (1, 2)]
+        r = self._run(rows)
+        self.assertEqual(r["没有在本轮失去区分度的打分维度"], "PASS")
+
+    def test_piling_on_one_total_fails(self):
+        """11-10 的真实形态：12/21 压在同一个合计，而那个合计正好贴着门槛。"""
+        rows = [[2, 1, 2, 1]] * 12 + [[1, 2, 2, 1], [2, 2, 1, 1], [1, 1, 2, 1],
+                                      [2, 1, 1, 1], [1, 2, 1, 1], [2, 2, 2, 1],
+                                      [1, 1, 1, 1], [2, 1, 2, 2], [1, 2, 2, 2]]
+        r = self._run(rows)
+        self.assertEqual(r["打分未在单一合计上堆积"], "FAIL")
+
+    def test_historical_spread_passes(self):
+        """历史六轮同分占比最高 42%，上限取 50%，不能误伤。"""
+        rows = ([[1, 1, 1, 1]] * 5 + [[2, 1, 1, 1]] * 3 + [[2, 2, 1, 1]] * 2
+                + [[1, 0, 2, 1], [2, 2, 2, 2]])
+        r = self._run(rows)
+        self.assertEqual(r["打分未在单一合计上堆积"], "PASS")
+
+    def test_small_round_is_not_judged(self):
+        """事件太少时分布本来就可能集中，不判。"""
+        r = self._run([[2, 1, 1, 1]] * 5)
+        self.assertEqual(r, {}, "样本不足时不该给出结论")
+
+    def test_dimensions_track_scoring_module(self):
+        """维度表从 scoring.py 取，不能两处各写一份。"""
+        import scoring
+        self.assertEqual(tuple(verify_gates.SCORING_DIMENSIONS),
+                         tuple(scoring.DIMENSIONS))
+        self.assertNotIn("source_authority", verify_gates.SCORING_DIMENSIONS)

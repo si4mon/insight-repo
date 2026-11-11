@@ -149,7 +149,7 @@ def normalize_event(ev: dict, event_id: str) -> tuple[dict, list[str]]:
             out["rating"], out["rating_basis"] = r, why
     elif out.get("rating"):
         errors.append(f"{event_id}: 写了 rating 却没有 scoring 块；"
-                      f"评级必须由五维评分派生，见 references/rating-anchors.md")
+                      f"评级必须由四维评分派生，见 references/rating-anchors.md")
 
     if out.get("source"):
         out["event_key"] = event_key(out)
