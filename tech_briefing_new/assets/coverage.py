@@ -35,7 +35,7 @@ def shanghai_now() -> datetime:
 
 def source_verdict(rec: dict, diff: dict | None = None) -> str:
     """
-    把三级状态压成一个可读判定，用于 8.1 展示与 gate 判定。
+    把三级状态压成一个可读判定，用于 C.1 展示与 gate 判定。
     注意这是"展示用"汇总，三级原始字段必须同时保留在 report 里。
 
     diff 传入时，无日期源可以用"相对上一快照新增"证明本轮确实有新内容，
@@ -65,9 +65,9 @@ def source_verdict(rec: dict, diff: dict | None = None) -> str:
     if ext == "skipped":
         return "SKIPPED"
     if rec.get("items_in_window", 0) > 0:
-        # 归档回退补回来的批次要能被看见：8.1 里"靠回退才拿到"和"主通道正常"
+        # 归档回退补回来的批次要能被看见：C.1 里"靠回退才拿到"和"主通道正常"
         # 是两种不同的覆盖状况，合并成 OK_IN_WINDOW 会掩盖主通道的故障。
-        # 回退补回来的批次要能被看见：8.1 里"靠回退才拿到"和"主通道正常"
+        # 回退补回来的批次要能被看见：C.1 里"靠回退才拿到"和"主通道正常"
         # 是两种覆盖状况，合并成 OK_IN_WINDOW 会掩盖主通道的故障。
         if rec.get("from_git_tags"):
             return "OK_FROM_GIT_TAGS"
@@ -318,7 +318,7 @@ def build_gaps(records: list[dict], required_surfaces: dict,
     gap 类型：
       surface_blind    该实体该面有源但全部失明（gate 失败级）
       surface_missing  该实体该面没有登记任何源
-      surface_uncoverable  已登记不可达原因（不阻断，但必须写进 8.1）
+      surface_uncoverable  已登记不可达原因（不阻断，但必须写进 C.1）
       source_blind     非关键源失明（不阻断）
       critical_blind   关键源失明（gate 失败级）
       window_partial   窗口前半段未被检索（critical 源阻断，其余转 action 任务）
@@ -343,7 +343,7 @@ def build_gaps(records: list[dict], required_surfaces: dict,
             gaps.append({
                 "type": "window_partial", "blocking": bool(r.get("critical")),
                 # 非 critical 源的窗口截断不阻断 gate，但必须转成补检任务。
-                # 否则它只留在 report.note 里，永远不进 8.3、也永远不会被补。
+                # 否则它只留在 report.note 里，永远不进 C.3、也永远不会被补。
                 "action_required": True,
                 "entity": r.get("entity"), "surface": r.get("surface"),
                 "source": r.get("id"), "verdict": "PARTIAL_WINDOW",
@@ -459,7 +459,7 @@ def build_report(records: list[dict], *, window_start: str, window_end: str,
     blocking = [g for g in gaps if g.get("blocking")]
     total_in_window = sum(r.get("items_in_window", 0) for r in records)
 
-    # 汇总每种判定的数量，8.1 直接可用
+    # 汇总每种判定的数量，C.1 直接可用
     verdict_counts = {}
     for r in records:
         verdict_counts[r.get("verdict", "?")] = verdict_counts.get(r.get("verdict", "?"), 0) + 1
@@ -479,11 +479,11 @@ def build_report(records: list[dict], *, window_start: str, window_end: str,
             "items_total": sum(r.get("items_total", 0) for r in records),
             "items_in_window": total_in_window,
             # 确定事件与"仅日粒度、区间与窗口相交"的待确认事件必须分开报。
-            # 合并成一个数字会让 8.1 无法回答"哪些是需要人工核时间的"。
+            # 合并成一个数字会让 C.1 无法回答"哪些是需要人工核时间的"。
             "items_in_window_exact": sum(r.get("items_in_window_exact", 0) for r in records),
             "items_in_window_fuzzy": sum(r.get("items_in_window_fuzzy", 0) for r in records),
             "blocking_gaps": len(blocking),
-            # 窗口截断不阻断 gate，但必须被计数 —— 否则 8.1 只报
+            # 窗口截断不阻断 gate，但必须被计数 —— 否则 C.1 只报
             # "44 源 transport 成功"，读者无从知道其中 6 个源只覆盖了后半窗口。
             "window_partial_sources": sum(
                 1 for r in records if r.get("covered_quality") == "partial"),

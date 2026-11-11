@@ -10,14 +10,14 @@ P1 候选池构建：把 items_<source>.json 合并、去重、归窗，产出 c
      的条目没有 published 字段，`if not published: continue` 把它们全扔了。
      而这类源恰恰承载"模型热度、新仓库、官方新工具"这类事件 ——
      v0 报告有 6 个事件的素材来自这里，新版一个都没有。
-  2. **窗口外条目被丢弃而未留痕**。8.3 的丢弃日志需要"为什么没进正文"，
+  2. **窗口外条目被丢弃而未留痕**。C.3 的丢弃日志需要"为什么没进正文"，
      但池里连条目都没有，就永远写不出理由。
   3. **dedup 只按 uid**。同一事件在不同源的 uid 不同，会重复进入池子，
      下游要靠 points 排序时又会把低分的那份当成噪声。
 
 因此本脚本：
   - 无日期条目**保留**，标 window_match=no_date + 走 snapshot 差分判断新旧；
-  - 窗口外条目**保留在池外文件** pool_out_of_window.json，供 8.3 引证；
+  - 窗口外条目**保留在池外文件** pool_out_of_window.json，供 C.3 引证；
   - 同源去重按 uid，跨源不合并（合并是 P2 的语义工作，不该在 P1 做）。
 
 用法：
@@ -195,7 +195,7 @@ def main() -> int:
               f"{sorted({x['src'] for x in nodate})}")
         print(f"    新旧判定: {dict(fresh)}")
         print("    只有 freshness=new_since_last_run 的才能作为本轮新事件；"
-              "carried_over 只能进第 5 章持续信号")
+              "carried_over 只能进附录 A持续信号")
     return 0
 
 

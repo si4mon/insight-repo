@@ -135,7 +135,7 @@ class Taxonomy:
         return sorted(self.data["chapters"], key=lambda x: x["chapter"])
 
     def section_id(self, n: int) -> str:
-        """章号 → HTML section id（s1..s8）。"""
+        """章号 → HTML section id（s1..s4、sA..sC）。"""
         return self.chapter(n)["section_id"]
 
     def anchor(self, column_id: str) -> str:
@@ -221,9 +221,9 @@ class Taxonomy:
         add("栏目只挂章 3/章 4", not cap, f"bad={cap}")
 
         ch_nums = sorted(x["chapter"] for x in chapters)
-        add("章号 1–8 连续", ch_nums == list(range(1, 9)), f"actual={ch_nums}")
+        add("章号 1–7 连续（四章正文 + 附录 A/B/C）", ch_nums == list(range(1, 8)), f"actual={ch_nums}")
         sec_ids = [x["section_id"] for x in chapters]
-        add("section id = s1..s8", sec_ids == [f"s{i}" for i in range(1, 9)], f"actual={sec_ids}")
+        add("section id = s1..s4, sA..sC", sec_ids == ["s1", "s2", "s3", "s4", "sA", "sB", "sC"], f"actual={sec_ids}")
 
         bad_l1 = [x["id"] for x in leaves if x["level1"] not in {d["id"] for d in self.data["domains"]}]
         add("叶子 level1 均存在", not bad_l1, f"bad={bad_l1}")

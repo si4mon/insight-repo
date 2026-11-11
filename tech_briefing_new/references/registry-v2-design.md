@@ -1,6 +1,6 @@
 # Thesis Registry v2 设计方案
 
-> 适用范围：`tech_briefing_new` skill 的 P3 聚类收敛、P4 入库、P6 生命周期，以及第 7 章"本轮技术判断"。
+> 适用范围：`tech_briefing_new` skill 的 P3 聚类收敛、P4 入库、P6 生命周期，以及第 1 章「技术判断」小节"本轮技术判断"。
 > 前提：**不迁移历史**。v2 从空库起步；v1 的 `thesis_registry.py` 与 `data/thesis_registry.json` 不再读取，可以删除或归档。
 
 ## 0. 摘要
@@ -11,7 +11,7 @@ v2 只回答三个问题：
 
 1. **这条事件是不是在给某个已知命题加证据？**（归属）
 2. **这个命题现在有多可信？**（置信度）
-3. **本轮哪些命题变强、变弱、被挑战、或沉寂了？**（第 7 章的输入）
+3. **本轮哪些命题变强、变弱、被挑战、或沉寂了？**（第 1 章「技术判断」小节的输入）
 
 为此做了五个关键决策：
 
@@ -30,7 +30,7 @@ v2 只回答三个问题：
 **目标**
 
 - 同一命题的证据跨天累积，"跨时间收敛"成为可计算的事实，而不是 LLM 的印象。
-- 置信度可以复算、可以下降，第 7 章的置信度和变化方向直接来自 registry 的输出。
+- 置信度可以复算、可以下降，第 1 章「技术判断」小节的置信度和变化方向直接来自 registry 的输出。
 - 同一窗口重跑、相邻窗口重叠、gate 失败后修改重跑，都不会污染 registry。
 - 归属判断的每一步都可以被门禁检查：查过什么、选了什么、为什么不选其他候选。
 
@@ -163,7 +163,7 @@ v2 只回答三个问题：
 | v1 条目 | 判断 | 原因 |
 |---|---|---|
 | TH-003 System One 专用模型谱系扩张 | 合格 | 方向明确、可证伪，后续有多实体证据 |
-| TH-049 订阅制 API 额度从开发者工具变为套餐权益 | 不应成为命题 | 商业套餐变化，不对应技术约束；作为事件进 8.3 即可 |
+| TH-049 订阅制 API 额度从开发者工具变为套餐权益 | 不应成为命题 | 商业套餐变化，不对应技术约束；作为事件进 C.3 即可 |
 | TH-047 芯片管制催生灰色供应链 | 不应成为命题 | 非技术命题，且被错归入 4.6（评测与治理） |
 
 ---
@@ -252,8 +252,8 @@ ingest 是一个事务：整批事件全部通过校验才写入，任何一条�
 
 按这个模型推算：
 
-- 单条 A+ 证据得 3 分，为 Medium，可以作为 Frontier Thesis 进入第 7 章。
-- 单条 A 证据得 2 分，为 Low，需要第二条独立证据才能进入第 7 章。这和评级定义"A = 量化显著但缺乏独立基准"一致。
+- 单条 A+ 证据得 3 分，为 Medium，可以作为 Frontier Thesis 进入第 1 章「技术判断」小节。
+- 单条 A 证据得 2 分，为 Low，需要第二条独立证据才能进入第 1 章「技术判断」小节。这和评级定义"A = 量化显著但缺乏独立基准"一致。
 - 要到 High，需要类似"A+ + 3 个实体 + 跨 2 周"这样的组合（3 + 2 + 1 = 6）。
 - 一条 A+ 反证可以把 Medium 拉回 Low，这正是 v1 做不到的。
 
@@ -289,15 +289,15 @@ Frontier 和 Convergence 也是派生值：支持证据来自 ≥ 2 个实体为
 
 与现有规则的对应关系：
 
-- `proposed` 不进第 7 章核心判断，只能作为第 5 章的 Early Signal（沿用现有规则）。
-- `contested` 可以进第 7 章，但必须同时写出反证。这正好对应现有的人工复核项"有反证时是否下调置信度"。
+- `proposed` 不进第 1 章「技术判断」小节核心判断，只能作为附录 A的 Early Signal（沿用现有规则）。
+- `contested` 可以进第 1 章「技术判断」小节，但必须同时写出反证。这正好对应现有的人工复核项"有反证时是否下调置信度"。
 - `dormant` 的命题仍会出现在召回里，所以新证据可以把它唤醒，"重新出现"因此成为可计算的事件。
 
 ---
 
 ## 8. 幂等与窗口重叠
 
-### 8.1 event_key
+### C.1 event_key
 
 `event_key` 等于规范化后的首发来源的 sha1 前 12 位。规范化规则如下：
 
@@ -307,7 +307,7 @@ Frontier 和 Convergence 也是派生值：支持证据来自 ≥ 2 个实体为
 | GitHub release | `gh:<org>/<repo>@<tag>` |
 | 其他 URL | 小写 host，去掉 `www.`、query、fragment 和末尾斜杠 |
 
-### 8.2 三种重复场景
+### C.2 三种重复场景
 
 | 场景 | 行为 |
 |---|---|
@@ -315,7 +315,7 @@ Frontier 和 Convergence 也是派生值：支持证据来自 ≥ 2 个实体为
 | **相邻窗口重叠**（今天 00:00 到 09:00 的事件在明天的窗口里再次出现） | `event_key` 已存在：只在 `seen_in_runs` 里追加本轮。如果本轮裁决与已有 link 相同，不做任何操作；如果不同，更新 link 并记录 `decided_in`。证据按 event_key 计数，所以不会重复 |
 | **同一事件换了来源 URL** | 由 §5.3 的"疑似重复事件"警告兜底，LLM 确认后复用已有的 event_key |
 
-ingest 的输出会标出 `seen_before: <run_date>`。第 8.2 节可以据此标注"上期已报"：事件仍然出现在正文里，满足"每轮交付全量简报"的硬约束，但不计入新增。
+ingest 的输出会标出 `seen_before: <run_date>`。第 C.2 节可以据此标注"上期已报"：事件仍然出现在正文里，满足"每轮交付全量简报"的硬约束，但不计入新增。
 
 ---
 
@@ -335,7 +335,7 @@ LLM 仍然按自己的方式写 `EV-xx.json`，但写完之后必须经过 norma
 |---|---|---|
 | `candidates --events-dir D` | 为每个事件写入 `thesis_candidates` | P3 |
 | `ingest --events-dir D --run-date R` | 校验裁决并以事务方式入库；同一 R 整批替换。只能入库最新 run 或重跑最近一次 run，早于最近一次的 R 会被拒绝 | P4 |
-| `report --run-date R [--out events_run_R/thesis_report.json]` | 本轮触及的命题：状态和置信度的前后对比、Frontier/Convergence、本轮收敛或跨时间收敛、得分明细 | P5 写第 7 章 |
+| `report --run-date R [--out events_run_R/thesis_report.json]` | 本轮触及的命题：状态和置信度的前后对比、Frontier/Convergence、本轮收敛或跨时间收敛、得分明细 | P5 写第 1 章「技术判断」小节 |
 | `show TH-xxxx` / `search <kw>` / `stats` | 查询 | 任意时候 |
 | `merge` / `retire` / `revise` / `supersede` | 写入显式决策 | 人工维护 |
 
@@ -361,7 +361,7 @@ reg.save()                                     # 原子写入
 
 ---
 
-## 10. 与 SKILL、门禁、第 7 章的集成
+## 10. 与 SKILL、门禁、第 1 章「技术判断」小节的集成
 
 ### 10.1 事件 JSON 字段变化
 
@@ -379,7 +379,7 @@ reg.save()                                     # 原子写入
 ```
 写 EV-*.json → events.py normalize → registry candidates
   → LLM 逐条写 thesis_decision → registry ingest（失败就修正裁决再跑，可安全重跑）
-  → registry report → 按 thesis_report.json 写第 7 章
+  → registry report → 按 thesis_report.json 写第 1 章「技术判断」小节
 ```
 
 删除 SKILL 中 `fix_events.py` 的代码块、"批量 ingest 要自己补 track/section"一段，以及 P6 中的 `update` 步骤。
@@ -391,8 +391,8 @@ reg.save()                                     # 原子写入
 | 候选已生成 | 每个 A/A+ 事件都有 `thesis_candidates`（允许为空列表），并且与 `registry candidates` 重新计算的结果一致 |
 | 裁决完整 | 每个 A/A+ 事件都有 `thesis_decision`，`action` 不是 `none` |
 | 新命题有对照 | `action = new` 且候选非空时，`rejected` 覆盖全部候选 |
-| 已入库 | registry 中存在本轮的 run，其 `event_keys` 与 8.2 声明的事件一致 |
-| 第 7 章引用合法 | 第 7 章引用的 `TH-` 编号都存在于 `thesis_report.json` 中；状态为 active 或 contested；置信度文字与 report 一致；contested 的命题必须写出反证 |
+| 已入库 | registry 中存在本轮的 run，其 `event_keys` 与 C.2 声明的事件一致 |
+| 第 1 章「技术判断」小节引用合法 | 第 1 章「技术判断」小节引用的 `TH-` 编号都存在于 `thesis_report.json` 中；状态为 active 或 contested；置信度文字与 report 一致；contested 的命题必须写出反证 |
 
 ---
 
@@ -435,7 +435,7 @@ reg.save()                                     # 原子写入
 | 1 | registry v2 核心：数据模型、派生计算、召回、事务 ingest、report、存储与锁 | `thesis_registry.py`（重写）+ 单测 |
 | 2 | `events.py normalize` 和 event schema | 替代两个临时脚本 |
 | 3 | ontology 增加 `confidence_model`、v2 生命周期、`evidence_form` 枚举、命题粒度规则 | `thesis_ontology.json` |
-| 4 | 门禁追溯层改造；SKILL 第 4、6 步和第 7 章写法更新；删除 v1 的 registry 文件 | `verify_gates.py`、SKILL.md |
+| 4 | 门禁追溯层改造；SKILL 第 4、6 步和第 1 章「技术判断」小节写法更新；删除 v1 的 registry 文件 | `verify_gates.py`、SKILL.md |
 | 5 | 用合成的 3 个 run（含窗口重叠、一条反证、一次合并）做端到端演练 | 演练记录 |
 
 ---
@@ -446,8 +446,8 @@ reg.save()                                     # 原子写入
 
 | # | 问题 | 决策 |
 |---|---|---|
-| 1 | 单条 A 级证据的命题能否进入第 7 章？ | **不能。** 按 §6 模型执行：A 的强度分为 2，单条 A 证据的命题为 Low，需要第二条独立证据才能进入第 7 章；单条 A+ 为 Medium，可以当天进入 |
+| 1 | 单条 A 级证据的命题能否进入第 1 章「技术判断」小节？ | **不能。** 按 §6 模型执行：A 的强度分为 2，单条 A 证据的命题为 Low，需要第二条独立证据才能进入第 1 章「技术判断」小节；单条 A+ 为 Medium，可以当天进入 |
 | 2 | B 级事件能否作为支持证据挂到已有命题上？ | **可以。** 强度只计 1 分，但计入跨实体、跨形态和持续性维度，作为"长期信号"的来源 |
 | 3 | 命题范围能否停在二级域（如 B1）？ | **不能。** `scope_leaves` 必须是 1–3 个叶子，由 ingest 校验（§5.3） |
 | 4 | 状态目录的默认位置 | **`$WORKDIR/state/`**。多个定时任务或多台机器共用一份 registry 时，用 `--state` 或环境变量 `TECH_BRIEFING_STATE` 指向同一个共享目录 |
-| 5 | 置信度参数是否需要先校准 | **先按 §6 的数值上线。** 运行 2–3 周后根据第 7 章的实际表现调整；参数放在 ontology 的 `confidence_model` 里，调整不需要改代码 |
+| 5 | 置信度参数是否需要先校准 | **先按 §6 的数值上线。** 运行 2–3 周后根据第 1 章「技术判断」小节的实际表现调整；参数放在 ontology 的 `confidence_model` 里，调整不需要改代码 |

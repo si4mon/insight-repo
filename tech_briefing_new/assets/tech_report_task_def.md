@@ -3,16 +3,16 @@
 本文件定义"做什么、按什么标准判断"；执行步骤、命令、文件路径与产物格式见 SKILL.md，本文件不重复。二者冲突时：内容判断以本文件为准，结构契约、文件路径与门禁以 SKILL.md 和脚本为准。
 
 【0｜TARGET_WINDOW Gate｜最高优先级】
-任务开始后，必须先获取真实当前运行时刻 NOW_UTC，并转换到 IANA 时区 Asia/Shanghai：NOW_SHANGHAI = convert_timezone(NOW_UTC, "Asia/Shanghai")。WINDOW_START_DATE = date(NOW_SHANGHAI) - 1 calendar day；WINDOW_START = WINDOW_START_DATE 00:00:00 Asia/Shanghai；WINDOW_END = NOW_SHANGHAI；TARGET_WINDOW = [WINDOW_START, WINDOW_END]。本任务中的 TARGET_DATE / TARGET_RANGE 语义统一解释为 TARGET_WINDOW，不再限定为单一自然日。禁止使用用户时区、浏览器时区、系统默认时区、上一轮日期、历史文件名、历史正文或已有状态文件推导 TARGET_WINDOW。冻结 TARGET_WINDOW 后，本轮的采集、检索、筛选、事件归属、标题、正文、文件名、8.2 Event Index 都必须使用同一窗口：WINDOW_START ≤ event_first_publish_time_in_Asia_Shanghai ≤ WINDOW_END。昨日全天事件允许进入正文；今日从 00:00 至任务执行时刻的事件允许进入正文；昨日 00:00 之前首次发布的事件，不得作为本轮“新事件”进入正文，只能按 Active Event / Historical Context 规则作为背景引用；无法确认首发时刻的高价值候选，必须明确标注“首发时间未完全核实”，不得伪造日期归属。生成前必须执行 Window Audit：H1 中的时间范围必须等于 TARGET_WINDOW；正文首页必须显示 WINDOW_START / WINDOW_END；8.2 Event Index 中所有“本轮新事件”的首发时刻都必须位于 TARGET_WINDOW；若文件生成过程中 NOW_SHANGHAI 已变化，不重新扩展 WINDOW_END；WINDOW_END 在任务开始时冻结；任一位置时间窗口不一致，废弃草稿并重新生成。文件名日期一律用 WINDOW_START_DATE（路径与命名见 SKILL.md）。
+任务开始后，必须先获取真实当前运行时刻 NOW_UTC，并转换到 IANA 时区 Asia/Shanghai：NOW_SHANGHAI = convert_timezone(NOW_UTC, "Asia/Shanghai")。WINDOW_START_DATE = date(NOW_SHANGHAI) - 1 calendar day；WINDOW_START = WINDOW_START_DATE 00:00:00 Asia/Shanghai；WINDOW_END = NOW_SHANGHAI；TARGET_WINDOW = [WINDOW_START, WINDOW_END]。本任务中的 TARGET_DATE / TARGET_RANGE 语义统一解释为 TARGET_WINDOW，不再限定为单一自然日。禁止使用用户时区、浏览器时区、系统默认时区、上一轮日期、历史文件名、历史正文或已有状态文件推导 TARGET_WINDOW。冻结 TARGET_WINDOW 后，本轮的采集、检索、筛选、事件归属、标题、正文、文件名、C.2 Event Index 都必须使用同一窗口：WINDOW_START ≤ event_first_publish_time_in_Asia_Shanghai ≤ WINDOW_END。昨日全天事件允许进入正文；今日从 00:00 至任务执行时刻的事件允许进入正文；昨日 00:00 之前首次发布的事件，不得作为本轮“新事件”进入正文，只能按 Active Event / Historical Context 规则作为背景引用；无法确认首发时刻的高价值候选，必须明确标注“首发时间未完全核实”，不得伪造日期归属。生成前必须执行 Window Audit：H1 中的时间范围必须等于 TARGET_WINDOW；正文首页必须显示 WINDOW_START / WINDOW_END；C.2 Event Index 中所有“本轮新事件”的首发时刻都必须位于 TARGET_WINDOW；若文件生成过程中 NOW_SHANGHAI 已变化，不重新扩展 WINDOW_END；WINDOW_END 在任务开始时冻结；任一位置时间窗口不一致，废弃草稿并重新生成。文件名日期一律用 WINDOW_START_DATE（路径与命名见 SKILL.md）。
 
 【0.1｜扫描窗口与事件归属分离】
-事件归属窗口为 TARGET_WINDOW。为减少跨时区漏检，实际采集扫描窗口扩大为：SCAN_WINDOW_START = WINDOW_START - 6 hours；SCAN_WINDOW_END = WINDOW_END；SCAN_WINDOW = [SCAN_WINDOW_START, SCAN_WINDOW_END]。扫描窗口用于“发现候选”，TARGET_WINDOW 用于“决定正文新事件归属”。每个事件仍按“首次公开发布时刻”换算 Asia/Shanghai 判定是否属于 TARGET_WINDOW；SCAN_WINDOW_START 至 WINDOW_START 之间出现的事件只用于跨时区边界校验、Active Event、背景关系与漏检回溯；WINDOW_END 之后的信息不得以本次正文新事件身份出现；如果搜索结果页面日期与原始首发时间不一致，必须优先使用官方原始发布时间；美国当地日期、UTC 日期、媒体转载日期不得直接作为归属日期；聚合源命中后必须回溯原始来源确认首发时刻。跨日状态（源注册表 assets/sources.py、known_vocabulary、thesis registry 及其事件库、官方面快照、漏检档案）仅用于去重、差分和回溯，禁止用于推导 TARGET_WINDOW。若状态文件不可用，按“首次运行”执行，并在 8.1 中记录。
+事件归属窗口为 TARGET_WINDOW。为减少跨时区漏检，实际采集扫描窗口扩大为：SCAN_WINDOW_START = WINDOW_START - 6 hours；SCAN_WINDOW_END = WINDOW_END；SCAN_WINDOW = [SCAN_WINDOW_START, SCAN_WINDOW_END]。扫描窗口用于“发现候选”，TARGET_WINDOW 用于“决定正文新事件归属”。每个事件仍按“首次公开发布时刻”换算 Asia/Shanghai 判定是否属于 TARGET_WINDOW；SCAN_WINDOW_START 至 WINDOW_START 之间出现的事件只用于跨时区边界校验、Active Event、背景关系与漏检回溯；WINDOW_END 之后的信息不得以本次正文新事件身份出现；如果搜索结果页面日期与原始首发时间不一致，必须优先使用官方原始发布时间；美国当地日期、UTC 日期、媒体转载日期不得直接作为归属日期；聚合源命中后必须回溯原始来源确认首发时刻。跨日状态（源注册表 assets/sources.py、known_vocabulary、thesis registry 及其事件库、官方面快照、漏检档案）仅用于去重、差分和回溯，禁止用于推导 TARGET_WINDOW。若状态文件不可用，按“首次运行”执行，并在 C.1 中记录。
 
 【1｜执行强度】
 必须按高强度 Research / Reasoning 执行：多源检索、交叉验证、日期/版本审计、事件聚合、近 3 日 Active Event、Expert Thesis Watch、Frontier / Convergence / Confidence Gate、Zero-result Audit 后再成稿。禁止低强度摘要。执行顺序必须显式分阶段：P1 宽召回 → P2 抽象提升 → P3 聚类收敛 → P4 价值门控与排序 → P5 成稿交付 → P6 漏检回溯。P1 阶段禁止做价值判断和主题过滤。
 
 【2｜采集机制：五路召回 + 双驱动补检】
-禁止只按厂商/产品名扫描，也禁止只按关键词表扫描。关键词表与实体表决定“补检深度”，不决定“召回边界”。每天必须并行执行以下五路召回机制，全部完成后才能进入 Zero-result Gate。注意：这里的五路是“召回机制”，不同于源注册表里的源通道字段 channel（A_entity / B_arxiv / C_aggregator / D_social / E_expert / F_cn_media / G_official_surface）；二者的对应关系与执行方式见 SKILL.md 步骤 3，8.3 的“召回通道”列按 SKILL.md 填写。
+禁止只按厂商/产品名扫描，也禁止只按关键词表扫描。关键词表与实体表决定“补检深度”，不决定“召回边界”。每天必须并行执行以下五路召回机制，全部完成后才能进入 Zero-result Gate。注意：这里的五路是“召回机制”，不同于源注册表里的源通道字段 channel（A_entity / B_arxiv / C_aggregator / D_social / E_expert / F_cn_media / G_official_surface）；二者的对应关系与执行方式见 SKILL.md 步骤 3，C.3 的“召回通道”列按 SKILL.md 填写。
 1. Entity Watch：按厂商、项目、仓库、产品线检查正式发布与实质更新。
 2. Technology Watch Matrix：按关键技术命题独立搜索，即使没有命中既有型号/产品名，也必须进入候选池。
 3. Source Full-Read：对源注册表中每个源读取 SCAN_WINDOW 内全部条目，至少获取标题、链接、发布时间、来源，不得预先按主题过滤，包括注意力聚合源。
@@ -73,10 +73,10 @@ Open-ended Frontier Discovery 必须通过机制执行：以 Source Full-Read / 
 至少覆盖 Andrej Karpathy、Dario Amodei、Sam Altman、Demis Hassabis、Yann LeCun、Ilya Sutskever、Geoffrey Hinton、Jensen Huang、Satya Nadella、Mustafa Suleyman、Jeff Dean、Noam Brown、Aidan Gomez、Thomas Wolf、Yoshua Bengio、Fei-Fei Li、Lilian Weng、Liang Wenfeng。分类：L1 New Statement、L2 Reactivated Thesis、L3 Thesis Validation。只有专家在 TARGET_WINDOW 内首次公开表达的新观点，才属于 L1；如果原始观点早于 TARGET_WINDOW，只是在本轮重新传播，不得伪造为 L1；L1 = 0 时必须明确写 0；禁止用二手媒体转述制造“专家新观点”。
 
 【12.5｜必审清单｜分层留痕】
-候选池一轮 2000+ 条，逐条台账不可执行；全凭取舍则同一窗口不同执行各自漏掉不同事件。必须由 must_review.py 生成分层必审清单：官方首发面（A_entity + G_official_surface）窗口内条目全量、HF Daily Papers 全量、HN 上命中论域词且分数达阈值的条目、Techmeme 命中论域词的条目、中文媒体命中论域词的条目、arXiv 按词表打分前 K 篇。趋势榜单源不入清单。清单内每一条都必须在 must_review_trace.json 里给出处置：selected / merged（给出 EV 编号）、chapter5（写明第 5 章归属）、discarded（理由取【16.1】的封闭集合）；清单外的条目按池筛规则统计留痕，不要求逐条。清单只决定要不要留痕，不决定评级：清单外的条目仍可评 A。有价值的 arXiv 论文落在前 K 之外时，补词表而不是抬 K。分层规则、阈值与词表变更记录见 references/must-review.md。
+候选池一轮 2000+ 条，逐条台账不可执行；全凭取舍则同一窗口不同执行各自漏掉不同事件。必须由 must_review.py 生成分层必审清单：官方首发面（A_entity + G_official_surface）窗口内条目全量、HF Daily Papers 全量、HN 上命中论域词且分数达阈值的条目、Techmeme 命中论域词的条目、中文媒体命中论域词的条目、arXiv 按词表打分前 K 篇。趋势榜单源不入清单。清单内每一条都必须在 must_review_trace.json 里给出处置：selected / merged（给出 EV 编号）、chapter5（写明附录 A归属）、discarded（理由取【16.1】的封闭集合）；清单外的条目按池筛规则统计留痕，不要求逐条。清单只决定要不要留痕，不决定评级：清单外的条目仍可评 A。有价值的 arXiv 论文落在前 K 之外时，补词表而不是抬 K。分层规则、阈值与词表变更记录见 references/must-review.md。
 
 【13｜Zero-result Gate｜强约束】
-任何“无新模型”“无高价值新增”“0 命中”“某厂商今日无更新”结论都必须附采集证据。必须确认：Entity Watch 已完成；Technology Watch Matrix 对应技术面已完成；Tier-1 厂商公司面 + 产品面 + 用户帮助面 + developer/API + model catalog + release notes/model card 已完成；Source Full-Read 已完成；Cross-Source Resonance 已完成；Official Surface Diff 已完成，或记录快照不可用原因；arXiv / HF source-native open-ended scan 已完成；对相关 GitHub / 官方社媒做了补检；搜索时间范围覆盖整个 SCAN_WINDOW，而不是只搜“today”。任一面未执行，不得给 Zero-result 结论。8.1 中必须记录具体检查面、时间范围、查询方式、0 结果、无法访问的页面、快照不可用原因（8.1 的完整格式见 SKILL.md 6c）。
+任何“无新模型”“无高价值新增”“0 命中”“某厂商今日无更新”结论都必须附采集证据。必须确认：Entity Watch 已完成；Technology Watch Matrix 对应技术面已完成；Tier-1 厂商公司面 + 产品面 + 用户帮助面 + developer/API + model catalog + release notes/model card 已完成；Source Full-Read 已完成；Cross-Source Resonance 已完成；Official Surface Diff 已完成，或记录快照不可用原因；arXiv / HF source-native open-ended scan 已完成；对相关 GitHub / 官方社媒做了补检；搜索时间范围覆盖整个 SCAN_WINDOW，而不是只搜“today”。任一面未执行，不得给 Zero-result 结论。C.1 中必须记录具体检查面、时间范围、查询方式、0 结果、无法访问的页面、快照不可用原因（C.1 的完整格式见 SKILL.md 6c）。
 
 【14｜Value Ranking】
 P0：Frontier Lab / 头部厂商模型；Audio / Live；Agent；Runtime；协议；架构正式发布；重要 open weights；重大能力 / API lifecycle 变化；系统级 benchmark；核心专家范式判断；头部厂商 Agent 产品形态 / 入口合并、拆分或默认行为变化。前提是经【2.5】确认改变技术命题。
@@ -92,20 +92,21 @@ P3：issue / discussion / bug 默认仅作为旁证。
 A / A+ 事件的每条未丢弃 claim 必须绑定到快照里的原文片段：claims[].evidence = {snapshot, snapshot_sha256, quote}。snapshot_sha256 对不上说明快照在事后被换过；quote 在快照里匹配不到说明那句话不是从原文来的。只要求"快照文件存在"是不够的——抓了原文却凭印象写机制时，快照仍然在，对不上的是正文。比对由 claim_evidence.py 完成，门禁逐条校验。
 
 【15.2｜统计与主线】
-事件总数、A+/A 计数、Dashboard 各项、8.2 索引表、第 2 章 Top N 必须由同一份 events_run_<date>/ 派生（report_stats.py），不得手写；门禁用同一脚本复算比对。第 1 章每条主线至少引用 2 个 8.2 中的 EV 编号，且引用的 EV 评级不低于 B——一个事件撑不起"主线"，那是单个事件，写在卡片里就够了。门禁通过后把摘要（通过数、失败项、轮次、脚本 commit、.md 的 sha256）写在 .md 旁边，渲染器拒绝渲染没有门禁摘要、摘要有失败项、或 .md 在门禁之后被改过的稿子；闸门在 render_report.py 里，直接调 report_engine/render.mjs 会绕过它。门禁重试上限 3 轮（轮次由 verify_gates 记在 .gate_attempts.jsonl，不靠记忆），第 3 轮仍失败按降级交付：把门禁生成的降级节**追加到正文最末尾**（第 8 章之后，标题「门禁未通过项与影响」，逐项给出失败内容与它对本稿的影响）、重跑门禁对齐 sha256、再 --allow-gate-fail 渲染，Markdown 与 HTML 两份都带失败项清单。不放在开头：降级项绝大多数是采集与覆盖缺口，读者当场无法处置，只影响他怎么引用正文，属于读完之后要知道的事；但它必须出现——静默不交付和静默交付一份看着干净的稿子，后者更糟。
+事件总数、A+/A 计数、Dashboard 各项、C.2 索引表、第 2 章 Top N 必须由同一份 events_run_<date>/ 派生（report_stats.py），不得手写；门禁用同一脚本复算比对。第 1 章每条主线至少引用 2 个 C.2 中的 EV 编号，且引用的 EV 评级不低于 B——一个事件撑不起"主线"，那是单个事件，写在卡片里就够了。门禁通过后把摘要（通过数、失败项、轮次、脚本 commit、.md 的 sha256）写在 .md 旁边，渲染器拒绝渲染没有门禁摘要、摘要有失败项、或 .md 在门禁之后被改过的稿子；闸门在 render_report.py 里，直接调 report_engine/render.mjs 会绕过它。门禁重试上限 3 轮（轮次由 verify_gates 记在 .gate_attempts.jsonl，不靠记忆），第 3 轮仍失败按降级交付：把门禁生成的降级节**追加到正文最末尾**（附录 C之后，标题「门禁未通过项与影响」，逐项给出失败内容与它对本稿的影响）、重跑门禁对齐 sha256、再 --allow-gate-fail 渲染，Markdown 与 HTML 两份都带失败项清单。不放在开头：降级项绝大多数是采集与覆盖缺口，读者当场无法处置，只影响他怎么引用正文，属于读完之后要知道的事；但它必须出现——静默不交付和静默交付一份看着干净的稿子，后者更糟。
 
 【15.3｜连续演进的事情用增量，不要拆成多个事件】
-同一桩事情在后续窗口又走了一步时，挂成已有事件的增量，不要新建一个事件，也不要绕成「章 5 的 Active Event + 另建一个带 contradicts 的事件」——后者语义是错的。写法：事件 JSON 里给 `increment_of = {"event_key": <已在库的事件>, "delta": "这次又发生了什么"}`，入库时自动挂上；事后补记用 `thesis_registry.py append-increment`。增量自带 source 与 first_publish，所以后续动作即使来自另一个 URL（配对 SDK 的另一个仓库）也挂在同一个事件下。registry 的 `report` 会把本轮的增量单独列出，第 5 章的 Active Event 与第 7 章的收敛叙述据此书写。判断"是不是已有事件"不靠记忆：P1 阶段 `thesis_registry.py seen` 已经给出答案。
+同一桩事情在后续窗口又走了一步时，挂成已有事件的增量，不要新建一个事件，也不要绕成「附录 A 的 Active Event + 另建一个带 contradicts 的事件」——后者语义是错的。写法：事件 JSON 里给 `increment_of = {"event_key": <已在库的事件>, "delta": "这次又发生了什么"}`，入库时自动挂上；事后补记用 `thesis_registry.py append-increment`。增量自带 source 与 first_publish，所以后续动作即使来自另一个 URL（配对 SDK 的另一个仓库）也挂在同一个事件下。registry 的 `report` 会把本轮的增量单独列出，附录 A的 Active Event 与第 1 章「技术判断」小节的收敛叙述据此书写。判断"是不是已有事件"不靠记忆：P1 阶段 `thesis_registry.py seen` 已经给出答案。
 
-【16｜固定八章】
-1 本轮结论与技术趋势：≤3 条跨栏目主线，描述本轮结构性变化的交汇，不重复栏目内的事件论证；分事实层与推理层书写（写法见 references/event-writing.md），并给出 Dashboard（见【17】）。
-2 今日必看：“今日必看”指本 TARGET_WINDOW 最值得看的事件，不再局限于单一自然日。按技术价值输出 Top N，不设固定数量、不按栏目配额；达标几条列几条，不为凑数降低门槛，也不为凑数把 B 级抬进焦点层。评级相同时，优先改变技术判断的事件，而非只刷新数字的事件。Top 1 深拆（架构/流程可视化 + 落地场景 + 与历史路线关系），可在此承载该事件的唯一主卡；全卡超过 5 条时，Top 1 保留深拆，其余压缩为摘要卡（标题 + 评级 + 一句话命题 + 指向分类章主卡的链接），不重复正文。
-3 模型技术热点：3.1 模型架构、训练与适应；3.2 推理、决策与效率；3.3 多模态、语音与实时模型；3.4 世界、空间与动作模型。只展开当天有入选事件的栏目（0 条不出现，1 条折叠进相邻栏目）；每个事件只在唯一主栏目写全卡。
+【16｜固定章节】
+结构自 2026-11-11 起为「四章正文 + 三个附录」。原则：读者的阅读顺序决定内容的摆放顺序——先读到的必须是技术事件与技术本身，呈现简报质量的信息（统计、窗口审计、采集覆盖、门禁）一律后置并从简。正文不写一级标题；窗口写在 frontmatter 的 window 字段。
+1 本轮结论与技术判断：先写一句总判断，再写 ≤3 条跨栏目主线，描述本轮结构性变化的交汇，不重复栏目内的事件论证；分事实层与推理层书写（写法见 references/event-writing.md）。覆盖有缺口时只用一行提示「事件数是下限，详见附录 C」，不在这里放 Dashboard 或统计表。章末设「### 技术判断」小节：Frontier Thesis、Convergence Thesis。只写 thesis registry 本轮报告中 core_judgment 为真的命题（状态 active / contested 且置信度非 Low），每条写 TH 编号、类型、置信度（与 registry 一致）、本轮收敛 / 跨时间收敛与前后变化；contested 的命题必须写出反证；proposed 或 Low 的命题只能作为附录 A Early Signal。
+2 今日必看：A/A+ 事件的完整主卡，张数 = min(5, A/A+ 数量)，没有 A/A+ 时放评级最高的 1 张；按评级 → 总分 → 成对裁定取前 5，不按栏目配额，不为凑数把 B 级抬进来。每张卡在标记行声明「归属 N.M」，写足四节技术深拆与「对我们的含义」。这里不写摘要指引：高价值内容必须在第一时间直接读到。超出 5 张的 A/A+ 在各自栏目写完整主卡。评级相同时，优先改变技术判断的事件，而非只刷新数字的事件。
+3 模型技术热点：3.1 模型架构、训练与适应；3.2 推理、决策与效率；3.3 多模态、语音与实时模型；3.4 世界、空间与动作模型。只展开当天有入选事件的栏目（0 条不出现，1 条折叠进相邻栏目）；每个事件只在唯一主栏目写全卡。 主卡已在今日必看的事件，在归属栏目只留一条摘要指引（标记行信号位写「摘要」）。B/C 级事件的卡写在栏目里。
 4 Agent 系统技术热点：4.1 任务控制、运行与基础设施；4.2 记忆、知识与上下文；4.3 外部环境中的行动与工具使用；4.4 多 Agent 协同与互操作；4.5 学习与系统自进化；4.6 评测、验证与可信治理；4.7 交互、主动服务与持续委托。
-5 值得关注：Early Signal、Active Event、Counter-signal、时间边界候选、未归类高信号。时间边界候选指首发时刻接近 WINDOW_START、时间信息存在时区歧义或仍需进一步核实的候选。未归类事件必须写明"为什么现有 54 个叶子都不覆盖"。
-6 业界专家观点与趋势信号。
-7 本轮技术判断：Frontier Thesis、Convergence Thesis。只写 thesis registry 本轮报告中 core_judgment 为真的命题（状态 active / contested 且置信度非 Low），每条写 TH 编号、类型、置信度（与 registry 一致）、本轮收敛 / 跨时间收敛与前后变化；contested 的命题必须写出反证；proposed 或 Low 的命题只能作为第 5 章 Early Signal。
-8 信息源采集统计：8.1 源与覆盖审计；8.2 事件索引；8.3 候选池丢弃日志与漏检回溯。
+附录 A 值得关注：Early Signal、Active Event、Counter-signal、时间边界候选、未归类高信号。时间边界候选指首发时刻接近 WINDOW_START、时间信息存在时区歧义或仍需进一步核实的候选。未归类事件必须写明"为什么现有 54 个叶子都不覆盖"。 附录 A 只放线索表，不放编号事件；线索行的「本轮审阅结论」要写审阅后的判断，不得以原文摘要首句充当。
+附录 B 业界专家观点与趋势信号。
+附录 C 信息源采集统计：Dashboard（见【17】）与 Window Audit 放在本附录开头；C.1 源与覆盖审计；C.2 事件索引；C.3 候选池丢弃日志与漏检回溯。
+A/A+ 主卡的「对我们的含义」：排在四节技术深拆之后，必须建立在前文已交代的技术事实上——引用本卡的一个具体机制或数字，落到我方某条技术路线的具体环节，并写出原文未验证、不能外推的范围。用条件句与待验证项，不写定论与行动号召，不用定性夸大用语。
 
 栏目与叶子的映射以 assets/taxonomy.py 为唯一事实源，本文档不重复维护映射表。
 第 3、4 章结构与分析深度必须对称。
@@ -114,15 +115,15 @@ A / A+ 事件的每条未丢弃 claim 必须绑定到快照里的原文片段：
 候选池中被丢弃的 Tier-1 来源条目及共振命中条目，逐条记录：条目、来源、召回通道、首发时刻、是否位于 TARGET_WINDOW、处置、理由。丢弃理由为封闭集合，只能取：未验证、重复、低影响、首发早于 WINDOW_START、首发晚于 WINDOW_END、Active Event 非新事件、错误年份、媒体转载误判、已并入其他事件、技术命题未发生变化。不得无理由丢弃。
 
 【16.2｜tier-1 命中项不得以「未验证」结案】
-必审条目的标题命中 data/review_terms.json 的 tier1_guard 词表（对应 business_tier=1 的三条业务主线：模型核心、harness engineering/RSI 含工具治理、个性化记忆，外加主动介入决策 P5）时，处置不得是 discarded + 未验证。可以不写成事件，但不能无声消失：降到第 5 章留一个线索位，或者给出真正说明情况的理由（首发早于 WINDOW_START、重复、低影响、技术命题未发生变化等）。门禁项「tier-1 命中项未被『未验证』静默丢弃」。
+必审条目的标题命中 data/review_terms.json 的 tier1_guard 词表（对应 business_tier=1 的三条业务主线：模型核心、harness engineering/RSI 含工具治理、个性化记忆，外加主动介入决策 P5）时，处置不得是 discarded + 未验证。可以不写成事件，但不能无声消失：降到附录 A留一个线索位，或者给出真正说明情况的理由（首发早于 WINDOW_START、重复、低影响、技术命题未发生变化等）。门禁项「tier-1 命中项未被『未验证』静默丢弃」。
 起因：2026-11-09 那轮 76 条必审里约 50 条共用「未验证」结案，Flex-RSI、BOXBOX（均为 RSI/harness 自改进）与 Knowing When to Intervene（主动介入，正是 P5 的切换信号原文）就此消失；而同一轮里 ERNIE Evolve（同属 RSI）被评为 A 并立了 TH-0001。同一命题的三份证据，一份立命题、两份没看就丢，不自洽。「未验证」是合法理由，但当它覆盖大半个清单时，台账就从判断记录退化成没时间的记录，不可审计。该词表刻意不收 memory / reasoning / tool use 这类裸词——实测会把拦截面从 24% 推到 37%，门禁过宽就会被绕开。
-漏检回溯 P6：每次运行对照前一次扫描窗口的注意力聚合源头条、专家讨论、当前网络热点、上一份简报，识别可能漏检项。漏检根因为封闭集合，只能取：源面未覆盖、召回通道未命中、代理拦截、解析失败、窗口覆盖不完整、抽象提升失败、价值误判、日期边界、时区换算错误、官方原文未回溯、搜索结果年份污染、动态页面未读取。并据此更新 assets/sources.py、known_vocabulary、thesis registry（retire / merge / revise 决策）；变化类型体系属于 thesis_ontology.json，由人工维护。8.3 必须使用表格呈现。
+漏检回溯 P6：每次运行对照前一次扫描窗口的注意力聚合源头条、专家讨论、当前网络热点、上一份简报，识别可能漏检项。漏检根因为封闭集合，只能取：源面未覆盖、召回通道未命中、代理拦截、解析失败、窗口覆盖不完整、抽象提升失败、价值误判、日期边界、时区换算错误、官方原文未回溯、搜索结果年份污染、动态页面未读取。并据此更新 assets/sources.py、known_vocabulary、thesis registry（retire / merge / revise 决策）；变化类型体系属于 thesis_ontology.json，由人工维护。C.3 必须使用表格呈现。
 
 【17｜HTML】
-默认交付响应式、高信息密度、专业克制的完整 HTML。**只写 Markdown 工作源**，由内置渲染引擎生成自包含页面（命令、路径与 Markdown 结构契约见 SKILL.md 步骤 5）；排版与主题由引擎模板承担，设计约束见 references/design-constraints.md。禁止手改渲染后的 .html，修改一律回到 .md 重新渲染。Dashboard（第 1 章事实层中的统计表）必须同时显示 TARGET_WINDOW、事件总数、A / A+ 数、Frontier Signal 数、Convergence Signal 数、Active Event 数，并按 `change_object` 给出分布（Model / Harness / 运行平台 / 交互·应用 / 尚未披露）—— 不再使用旧的 Model Track / Harness Track 双轨计数。Top N 使用独立重点卡（数量按技术价值，不设固定值）。Top 1 必须给架构或流程可视化（本地 SVG/PNG 图片或表格，画机制不画名字；箭头带动词，跨度带尺寸线；图片要求见 SKILL.md 步骤 5）。每张主卡必须包含：可点击原始源、Asia/Shanghai 首发时刻、日期语义、Technical Value、Evidence Confidence、Trend Maturity、变化类型、技术命题（TH 编号）；摘要卡与第 5 章持续信号卡只需评级、一句话命题与指向主卡的链接。8.1 / 8.2 / 8.3 使用表格。
+默认交付响应式、高信息密度、专业克制的完整 HTML。**只写 Markdown 工作源**，由内置渲染引擎生成自包含页面（命令、路径与 Markdown 结构契约见 SKILL.md 步骤 5）；排版与主题由引擎模板承担，设计约束见 references/design-constraints.md。禁止手改渲染后的 .html，修改一律回到 .md 重新渲染。Dashboard（第 1 章事实层中的统计表）必须同时显示 TARGET_WINDOW、事件总数、A / A+ 数、Frontier Signal 数、Convergence Signal 数、Active Event 数，并按 `change_object` 给出分布（Model / Harness / 运行平台 / 交互·应用 / 尚未披露）—— 不再使用旧的 Model Track / Harness Track 双轨计数。Top N 使用独立重点卡（数量按技术价值，不设固定值）。Top 1 必须给架构或流程可视化（本地 SVG/PNG 图片或表格，画机制不画名字；箭头带动词，跨度带尺寸线；图片要求见 SKILL.md 步骤 5）。每张主卡必须包含：可点击原始源、Asia/Shanghai 首发时刻、日期语义、Technical Value、Evidence Confidence、Trend Maturity、变化类型、技术命题（TH 编号）；摘要卡与附录 A持续信号卡只需评级、一句话命题与指向主卡的链接。C.1 / C.2 / C.3 使用表格。
 
 【18｜附件交付 Gate】
-验收以脚本退出码为准，不由 LLM 读一遍 HTML 自证通过：结构、时间窗口、8.2 首发时刻归窗、Active / Historical 标注、来源链接、追溯与 registry 由 verify_gates.py 校验，渲染由 render_report.py 校验（检查项见 SKILL.md 步骤 6）。脚本覆盖不到的两项列入人工复核：title / H1 / Dashboard / 正文窗口 / 文件名的时间范围一致；不残留旧版“TARGET_DATE = 单一天”的文字或审计逻辑。交付前确认 reports/ 下渲染出的 .html 真实存在且 size > 0；客户端支持文件附件时，附上该文件并核对文件对象（文件名、大小），只有拿到真实可见的文件对象才允许标 SUCCESS。
+验收以脚本退出码为准，不由 LLM 读一遍 HTML 自证通过：结构、时间窗口、C.2 首发时刻归窗、Active / Historical 标注、来源链接、追溯与 registry 由 verify_gates.py 校验，渲染由 render_report.py 校验（检查项见 SKILL.md 步骤 6）。脚本覆盖不到的两项列入人工复核：title / H1 / Dashboard / 正文窗口 / 文件名的时间范围一致；不残留旧版“TARGET_DATE = 单一天”的文字或审计逻辑。交付前确认 reports/ 下渲染出的 .html 真实存在且 size > 0；客户端支持文件附件时，附上该文件并核对文件对象（文件名、大小），只有拿到真实可见的文件对象才允许标 SUCCESS。
 
 【19｜最终回复】
 最终回复必须简要给出：1) TARGET_WINDOW：WINDOW_START → WINDOW_END，均为 Asia/Shanghai；2) 本轮采纳了哪些栏目（按栏目列出主卡数量）；3) 章 2 的 Top N 名单（N 由价值决定）；4) 最重要的 Model ↔ Harness 技术判断；5) 与上一轮相比最重要的新增 / 修正，如有；6) 已通过可见性验收的真实 HTML 文件入口。最终回复不得把 TARGET_WINDOW 简写成单一 TARGET_DATE。若正文同时覆盖昨天和今天，必须明确写出两个自然日及精确截止时间。

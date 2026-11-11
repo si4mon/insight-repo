@@ -14,7 +14,7 @@ CLI（全局参数 --state DIR）：
   candidates --events-dir D [--run-date R]       为每个事件写入 thesis_candidates
   ingest     --events-dir D --run-date R [--report collect_report.json] [--backfill]
   gaps       --until R                           列出漏跑的窗口日期（需补跑）
-  report     --run-date R [--out FILE]           第 7 章输入：本轮命题的前后对比
+  report     --run-date R [--out FILE]           第 1 章「技术判断」小节输入：本轮命题的前后对比
   show TH-0001 | search 关键词 | stats
   merge --source A --target B --reason ... | retire --id X --reason ...
   revise --id X --statement ... --reason ...  | supersede --old A --new B --reason ...
@@ -720,7 +720,7 @@ class Registry:
 
         三类来源都进索引：
           event     已写成事件的来源（含增量自带的来源）；
-          mention   进过第 5 章或被并入其他事件的候选（record_mentions 落的）。
+          mention   进过附录 A或被并入其他事件的候选（record_mentions 落的）。
         判重的口径和 event_key 完全一致（都走 events.canonical_source），
         所以这里命中就等于 ingest 时会命中，不会出现"选题说新、入库说旧"。
         """
@@ -778,7 +778,7 @@ class Registry:
         return out
 
     def record_mentions(self, run_date: str, items: list[dict]) -> int:
-        """登记本轮进过第 5 章或被并入其他事件的候选来源。
+        """登记本轮进过附录 A或被并入其他事件的候选来源。
 
         这些条目不是事件，不进 events，所以此前完全没有跨轮记忆——同一条线索
         可以连续几轮以"新线索"出现。这里只存判重需要的最小信息，不参与命题图谱。
@@ -815,7 +815,7 @@ class Registry:
         状态——再次出现只往 seen_in_runs 里加一个日期，记不下"这次又发生了什么"。
         于是连续演进型的事情没有正确的表达方式：openai-python 与 openai-node
         同分钟配对发布跨两个窗口出现，只能描述成"节奏"；想表达增量就得绕成
-        「章 5 的 Active Event + 另建一个带 contradicts 的事件」，语义是错的。
+        「附录 A 的 Active Event + 另建一个带 contradicts 的事件」，语义是错的。
 
         增量自带 source 与 first_publish，所以同一桩事情的后续动作即使来自
         另一个 URL（配对 SDK 的另一个仓库）也能挂在同一个事件下。
@@ -883,7 +883,7 @@ class Registry:
     def supersede(self, old: str, new: str, reason: str):
         self._decide({"type": "supersede", "old": old, "new": new, "reason": reason})
 
-    # ---------- 报告（第 7 章输入） ----------
+    # ---------- 报告（第 1 章「技术判断」小节输入） ----------
     def report(self, run_date: str) -> dict:
         if run_date not in self.run_dates():
             raise RegistryError(f"registry 中没有 run {run_date}（先 ingest）")
@@ -916,8 +916,8 @@ class Registry:
                 and after["confidence"] not in CM["core_judgment_excludes"],
             })
         rows.sort(key=lambda r: (not r["core_judgment"], -r["score"], r["id"]))
-        # 本轮追加的事件增量：连续演进型的事情不再拆成多个事件，所以第 5 章的
-        # Active Event 与第 7 章的收敛叙述要能看到"这桩事情这次又走了一步"。
+        # 本轮追加的事件增量：连续演进型的事情不再拆成多个事件，所以附录 A的
+        # Active Event 与第 1 章「技术判断」小节的收敛叙述要能看到"这桩事情这次又走了一步"。
         incs = []
         for k, stored in sorted(self.data["events"].items()):
             for it in stored.get("increments") or []:
@@ -994,7 +994,7 @@ def main() -> int:
     i.add_argument("--backfill", action="store_true", help="补跑漏掉的较早日期")
     g = sub.add_parser("gaps", help="列出漏跑的窗口日期")
     g.add_argument("--until", required=True, help="本轮 WINDOW_START_DATE（不含）")
-    r = sub.add_parser("report", help="第 7 章输入")
+    r = sub.add_parser("report", help="第 1 章「技术判断」小节输入")
     r.add_argument("--run-date", required=True)
     r.add_argument("--out", default="")
     s = sub.add_parser("show")
@@ -1028,7 +1028,7 @@ def main() -> int:
     sn.add_argument("--urls-file", default="", help="每行一个 URL 的文本文件")
     sn.add_argument("--out", default="", help="结果写成 JSON（供 build.py 读）")
     rm = sub.add_parser("record-mentions",
-                        help="登记本轮进第 5 章 / 被并入的候选，供后续轮次判重")
+                        help="登记本轮进附录 A / 被并入的候选，供后续轮次判重")
     rm.add_argument("--must-review", required=True)
     rm.add_argument("--trace", required=True, help="must_review_trace.json")
     rm.add_argument("--run-date", required=True)
@@ -1130,7 +1130,7 @@ def main() -> int:
                                   "disposition": d, "reason": e.get("reason", "")})
             with reg:
                 n = reg.record_mentions(args.run_date, items)
-            print(f"登记 {n} 条线索（第 5 章 / 已并入），本轮候选 {len(items)} 条")
+            print(f"登记 {n} 条线索（附录 A / 已并入），本轮候选 {len(items)} 条")
         elif args.cmd == "increments":
             _print(reg.increments(args.event_key, args.as_of or None))
         elif args.cmd == "append-increment":

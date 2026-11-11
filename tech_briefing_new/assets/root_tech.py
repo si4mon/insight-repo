@@ -67,7 +67,7 @@ def resolve(rid: str, data: dict | None = None) -> dict:
     if bare in data["index"]:
         return data["index"][bare]
     if bare in data["candidate_index"]:
-        raise RootTechError(f"{rid} 是候选根（只记录不计分，命中写入第 5 章）")
+        raise RootTechError(f"{rid} 是候选根（只记录不计分，命中写入附录 A）")
     raise RootTechError(f"{rid} 不在根技术清单里")
 
 
@@ -130,7 +130,7 @@ def derive_adjacency(hits) -> int:
 
 
 def candidate_hits(hits, data: dict | None = None) -> list[str]:
-    """命中的候选根（B6.x）。只记录不计分，写入第 5 章作为候选根升格信号。"""
+    """命中的候选根（B6.x）。只记录不计分，写入附录 A作为候选根升格信号。"""
     data = data or load()
     out = []
     for h in hits or []:

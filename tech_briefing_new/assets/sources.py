@@ -110,7 +110,7 @@ TIER1_CANONICAL = {
 }
 
 # 已知无法覆盖的 实体×面，必须写明原因，否则审计时不通过。
-# reason 会原样写进 8.1，供人工判断是否需要申请权限。
+# reason 会原样写进 C.1，供人工判断是否需要申请权限。
 UNCOVERABLE = [
     {
         "entity": "Anthropic", "surface": "developer",
@@ -122,7 +122,7 @@ UNCOVERABLE = [
         "entity": "Anthropic", "surface": "support",
         "layer": "support.claude.com",
         "reason": "support.claude.com 可达但为 JS 渲染列表页，HTML 中无日期文本，"
-                  "html_cards 提取 0 条；已在 8.1 标注需人工补检",
+                  "html_cards 提取 0 条；已在 C.1 标注需人工补检",
     },
     {
         "entity": "Google", "surface": "developer",
@@ -306,7 +306,7 @@ def build_sources() -> list[dict]:
                                "file": f"gh_anthropic_{sdk}_tags.json"})
 
     # anthropic.com 保留为"探测性源"：不设 critical，且拦截页会被显式标记，
-    # 这样 8.1 能持续显示"该面仍被拦截"，而不是静默成功。
+    # 这样 C.1 能持续显示"该面仍被拦截"，而不是静默成功。
     add(id="anthropic_news_probe", entity="Anthropic", surface="company",
         layer="anthropic-com-news", channel="A_entity", mode="html_cards",
         required=False,
@@ -564,7 +564,7 @@ def build_sources() -> list[dict]:
 UNCOVERABLE_RECHECK_BY = "2026-11-30"
 _COMPENSATION = {
     ("Anthropic", "developer"): ("已登记 platform.claude.com/docs 与 claude.com/blog", ["Claude API", "Anthropic API"]),
-    ("Anthropic", "support"): ("claude.com/blog 与聚合源回溯；8.1 标注需人工补检", ["Claude release notes"]),
+    ("Anthropic", "support"): ("claude.com/blog 与聚合源回溯；C.1 标注需人工补检", ["Claude release notes"]),
     ("Google", "developer"): ("已登记 developers.googleblog.com 与 blog.google/technology/ai", ["Gemini API"]),
     ("Meta", "company"): ("聚合源（Techmeme / HN）与中文媒体回溯 + 每日检索任务", ["Meta AI", "Llama"]),
     ("xAI", "company"): ("聚合源回溯 + 每日检索任务", ["xAI", "Grok"]),

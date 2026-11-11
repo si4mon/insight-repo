@@ -265,7 +265,7 @@ function cardFacets(tokens, from, reportDate = '') {
   // fresh：标记行写 Active Event，或元信息表里的首发日早于简报日期 → 延续事件。
   //        「这条是今天新出的还是上一轮的延续」是日更简报读者最常问的，
   //        不该要求他展开出处表才知道。
-  const out = { layer: '', rating: '', kind: 'card', fresh: '' };
+  const out = { layer: '', rating: '', kind: 'card', fresh: '', ev: '' };
   let seenMarker = false;
   for (let k = from; k < tokens.length; k++) {
     const t = tokens[k];
@@ -275,6 +275,7 @@ function cardFacets(tokens, from, reportDate = '') {
       if (!m || !/EV-\d/.test(m[1])) continue;
       const seg = m[1];
       seenMarker = true;
+      out.ev = (seg.match(/EV-\d+/) || [''])[0];
       out.layer = (CARD_LAYERS.find(([zh]) => seg.includes(zh)) || [])[1] || '';
       out.rating = (seg.match(/(?:^|\s|·)\s*(A\+|A|B|C)\s*(?:·|$)/) || [])[1] || '';
       if (/·\s*摘要\s*·/.test(seg)) out.kind = 'ref';
@@ -514,10 +515,21 @@ function render(tokens) {
   let pendingSectionLede = false;
   let inSection = false;
   let inCard = false;
-  let card = null;          // 当前卡的 {kind, rating, metaDone, deepOpen}
+  let card = null;          // 当前卡的 {kind, rating, metaDone, deepOpen, deepDone, implOpen}
+  let curH2 = '';
+  let inAppendix = false;
+  const focusItems = [];    // 今日必看里的主卡，用来在页首生成条带
+  const usedIds = new Set();
+  const closeInner = () => {
+    let t = '';
+    if (card && card.deepOpen) { t += '\n</div></details>'; card.deepOpen = false; card.deepDone = true; }
+    if (card && card.implOpen) { t += '\n</div>'; card.implOpen = false; }
+    return t;
+  };
+  const closeAppendix = () => { if (!inAppendix) return ''; inAppendix = false; return '\n</div></details>\n'; };
   const closeCard = () => {
     if (!inCard) return '';
-    const tail = (card && card.deepOpen ? '\n</div></details>' : '') + '\n</article>\n';
+    const tail = closeInner() + '\n</article>\n';
     inCard = false; card = null;
     return tail;
   };
@@ -553,7 +565,9 @@ function render(tokens) {
       if (t.level <= 4 && inCard) html += closeCard();
       const h = renderHeading(t.level, t.text, blockId);
       if (t.level === 2) {
+        html += closeAppendix();
         if (inSection) html += '</section>';
+        curH2 = t.text;
         const id = slug(t.text);
         html += `\n<section aria-labelledby="${id}">\n`;
         inSection = true;
@@ -569,21 +583,43 @@ function render(tokens) {
                     + (f.rating ? ` data-rating="${escapeHtml(f.rating)}"` : '')
                     + (f.fresh ? ` data-fresh="${f.fresh}"` : '');
         const cls = f.kind === 'ref' ? 'event-ref' : 'event-card';
-        html += `\n<article class="${cls}"${attrs}>\n`;
+        // 主卡用 EV 编号做锚点，页首条带与栏目里的摘要指引都跳到这里
+        const idAttr = (f.kind === 'card' && f.ev && !usedIds.has(f.ev)) ? ` id="${f.ev}"` : '';
+        if (idAttr) usedIds.add(f.ev);
+        html += `\n<article class="${cls}"${idAttr}${attrs}>\n`;
         if (f.kind === 'card' && f.fresh) {
           html += `<span class="card-fresh">${f.fresh === 'cont' ? '延续' : '本轮首发'}</span>`;
         }
+        if (f.kind === 'ref' && f.ev) {
+          html += `<a class="event-ref__go" href="#${f.ev}">主卡 ↑</a>`;
+        }
+        if (f.kind === 'card' && /今日必看/.test(curH2)) {
+          const bar = t.text.indexOf('｜');
+          focusItems.push({ ev: f.ev, layer: f.layer, rating: f.rating,
+            kw: bar > 0 ? t.text.slice(0, bar).trim() : '',
+            sum: bar > 0 ? t.text.slice(bar + 1).trim() : t.text });
+        }
         inCard = true;
-        card = { kind: f.kind, rating: f.rating, metaDone: false, deepOpen: false };
+        card = { kind: f.kind, rating: f.rating, metaDone: false, deepOpen: false, deepDone: false, implOpen: false };
       }
       // 卡内第一个 h5 起是深拆（机制/定量/对比）。A/A+ 默认展开，B/C 默认折起：
       // 评级的轻重由此体现在"占多少屏"上，而不只是底色深浅。
-      if (t.level === 5 && inCard && card && card.kind === 'card' && !card.deepOpen) {
+      // 「对我们的含义」不进折叠：它是这张卡对读者的落点，单独成块、始终可见。
+      if (t.level === 5 && inCard && card && card.kind === 'card' && /对我们的含义/.test(t.text)) {
+        html += closeInner();
+        html += '\n<div class="card-impl">\n';
+        card.implOpen = true;
+      } else if (t.level === 5 && inCard && card && card.kind === 'card' && !card.deepOpen && !card.deepDone && !card.implOpen) {
         const open = (card.rating === 'A' || card.rating === 'A+') ? ' open' : '';
         html += `\n<details class="card-deep"${open}><summary>机制、定量与对比</summary><div class="card-deep__body">\n`;
         card.deepOpen = true;
       }
       html += withReportComments(h.html, comments, blockId);
+      if (t.level === 2 && /^\s*附录/.test(t.text)) {
+        // 附录是查证用的：线索、专家观察、采集审计。默认整节折起，不占阅读流。
+        html += '\n<details class="appendix"><summary>展开本附录</summary><div class="appendix__body">\n';
+        inAppendix = true;
+      }
       lastHeadingLevel = t.level;
       continue;
     }
@@ -675,11 +711,13 @@ function render(tokens) {
       if (inCard && card && (card.metaDone || card.kind === 'ref') && t.rows.length > LONG_TABLE_ROWS) {
         html += closeCard();
       }
-      if (inCard && card && card.kind === 'card' && !card.metaDone) {
+      const isMetaTable = /元信息/.test(String(t.header[0] || ''));
+      if (inCard && card && card.kind === 'card' && !card.metaDone && isMetaTable) {
+        html += closeInner();
         // 出处与评分：读者先要知道发生了什么，核对时才需要它。永远默认折起。
         card.metaDone = true;
         html += `<details class="card-meta"><summary>出处与评分</summary>${tableHtml}</details>`;
-      } else if (!inCard && t.rows.length > LONG_TABLE_ROWS) {
+      } else if (!inCard && !inAppendix && t.rows.length > LONG_TABLE_ROWS) {
         // 查阅型长表（线索表、源清单、丢弃日志）不该摆成阅读流。
         html += `<details class="long-table"><summary>${escapeHtml(String(t.header[0] || '表格'))} 等 ${t.header.length} 列 · 共 ${t.rows.length} 行</summary>${tableHtml}</details>`;
       } else {
@@ -715,8 +753,9 @@ function render(tokens) {
   }
 
   html += closeCard();
+  html += closeAppendix();
   if (inSection) html += '</section>';
-  return { html, headings };
+  return { html, headings, focusItems };
 }
 
 function renderFootnotes(tokens) {
@@ -806,7 +845,18 @@ if (meta.status === undefined || meta.status === '') {
 
 FN_USED.clear();
 const tokens = tokenize(body);
-const { html: articleHtml, headings } = render(tokens);
+const rendered = render(tokens);
+const { headings, focusItems } = rendered;
+// 页首条带：今日必看的主卡各一行。首屏应该回答"今天有什么"，而不是展示窗口与统计。
+// 由正文派生，不需要作者另写一遍。
+const topStrip = focusItems.length ? `<nav class="top-strip" aria-label="今日必看">
+  <p class="top-strip__title">今日必看</p>
+  <ol>${focusItems.map(it => `<li${it.layer ? ` data-layer="${it.layer}"` : ''}><a href="#${escapeHtml(it.ev)}">`
+    + `<span class="top-strip__rating">${escapeHtml(it.rating)}</span>`
+    + (it.kw ? `<span class="top-strip__kw">${inline(it.kw)}</span>` : '')
+    + `<span class="top-strip__sum">${inline(it.sum)}</span></a></li>`).join('')}</ol>
+</nav>\n` : '';
+const articleHtml = topStrip + rendered.html;
 if (IMAGE_ERRORS.length) {
   for (const e of IMAGE_ERRORS) console.error(`error: ${e}`);
   console.error('error: local images must exist (paths are relative to the .md); nothing was written');
@@ -835,6 +885,7 @@ const articleHeader = `<header class="article-header">
   <dl class="meta">
     <dt>generated by</dt> <dd>${escapeHtml(meta.generated_by || meta.generatedBy || 'AI agent')}</dd>
     <dt>date</dt> <dd>${escapeHtml(date)}</dd>
+    ${meta.window ? `<dt>window</dt> <dd>${escapeHtml(String(meta.window))}</dd>` : ''}
     <dt>reading time</dt> <dd id="reading-time">~? min read</dd>
     ${tagsHtml ? `<dt>tags</dt> <dd>${tagsHtml}</dd>` : ''}
     ${meta.sources != null ? `<dt>sources</dt> <dd>${escapeHtml(String(meta.sources))}</dd>` : ''}

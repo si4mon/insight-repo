@@ -1186,6 +1186,59 @@ details.long-table {
 
 @media print { .event-card details > *, details.long-table > * { display: revert; } }
 
+/* —— 首屏条带：今日必看各一行 —— */
+.top-strip { margin: 0 0 var(--s-8); padding: var(--s-4) var(--s-6);
+  border: 1px solid var(--rule); border-radius: 10px; background: var(--bg-elevated); }
+.top-strip__title { margin: 0 0 var(--s-2); font-family: var(--font-ui); font-size: 0.6875rem;
+  font-weight: 600; letter-spacing: 0.08em; color: var(--text-muted); }
+.top-strip ol { list-style: none; margin: 0; padding: 0; }
+.top-strip li { border-left: 3px solid var(--card-hue, var(--rule-strong)); padding: var(--s-1) 0 var(--s-1) var(--s-3); margin: var(--s-1) 0; }
+.top-strip li[data-layer="model"]       { --card-hue: oklch(0.48 0.145  35); }
+.top-strip li[data-layer="harness"]     { --card-hue: oklch(0.48 0.145 250); }
+.top-strip li[data-layer="platform"]    { --card-hue: oklch(0.46 0.130 155); }
+.top-strip li[data-layer="interaction"] { --card-hue: oklch(0.48 0.145 310); }
+[data-theme="dark"] .top-strip li[data-layer="model"]       { --card-hue: oklch(0.78 0.130  35); }
+[data-theme="dark"] .top-strip li[data-layer="harness"]     { --card-hue: oklch(0.78 0.130 250); }
+[data-theme="dark"] .top-strip li[data-layer="platform"]    { --card-hue: oklch(0.78 0.130 155); }
+[data-theme="dark"] .top-strip li[data-layer="interaction"] { --card-hue: oklch(0.78 0.130 310); }
+.top-strip a { display: block; text-decoration: none; color: var(--text); line-height: 1.45; }
+.top-strip a:hover .top-strip__sum { text-decoration: underline; }
+.top-strip__rating { display: inline-block; min-width: 1.9em; font-family: var(--font-ui);
+  font-size: 0.75rem; font-weight: 700; color: var(--card-hue, var(--text-muted)); }
+.top-strip__kw { font-family: var(--font-ui); font-size: 0.8125rem; font-weight: 600;
+  color: var(--card-hue, var(--accent)); margin-right: 0.6em; }
+.top-strip__sum { font-size: 1rem; }
+
+/* —— 对我们的含义：卡片的落点，始终可见 —— */
+.card-impl { margin: var(--s-4) 0 var(--s-2); padding: var(--s-3) var(--s-4);
+  border-left: 3px solid var(--card-hue, var(--accent));
+  background: color-mix(in oklch, var(--bg) 78%, transparent); border-radius: 0 8px 8px 0; }
+.card-impl > h5 { margin: 0 0 var(--s-1); color: var(--card-hue, var(--accent)); }
+.card-impl > p:last-child { margin-bottom: 0; }
+
+/* —— 附录：查证用，默认整节折起 —— */
+details.appendix > summary { cursor: pointer; list-style: none; font-family: var(--font-ui);
+  font-size: 0.8125rem; color: var(--text-muted); padding: var(--s-1) 0; }
+details.appendix > summary::-webkit-details-marker { display: none; }
+details.appendix > summary::before { content: "▸"; display: inline-block; width: 1em; margin-right: 0.2em; }
+details.appendix[open] > summary::before { content: "▾"; }
+section:has(> details.appendix) > h2 { font-size: 1.25rem; color: var(--text-muted); }
+
+.event-ref__go { float: right; font-family: var(--font-ui); font-size: 0.75rem;
+  color: var(--text-muted); text-decoration: none; }
+.event-ref__go:hover { color: var(--text); }
+/* 页眉元信息压成一行小字：日期、窗口、阅读时长是查证信息，不该在首屏占四行加两道横线 */
+.article-header dl.meta {
+  display: flex; flex-wrap: wrap; gap: 0 1.4em;
+  padding: 0; border: 0; margin: var(--s-3) 0 var(--s-6);
+  font-size: 0.6875rem; line-height: 1.6; opacity: 0.8;
+}
+.article-header dl.meta dt { display: inline; margin-right: 0.45em; }
+.article-header dl.meta dd { display: inline; color: var(--text-muted); }
+.article-header dl.meta dt:first-of-type, .article-header dl.meta dt:first-of-type + dd { display: none; }
+.article-header h1 { font-size: clamp(1.75rem, 3.2vw, 2.25rem); line-height: 1.2; }
+@media print { details.appendix > * { display: revert; } }
+
 /* 双层标题：第一层是实体/关键词，第二层是这条事件的判断 */
 .event-card__kw {
   display: block;

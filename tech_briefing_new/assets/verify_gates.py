@@ -10,10 +10,10 @@ Gate 校验器：把"必须满足的条件"变成机器可判的 pass/fail。
 
 本脚本只做机器能确定的事，不代替人工判断：
   - 采集层：覆盖 gate（每个必须实体×面是否读到内容）、补检任务是否清空
-  - 文档层：Markdown 源的结构、时间窗口一致性、8.2 事件时刻落在窗口内；
+  - 文档层：Markdown 源的结构、时间窗口一致性、C.2 事件时刻落在窗口内；
             渲染出的 HTML 只做轻量存在性断言
   - 追溯层：事件已规范化、A/A+ 有 claims
-  - registry 层：召回由工具生成、本轮已入库、第 7 章引用与 registry 派生值一致
+  - registry 层：召回由工具生成、本轮已入库、第 1 章「技术判断」小节引用与 registry 派生值一致
 
 用法：
   python verify_gates.py --report raw_2026-10-23/collect_report.json
@@ -104,7 +104,7 @@ def check_collection(c: Check, report: dict, gap_tasks_path: Path | None):
         # 阻断缺口（整面失明）必须清零才能交付；
         # 窗口截断缺口（window_partial）不阻断交付，但同样必须有人给出
         # "那段时间到底有没有东西"的结论 —— 否则它只会躺在 note 里，
-        # 永远不会出现在 8.3 的漏检回溯表上。
+        # 永远不会出现在 C.3 的漏检回溯表上。
         # 旧版 gap_tasks.json 没有分档字段，按 tasks 现算，避免"缺字段 = 通过"。
         tasks = gt.get("tasks", [])
         open_tasks = [t for t in tasks if t.get("status") == "open"]
@@ -174,7 +174,7 @@ def _iso(s):
         dt = datetime.fromisoformat(s)
     except (ValueError, TypeError):
         return None
-    # collect_report 的窗口串可能不带时区，统一补成 +08，否则与 8.2 表格里
+    # collect_report 的窗口串可能不带时区，统一补成 +08，否则与 C.2 表格里
     # 解析出的带时区 datetime 比较会抛 "can't compare offset-naive and
     # offset-aware datetimes"。
     if dt.tzinfo is None:
@@ -274,7 +274,7 @@ def check_source_coverage_definition(c: Check, report: dict | None = None):
 
     if report is not None:
         # 报告里的实体是否覆盖了 tier1：不要求源成功，但要求"被尝试过"。
-        # 已登记 UNCOVERABLE 且确实没有任何源的实体豁免——它们会在 8.1 里
+        # 已登记 UNCOVERABLE 且确实没有任何源的实体豁免——它们会在 C.1 里
         # 以"已登记不可达"出现，而不是以源的形态出现。
         seen = {s.get("entity") for s in report.get("sources", [])}
         no_source = {u["entity"] for u in src_reg.UNCOVERABLE}
@@ -417,7 +417,7 @@ _MAINLINE = re.compile(r'^\s*(?:\d+\.|[-*])\s+\*\*')
 
 
 def check_ch1_mainlines(c: Check, md_path: Path | None, events_dir: Path | None):
-    """第 1 章的主线必须由技术事件支撑：每条至少引用 2 个 8.2 里的 EV。
+    """第 1 章的主线必须由技术事件支撑：每条至少引用 2 个 C.2 里的 EV。
 
     一条只靠感觉写出来的主线，读者无法回到证据；要求两个 EV，是因为一个事件
     撑不起"主线"这个词——那是单个事件，写在卡片里就够了。
@@ -431,6 +431,7 @@ def check_ch1_mainlines(c: Check, md_path: Path | None, events_dir: Path | None)
     seg = text[m.end():]
     nxt = re.search(r'^##\s+', seg, re.M)
     ch1 = seg[:nxt.start()] if nxt else seg
+    ch1 = re.split(r'^###\s+[^\n]*技术判断', ch1, maxsplit=1, flags=re.M)[0]
 
     lines = [ln for ln in ch1.splitlines() if _MAINLINE.match(ln)]
     if not lines:
@@ -616,7 +617,7 @@ def check_scoring(c: Check, events_dir: Path | None, pairwise_path: Path | None)
 # MD 路线（render_report.py + report_engine）下，HTML 是机械渲染的副本，
 # 不再承载结构契约。门禁改为直接校验 LLM 手写的 .md：
 #
-#   ## <章标题>            ← 八章之一（章号由顺序匹配 taxonomy.chapters()）
+#   ## <章标题>            ← 章节之一（章号由顺序匹配 taxonomy.chapters()）
 #   ### <栏目标题>          ← 三级锚点，对应 11 个栏目（"3.1 模型架构..." 形式）
 #   #### <事件卡标题>       ← 四级标题即一张卡；A/A+ 卡必须含四节深拆
 #   ##### 挑战与问题 / 机制与架构 / 效果与定量 / 对比其他方案的价值
@@ -627,6 +628,11 @@ def check_scoring(c: Check, events_dir: Path | None, pairwise_path: Path | None)
 
 _MD_HEADING = re.compile(r'^(#{1,6})\s+(.*?)\s*$', re.M)
 _REQUIRED_DEEP_SECTIONS = ("挑战与问题", "机制与架构", "效果与定量", "对比其他方案的价值")
+IMPLICATION_SECTION = "对我们的含义"
+IMPLICATION_MIN_CHARS = 60
+# 含义要客观：这些词出现就说明在下定性结论而不是在推演
+IMPLICATION_HYPE = ("颠覆", "革命性", "划时代", "遥遥领先", "必须立即", "彻底改变", "毫无疑问", "碾压")
+FOCUS_MAX = 5
 
 
 
@@ -821,15 +827,20 @@ def _md_layout(text: str) -> dict:
     只写在标记行里的 EV 编号会被读到错误位置而漏检。
     """
     known = set(TAXONOMY.column_ids())
-    audit = {"8.1", "8.2", "8.3"}
+    audit = {"C.1", "C.2", "C.3"}
     columns: dict[str, list[dict]] = {}   # 出现过 ### 标题的栏目 → 其下卡片（可为空）
     focus: list[dict] = []                # 章 2 中不在任何栏目下的卡片
+    refs: list[dict] = []                 # 摘要指引：{eid, col, chapter}，不是卡
+    appendix_cards: list[str] = []        # 附录里出现的事件卡（不允许）
+    in_appendix = False
     stray: list[str] = []
     chapter, cur = 0, None
     for level, title, off in _md_sections(text):
         if level <= 2:
             chapter += level == 2
             cur = None
+            if level == 2 and title.strip().startswith("附录"):
+                in_appendix = True
         elif level == 3:
             cid = _md_column_id(title)
             if cid in known:
@@ -844,12 +855,19 @@ def _md_layout(text: str) -> dict:
             eid = _md_card_event(title, body)
             if not eid:
                 continue
+            if in_appendix:
+                appendix_cards.append(eid)
+                continue
+            if re.search(r'\*\*[^*]*·\s*摘要\s*·[^*]*\*\*', body[:200]):
+                refs.append({"eid": eid, "col": cur, "chapter": chapter})
+                continue
             card = {"eid": eid, "title": title, "decl": _md_card_decl(body), "body": body}
             if cur:
                 columns[cur].append(card)
             elif chapter == 2:
                 focus.append(card)
-    return {"columns": columns, "focus": focus, "stray": stray, "known": known}
+    return {"columns": columns, "focus": focus, "stray": stray, "known": known,
+            "refs": refs, "appendix_cards": appendix_cards}
 
 
 def _check_md_columns(c: Check, text: str, events_dir: Path | None):
@@ -918,7 +936,7 @@ def _check_md_columns(c: Check, text: str, events_dir: Path | None):
         c.warn("taxonomy", "未提供事件文件", "跳过主卡归位检查")
         return
     # 主卡归位：写了主卡的事件必须落在 primary_path 解析出的栏目；
-    # A/A+ 必须有主卡。B 级及以下可只出现在章 5（值得关注），不强制主卡。
+    # A/A+ 必须有主卡。B 级及以下可只出现在附录 A（值得关注），不强制主卡。
     misplaced = []
     for eid, ev in sorted(events.items()):
         try:
@@ -936,7 +954,7 @@ def _check_md_columns(c: Check, text: str, events_dir: Path | None):
 
 def check_markdown(c: Check, md_path: Path, report: dict,
                    events_dir: Path | None = None):
-    """MD 路线的核心门禁：八章齐全、栏目合法、A/A+ 四节、唯一主卡、空栏目。"""
+    """MD 路线的核心门禁：章节齐全、栏目合法、A/A+ 四节、唯一主卡、空栏目。"""
     if not md_path.exists():
         c.add("md", "Markdown 文件存在", False, str(md_path))
         return
@@ -952,20 +970,33 @@ def check_markdown(c: Check, md_path: Path, report: dict,
 
     secs = _md_sections(text)
 
-    # 八章：MD 章标题不带数字前缀（如「本轮结论与技术趋势」），按顺序
+    # 章节：MD 章标题不带数字前缀（如「本轮结论与技术趋势」），按顺序
     # 匹配——第 N 个 ## 就是第 N 章。顺序错位（缺章或多章）会被发现。
-    chapter_count = len(TAXONOMY.chapters())
-    h2_titles = [title for level, title, _ in secs if level == 2]
-    found_chapters = list(range(1, min(len(h2_titles), chapter_count) + 1))
-    expected = set(range(1, chapter_count + 1))
-    missing_ch = sorted(expected - set(found_chapters))
-    c.add("md", "八章齐全（按 ## 顺序匹配）",
-          not missing_ch, f"missing={missing_ch}（共 {len(h2_titles)} 个 ##）")
+    # 章节：四章正文 + 三个附录，按 ontology 的名字与顺序逐一匹配。
+    # 按名字而不是按"第 N 个 ##"：顺序是契约的一部分（读者先读结论与必看，
+    # 采集审计在最后），数个数发现不了顺序错位或章名被改写。
+    want = [ch["name"] for ch in TAXONOMY.chapters()]
+    h2_titles = [title for level, title, _ in secs if level == 2
+                 and "门禁未通过项" not in title]
+    def _norm(t): return re.sub(r'^\s*\d+\s+', '', t).strip()
+    got = [_norm(t) for t in h2_titles]
+    bad_ch = [f"第 {k+1} 个 ## 应为「{w}」，实际「{got[k] if k < len(got) else '缺'}」"
+              for k, w in enumerate(want) if k >= len(got) or _norm(w) not in got[k]]
+    c.add("md", "章节齐全且顺序正确（四章 + 附录 A/B/C）", not bad_ch,
+          "; ".join(bad_ch[:3]))
+    if len(got) > len(want):
+        c.add("md", "没有契约之外的章", False, f"多出: {got[len(want):]}")
 
-    # 8.1/8.2/8.3 子节存在（按标题文本）
     flat = " ".join(t for _, t, _ in secs)
-    c.add("md", "8.1/8.2/8.3 子节存在",
-          all(x in flat for x in ("8.1", "8.2", "8.3")), "")
+    c.add("md", "C.1/C.2/C.3 子节存在",
+          all(x in flat for x in ("C.1", "C.2", "C.3")), "")
+
+    # 首屏：正文不写一级标题（标题来自 frontmatter，再写一遍只是把第一屏占满），
+    # 窗口放 frontmatter 的 window 字段，由渲染器缩到角落。
+    c.add("md", "正文没有一级标题", not any(level == 1 for level, _, _ in secs),
+          "标题由 frontmatter 的 title 提供，正文从 ## 开始")
+    c.add("md", "frontmatter 含 window", bool(fm.get("window")),
+          "写 window: <起> → <止>；不要在正文开头用整段声明 TARGET_WINDOW")
 
     # 来源链接 ≥ 10（markdown 链接 + 裸 URL）
     md_links = re.findall(r'\[[^\]]*\]\((https?://[^)]+)\)', text)
@@ -1014,6 +1045,64 @@ def check_markdown(c: Check, md_path: Path, report: dict,
     c.add("md", "A/A+ 主卡含四维深拆（挑战/机制/效果/对比）",
           not missing_sec,
           "; ".join(missing_sec[:4]) if missing_sec else f"{len(duty)} 张 A/A+ 主卡")
+
+    # 「对我们的含义」：A/A+ 必填，排在四节技术深拆之后——含义要建立在前面
+    # 已经交代清楚的技术价值上，而不是先下结论再找理由。
+    bad_impl = []
+    for cd in duty:
+        h5 = [(t.strip(), off) for (lv, t, off) in _md_sections(cd["body"]) if lv == 5]
+        names = [t for t, _ in h5]
+        if IMPLICATION_SECTION not in names:
+            bad_impl.append(f"{cd['eid']}: 缺「{IMPLICATION_SECTION}」")
+            continue
+        pos = names.index(IMPLICATION_SECTION)
+        deep_pos = [names.index(x) for x in _REQUIRED_DEEP_SECTIONS if x in names]
+        if deep_pos and pos < max(deep_pos):
+            bad_impl.append(f"{cd['eid']}: 「{IMPLICATION_SECTION}」要排在四节技术深拆之后")
+        txt = _md_section_body(cd["body"], h5[pos][1])
+        txt = re.sub(r'\|[^\n]*\|', '', txt).strip()
+        if len(txt) < IMPLICATION_MIN_CHARS:
+            bad_impl.append(f"{cd['eid']}: 含义只有 {len(txt)} 字，写不出技术依据")
+        hype = [w for w in IMPLICATION_HYPE if w in txt]
+        if hype:
+            bad_impl.append(f"{cd['eid']}: 含义里有定性夸大用语 {hype}")
+    c.add("md", "A/A+ 主卡写了「对我们的含义」且客观", not bad_impl,
+          "; ".join(bad_impl[:4]))
+
+    # 今日必看：完整主卡写在这里，上限 FOCUS_MAX 张；分类章用摘要指引指回来。
+    focus_main = [cd for cd in lay["focus"]]
+    undeclared = [cd["eid"] for cd in focus_main if not cd["decl"]]
+    c.add("md", "今日必看的卡都是声明了归属栏目的完整主卡", not undeclared,
+          "未写「归属 N.M」: " + ", ".join(undeclared[:6]))
+    c.add("md", f"今日必看不超过 {FOCUS_MAX} 张", len(focus_main) <= FOCUS_MAX,
+          f"现有 {len(focus_main)} 张；必看是注意力预算，不是 A/A+ 全集")
+    refs_in_focus = [r["eid"] for r in lay["refs"] if r["chapter"] == 2]
+    c.add("md", "今日必看里没有摘要指引", not refs_in_focus,
+          "高价值内容要在这里直接读到，不能让读者跳走: " + ", ".join(refs_in_focus[:6]))
+    focus_ids = {cd["eid"]: cd["decl"] for cd in focus_main}
+    bad_ref = [f"{r['eid']}（{r['col']}）" for r in lay["refs"] if r["chapter"] != 2
+               and (r["eid"] not in focus_ids or focus_ids[r["eid"]] != r["col"])]
+    c.add("taxonomy", "栏目里的摘要指引都指向今日必看的主卡", not bad_ref,
+          "指引的事件不在今日必看，或栏目与主卡声明的归属不一致: " + ", ".join(bad_ref[:6]))
+    no_ref = [f"{e}→{col}" for e, col in focus_ids.items() if col
+              and not any(r["eid"] == e and r["col"] == col for r in lay["refs"])]
+    c.add("taxonomy", "今日必看的主卡在归属栏目留了摘要指引", not no_ref,
+          "按栏目查阅的读者找不到它: " + ", ".join(no_ref[:6]))
+    if events:
+        rank = {"A+": 3, "A": 2, "B": 1, "C": 0}
+        top = sorted((rank.get(ev.get("rating"), 0) for ev in events.values()), reverse=True)
+        n_high = sum(1 for r in top if r >= 2)
+        want_n = min(FOCUS_MAX, max(1, n_high)) if events else 0
+        c.add("md", "今日必看的张数与 A/A+ 数量相符", len(focus_main) == want_n,
+              f"A/A+ 共 {n_high} 个，应写 {want_n} 张，实际 {len(focus_main)} 张")
+        lo_in = min((rank.get((events.get(e) or {}).get("rating"), 0) for e in focus_ids), default=9)
+        hi_out = max((rank.get(ev.get("rating"), 0) for e, ev in events.items()
+                      if e not in focus_ids), default=-1)
+        c.add("trace", "今日必看之外没有评级更高的事件", hi_out <= lo_in,
+              "有评级更高的事件被留在了栏目里")
+    c.add("md", "附录里没有事件卡", not lay["appendix_cards"],
+          "编号事件一律写在正文章节，附录 A 只放线索表: "
+          + ", ".join(lay["appendix_cards"][:6]))
 
     # 卡片标记里的评级必须等于事件 JSON：否则写个 B 就能躲掉深拆
     if events:
@@ -1150,7 +1239,7 @@ def check_must_review(c: Check, mr_path: Path | None, trace_path: Path | None,
             if reason == "未验证" and _tier1_guard_hit(it.get("title") or ""):
                 tier1_dropped.append(f"{label}（命中 {_tier1_guard_hit(it.get('title') or '')}）")
         elif d == "chapter5" and not (e.get("reason") or "").strip():
-            bad_reason.append(f"{label}=第5章未写归属")
+            bad_reason.append(f"{label}=附录 A未写归属")
 
         # 反向核对：清单条目的链接已出现在某个事件里，处置却不是入选/并入，
         # 说明台账填错了（事件确实写了，台账说丢弃）。
@@ -1164,7 +1253,7 @@ def check_must_review(c: Check, mr_path: Path | None, trace_path: Path | None,
     c.add("collection", "处置取值合法", not illegal, "; ".join(illegal[:4]))
     c.add("collection", "tier-1 命中项未被「未验证」静默丢弃", not tier1_dropped,
           f"{len(tier1_dropped)} 条命中 tier-1 业务主线却以「未验证」结案，"
-          f"至少要降到第 5 章留线索位: " + "; ".join(tier1_dropped[:4]))
+          f"至少要降到附录 A留线索位: " + "; ".join(tier1_dropped[:4]))
     c.add("collection", "入选/并入指向存在的 EV", not bad_ev, "; ".join(bad_ev[:4]))
     c.add("collection", "丢弃理由取自封闭集合", not bad_reason,
           "; ".join(bad_reason[:4]))
@@ -1212,21 +1301,17 @@ def check_ct_labels(c: Check, md_path: Path | None):
 
 
 def _md_body_before_audit(text: str) -> str | None:
-    """正文部分：从开头到第 8 章（信息源采集统计）之前；定位不到返回 None。
+    """正文部分：从开头到附录 C（信息源采集统计）之前；定位不到返回 None。
 
-    第 8 章是审计章，8.2 索引表里本来就会列出每个编号。判断"这个事件被写过"
+    附录 C是审计章，C.2 索引表里本来就会列出每个编号。判断"这个事件被写过"
     必须把审计章切掉，否则索引表自己就能让检查恒绿——按标题文字找"8"是不行的，
     章标题写的是「信息源采集统计」，第一版就这么退回了全文、检查恒真。
-    这里按固定八章的位置取第 8 个二级标题，并用 8.x 的下级标题兜底，
+    这里按固定章节的位置取第 8 个二级标题，并用 8.x 的下级标题兜底，
     两条都落空就返回 None 交给调用方报警，不退回全文。
     """
     body = re.sub(r'^---\r?\n[\s\S]*?\r?\n---\r?\n', '', text, count=1)
-    secs = _md_sections(body)
-    h2 = [off for lv, _t, off in secs if lv == 2]
-    if len(h2) >= 8:
-        return body[:h2[7]]
-    for level, title, off in secs:
-        if level >= 2 and re.match(r'^\s*8\.\d', title):
+    for level, title, off in _md_sections(body):
+        if level == 2 and title.strip().startswith("附录"):
             return body[:off]
     return None
 
@@ -1235,13 +1320,13 @@ def check_event_body_presence(c: Check, md_path: Path | None, events_dir: Path |
     """每个事件在正文里都要有落点，正文里的卡片都要有事实源。
 
     此前只强制 A / A+ 写主卡（见 _check_md_columns 的「主卡归位」），B 级及
-    以下允许只出现在章 5。于是出现过这样一稿：第五轮 EV-09 在 8.2 索引里有行、
+    以下允许只出现在附录 A。于是出现过这样一稿：第五轮 EV-09 在 C.2 索引里有行、
     有 EV JSON、两边编号对得上、门禁 94 项全过，正文里却一个字都没有。
     索引对账只能证明"编号两边都有"，证明不了"这个事件被写过"——缺的那段
     正文没有任何检查项以它为对象。
 
     这里补两个方向：
-      正向  每个 EV JSON 的编号必须在第 1–7 章出现过（主卡、摘要卡或章 5 条目）；
+      正向  每个 EV JSON 的编号必须在第 1–7 章出现过（主卡、摘要卡或附录 A 条目）；
       反向  正文卡片的 EV 编号必须存在对应的 EV JSON，不能凭空多出一张卡。
     """
     if not (md_path and md_path.exists()):
@@ -1254,7 +1339,7 @@ def check_event_body_presence(c: Check, md_path: Path | None, events_dir: Path |
     body = _md_body_before_audit(text)
     if not (body and body.strip()):
         c.add("md", "能切出第 1–7 章正文", False,
-              "定位不到第 8 章；八章结构缺失由 check_markdown 报，此处不退回全文核对")
+              "定位不到附录 C；章节结构缺失由 check_markdown 报，此处不退回全文核对")
         return
 
     missing = []
@@ -1262,7 +1347,7 @@ def check_event_body_presence(c: Check, md_path: Path | None, events_dir: Path |
         if not re.search(rf'\b{re.escape(eid)}\b', body):
             rating = events[eid].get("rating") or "?"
             missing.append(f"{eid}（{rating} 级）")
-    c.add("md", "每个事件在第 1–7 章有落点", not missing,
+    c.add("md", "每个事件在正文章节有落点", not missing,
           "只在审计章出现、正文无任何文字: " + ", ".join(missing[:6]))
 
     lay = _md_layout(text)
@@ -1303,7 +1388,7 @@ def _tier1_guard_hit(title: str) -> str:
 
     「未验证」本是封闭集里的合法理由，但当它覆盖大半个清单时，台账就从
     判断记录退化成没时间的记录，不可审计。所以只对 tier-1 命中项加约束：
-    可以不写成事件，但不能无声消失——降到第 5 章留个线索位，或者给出
+    可以不写成事件，但不能无声消失——降到附录 A留个线索位，或者给出
     真正说明情况的理由（首发早于 WINDOW_START、重复、低影响等）。
     """
     t = (title or "").lower()
@@ -1395,7 +1480,7 @@ GATE_DEGRADED_MARK = "<!-- gate-degraded -->"   # 降级交付节的哨兵，渲
 # 读者要的不是"哪个函数报了错"，而是"这份稿子的哪一部分不能信"。
 _DEGRADED_IMPACT = {
     "collection": "本轮召回不完整：可能有窗口内事件根本没被采到，"
-                  "事件总数是下限而非全量。缺失面见第 8 章。",
+                  "事件总数是下限而非全量。缺失面见附录 C。",
     "coverage":   "信息源覆盖有缺口：某些源的窗口未闭合，"
                   "「本轮无更新」对这些源不成立，只能读作「未检索到」。",
     "md":         "正文结构不合规：章节、栏目或卡片的呈现约定被破坏，"
@@ -1467,7 +1552,7 @@ def _script_commit() -> str:
 
 def check_stats_recomputable(c: Check, md_path: Path | None, report: dict,
                              events_dir: Path | None):
-    """Dashboard 与 8.2 的数字必须能由事件目录复算。
+    """Dashboard 与 C.2 的数字必须能由事件目录复算。
 
     手写统计一定会漂移：2026-10-31 的一次运行自报 15 个事件、索引只有 14 行，
     自报 A+/A 为 1/5、实际 1/6。这里用 report_stats 复算一遍逐项比对。
@@ -1497,8 +1582,8 @@ def check_stats_recomputable(c: Check, md_path: Path | None, report: dict,
         if got != want:
             bad.append(f"A+/A 正文 {got[0]}/{got[1]} ≠ 事实源 {want[0]}/{want[1]}")
 
-    # 8.2 的 EV 行数
-    m82 = re.search(r'^(#{2,4})\s*8\.2\b[^\n]*$', text, re.M)
+    # C.2 的 EV 行数
+    m82 = re.search(r'^(#{2,4})\s*C\.2\b[^\n]*$', text, re.M)
     if m82:
         seg = text[m82.end():]
         nxt = re.search(rf'^#{{1,{len(m82.group(1))}}}\s+', seg, re.M)
@@ -1507,7 +1592,7 @@ def check_stats_recomputable(c: Check, md_path: Path | None, report: dict,
                       if ln.strip().startswith("|")
                       for m in [EV_ID_RE.search(ln)] if m})
         if n_rows != st["events_total"]:
-            bad.append(f"8.2 索引 {n_rows} 行 ≠ 事件数 {st['events_total']}")
+            bad.append(f"C.2 索引 {n_rows} 行 ≠ 事件数 {st['events_total']}")
 
     c.add("md", "统计可由事件目录复算", not bad, "; ".join(bad[:4]))
 
@@ -1609,7 +1694,7 @@ def check_link_identity(c: Check, report: dict, events_dir: Path | None,
 
 def check_md_event_index(c: Check, md_path: Path, report: dict,
                          events_dir: Path | None = None):
-    """8.2 Event Index 校验：解析 MD 表格行，与 EV JSON 逐条对账。"""
+    """C.2 Event Index 校验：解析 MD 表格行，与 EV JSON 逐条对账。"""
     if not md_path.exists():
         return
     text = md_path.read_text(encoding="utf-8", errors="ignore")
@@ -1620,10 +1705,10 @@ def check_md_event_index(c: Check, md_path: Path, report: dict,
         c.warn("md", "缺窗口信息，跳过 Event Index 检查", "")
         return
 
-    # 定位 8.2 段：从 "### 8.2" 或 "## 8.2" 到下一个同级或更高级标题
-    m82 = re.search(r'^(#{2,4})\s*8\.2\b[^\n]*$', text, re.M)
+    # 定位 C.2 段：从 "### C.2" 或 "## C.2" 到下一个同级或更高级标题
+    m82 = re.search(r'^(#{2,4})\s*C\.2\b[^\n]*$', text, re.M)
     if not m82:
-        c.warn("md", "未定位 8.2 段", "需人工核对 Event Index")
+        c.warn("md", "未定位 C.2 段", "需人工核对 Event Index")
         return
     level = len(m82.group(1))
     seg_start = m82.end()
@@ -1647,7 +1732,7 @@ def check_md_event_index(c: Check, md_path: Path, report: dict,
             idx_rows[eid.group(0)] = {"text": row, "dates": dates}
 
     if not all_dates:
-        c.warn("md", "8.2 中未找到结构化时刻", "需人工核对 Event Index")
+        c.warn("md", "C.2 中未找到结构化时刻", "需人工核对 Event Index")
     else:
         end_str = we.strftime("%Y-%m-%dT%H:%M")
         dates = [d for d in all_dates if d.strftime("%Y-%m-%dT%H:%M") != end_str]
@@ -1674,7 +1759,7 @@ def check_md_event_index(c: Check, md_path: Path, report: dict,
     # 与 EV JSON 交叉校验
     if not events_dir or not events_dir.exists():
         if idx_rows:
-            c.warn("md", "8.2 声明了事件但未提供 events 目录",
+            c.warn("md", "C.2 声明了事件但未提供 events 目录",
                    f"{len(idx_rows)} 行事件无法回溯到事实源")
         return
 
@@ -1686,10 +1771,10 @@ def check_md_event_index(c: Check, md_path: Path, report: dict,
             c.add("trace", f"{f.name} 可解析", False, "JSON 解析失败")
 
     no_json = sorted(set(idx_rows) - set(ev_files))
-    c.add("trace", "8.2 每个事件都有 EV JSON", not no_json,
+    c.add("trace", "C.2 每个事件都有 EV JSON", not no_json,
           "缺事实源: " + ", ".join(no_json[:8]))
     not_in_md = sorted(set(ev_files) - set(idx_rows))
-    c.add("trace", "每个 EV JSON 都在 8.2 出现", not not_in_md,
+    c.add("trace", "每个 EV JSON 都在 C.2 出现", not not_in_md,
           "未在 Event Index 引用: " + ", ".join(not_in_md[:8]))
 
     outside, id_mismatch, time_mismatch = [], [], []
@@ -1721,7 +1806,7 @@ def check_md_event_index(c: Check, md_path: Path, report: dict,
                 tokens = {t for cell in cells for t in re.split(r'[\s·/,，]+', cell) if t}
                 if ev["rating"] not in tokens:
                     id_mismatch.append(
-                        f"{eid}: 评级不一致 8.2 中无独立的「{ev['rating']}」 ↔ JSON={ev['rating']}")
+                        f"{eid}: 评级不一致 C.2 中无独立的「{ev['rating']}」 ↔ JSON={ev['rating']}")
             if fp is not None and row["dates"]:
                 md_times = {d.strftime("%Y-%m-%dT%H:%M") for d in row["dates"]}
                 if fp.strftime("%Y-%m-%dT%H:%M") not in md_times:
@@ -1733,7 +1818,7 @@ def check_md_event_index(c: Check, md_path: Path, report: dict,
           not outside, "窗口外: " + ", ".join(outside[:6]))
     c.add("trace", "EV 编号与事件内容一致",
           not id_mismatch, "; ".join(id_mismatch[:3]))
-    c.add("trace", "8.2 时刻与 EV JSON 一致（同一时区）",
+    c.add("trace", "C.2 时刻与 EV JSON 一致（同一时区）",
           not time_mismatch, "; ".join(time_mismatch[:4]))
 
 
@@ -1911,7 +1996,7 @@ _TH_RE = re.compile(r"TH-\d{4}")
 
 
 def check_md_theses(c: Check, md_path: Path | None, state_dir: Path | None, run_date: str):
-    """第 7 章与 registry 报告对齐：
+    """第 1 章「技术判断」小节与 registry 报告对齐：
       - 每条判断（列表项）都写 TH 编号；整章没有编号时必须写明"本轮无核心技术判断"；
       - registry 报告里 core_judgment 为真的命题全部出现（不能挑着写）；
       - 引用的命题存在、为 active / contested 且非 Low，置信度文字与 registry 一致，
@@ -1919,20 +2004,22 @@ def check_md_theses(c: Check, md_path: Path | None, state_dir: Path | None, run_
     if not md_path or not md_path.exists():
         return
     text = md_path.read_text(encoding="utf-8", errors="ignore")
-    h2 = [(t, off) for lv, t, off in _md_sections(text) if lv == 2]
-    if len(h2) < 7:
-        return                 # 八章缺失由 check_markdown 报
-    ch7 = _md_section_body(text, h2[6][1])
+    th = [off for lv, t, off in _md_sections(text) if lv == 3 and "技术判断" in t]
+    if not th:
+        c.add("registry", "第 1 章有「技术判断」小节", False,
+              "在第 1 章末尾写 ### 技术判断；本轮无核心判断时也要有这一节并写明")
+        return
+    ch7 = _md_section_body(text, th[0])
     lines = [ln.strip() for ln in ch7.splitlines() if ln.strip()]
     items = [ln for ln in lines if re.match(r'^([-*+]|\d+[.)、])\s+', ln)]
     unmarked = [ln[:30] for ln in items if not _TH_RE.search(ln)]
-    c.add("registry", "第 7 章每条判断都标了 TH 编号", not unmarked,
+    c.add("registry", "技术判断每条判断都标了 TH 编号", not unmarked,
           "未标编号: " + " / ".join(unmarked[:3]))
     cited = [(m.group(0), ln) for ln in lines for m in _TH_RE.finditer(ln)]
 
     reg, err = _open_registry(state_dir)
     if reg is None:
-        c.add("registry", "第 7 章引用可核对", False, err)
+        c.add("registry", "技术判断引用可核对", False, err)
         return
     try:
         core = [r["id"] for r in reg.report(run_date)["theses"] if r["core_judgment"]]
@@ -1940,13 +2027,13 @@ def check_md_theses(c: Check, md_path: Path | None, state_dir: Path | None, run_
         core = []
         c.warn("registry", "无法生成本轮 registry 报告", str(e))
     if not cited:
-        c.add("registry", "第 7 章为空时写明本轮无核心判断",
+        c.add("registry", "技术判断为空时写明本轮无核心判断",
               "本轮无核心技术判断" in ch7 and not core,
               f"registry 有核心判断 {core[:4]} 未写" if core else "需写明「本轮无核心技术判断」")
         return
     cited_ids = {t for t, _ in cited}
     missing = [t for t in core if t not in cited_ids]
-    c.add("registry", "第 7 章覆盖全部核心判断", not missing, "未写: " + ", ".join(missing[:6]))
+    c.add("registry", "技术判断覆盖全部核心判断", not missing, "未写: " + ", ".join(missing[:6]))
 
     unknown, not_core, wrong_conf, no_counter = [], [], [], []
     for tid, line in cited:
@@ -1960,10 +2047,10 @@ def check_md_theses(c: Check, md_path: Path | None, state_dir: Path | None, run_
             wrong_conf.append(f"{tid} 应写 {v['confidence']}")
         if v["state"] == "contested" and "反证" not in line:
             no_counter.append(tid)
-    c.add("registry", "第 7 章引用的命题存在", not unknown, ", ".join(unknown[:6]))
-    c.add("registry", "第 7 章只引用 active/contested 且非 Low 的命题", not not_core,
+    c.add("registry", "技术判断引用的命题存在", not unknown, ", ".join(unknown[:6]))
+    c.add("registry", "技术判断只引用 active/contested 且非 Low 的命题", not not_core,
           "; ".join(not_core[:4]))
-    c.add("registry", "第 7 章置信度与 registry 一致", not wrong_conf, "; ".join(wrong_conf[:4]))
+    c.add("registry", "技术判断置信度与 registry 一致", not wrong_conf, "; ".join(wrong_conf[:4]))
     c.add("registry", "contested 命题写出了反证", not no_counter, ", ".join(no_counter[:6]))
 
 
@@ -2104,7 +2191,7 @@ def main():
                 print("修正后重跑。")
             else:
                 print(f"已达重试上限：按降级交付——把 {hdr.name} 的内容追加到报告正文最末尾"
-                      f"（第 8 章之后，作为最后一节），渲染时加 --allow-gate-fail，"
+                      f"（附录 C之后，作为最后一节），渲染时加 --allow-gate-fail，"
                       f"并在 RUNLOG 写明失败项。不要静默不交付，也不要放到正文开头。")
 
     if args.json_out:

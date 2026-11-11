@@ -96,7 +96,7 @@ def gate_blocker(src: Path, allow_fail: bool = False) -> str:
         if GATE_DEGRADED_MARK not in body:
             return ("降级交付要求稿子自己带上降级节，否则产出的 HTML 看不出是降级的。\n"
                     f"  把 {src.parent.name}/.gate_degraded_section.md 的内容追加到"
-                    f"正文最末尾（第 8 章之后），然后重跑门禁（让 md 与摘要对上）再渲染。")
+                    f"正文最末尾（附录 C之后），然后重跑门禁（让 md 与摘要对上）再渲染。")
     # 门禁跑在旧稿上同样不算过：.md 改过就要重跑
     try:
         if src.stat().st_mtime > gs.stat().st_mtime + 1:

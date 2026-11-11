@@ -634,7 +634,7 @@ def _extract_arxiv_listing(body: bytes, source_url: str = "") -> list:
             # url / title 以前是在 dict 字面量里才算出来的，而 make_uid 在同一个
             # 字面量里就先引用了它们 —— 第一条就 NameError，整个函数 parse_failed，
             # 于是归档回退自引入 make_uid（2026-11-02 那轮）起从未产出过一条。
-            # 当轮的 8.1 还写了"自动改读归档页补回批次"，那句话是错的。
+            # 当轮的 C.1 还写了"自动改读归档页补回批次"，那句话是错的。
             url = f"https://arxiv.org/abs/{aid}"
             title = html.unescape(titles[n]) if n < len(titles) else aid
             out.append({
@@ -769,7 +769,7 @@ def window_match(item: dict, start_iso: str, end_iso: str) -> str | None:
     fuzzy — 日期只到日，其 50 小时不确定区间与窗口相交（可能事件）。
             这类条目必须保留：宁可多带一条待核实的，也不能让日粒度源
             的窗口边界事件静默掉出候选池。下游不得把它当确定事件计数，
-            8.2 引用时必须同时标注 date_precision。
+            C.2 引用时必须同时标注 date_precision。
 
     day 精度一律判 fuzzy，即使区间端点恰好落在窗口内——"Oct 22" 本身
     不是任何确定时刻，把它标成 exact 等于把时区猜测伪装成事实。

@@ -233,7 +233,7 @@ def validate(ev: dict) -> list[str]:
                             f"{want} 不一致；要改分就去改 relation 并写证据")
             for cid in rt.candidate_hits(hits):
                 errs.append(f"{eid}: {cid} 是候选根，只记录不计分，"
-                            f"命中应写入第 5 章而不是 root_tech")
+                            f"命中应写入附录 A而不是 root_tech")
         except Exception as e:
             errs.append(f"{eid}: 根技术清单不可用（{e}）")
 

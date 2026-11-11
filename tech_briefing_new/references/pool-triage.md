@@ -25,4 +25,4 @@ PY
 |---|---|---|
 | HN（`hn_newest` / `hn_front`） | 按 `points` 降序，再用技术词过滤；不按时间 | 低分条目（points ≤ 10）里仍有真信号（如 `Init` 9 分、`Compaction Laundering` 9 分），**不能只取高分**；但也不得因低分直接判 A 级 |
 | arXiv | 按 title 关键词打分，**再按 `Announce Type` 分档** | `new` 才是本轮新投稿；`cross` 是跨分类转载；`replace` / `replace-cross` 是修订版，按 task_def §9 不能当新论文，若 v2 在窗口内、v1 在窗口外，进正文时标"v2 修订" |
-| 无日期源（`no_date`） | 不进本章正文，只作背景 | `carried_over` 的条目全部只能进第 5 章"持续热度" |
+| 无日期源（`no_date`） | 不进本章正文，只作背景 | `carried_over` 的条目全部只能进附录 A"持续热度" |

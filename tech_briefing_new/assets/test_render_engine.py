@@ -510,3 +510,68 @@ class CardHierarchyTest(unittest.TestCase):
         html = self._render(self.CARD.format(r="A", d="2026-11-10") * 2 + "\n## 3 下一章\n\n文。\n")
         body = html[html.index('<article class="event-card"'):]
         self.assertEqual(body.count("<details"), body.count("</details>"))
+
+
+@unittest.skipIf(NODE is None, "node 不可用")
+class NewLayoutRenderTest(unittest.TestCase):
+    """2026-11-11 新版式：首屏条带、含义块、附录折叠、页眉窗口。"""
+
+    FM = "---\ntitle: T\ndate: 2026-11-10\nwindow: 11-10 00:00 → 11-11 03:03\nstatus: draft\nsummary: s\n---\n\n"
+    CARD = ("#### Decision Models｜类型化决策具备接口契约\n\n**A · Frontier Signal · EV-01 · Model · 归属 3.2**\n\n"
+            "##### 机制与架构\n\n机制正文。\n\n##### 对我们的含义\n\n含义正文。\n\n"
+            "| 元信息 | 本轮核验 |\n|---|---|\n| 首发（Asia/Shanghai） | 2026-11-10T08:00:00+08:00 |\n\n")
+
+    def _render(self, md):
+        with tempfile.TemporaryDirectory() as d:
+            src, out = Path(d) / "t.md", Path(d) / "t.html"
+            src.write_text(self.FM + md, encoding="utf-8")
+            r = subprocess.run([NODE, str(RENDER_JS), str(src), str(out), "--no-open"],
+                               capture_output=True, text=True)
+            self.assertEqual(r.returncode, 0, r.stderr)
+            return out.read_text(encoding="utf-8")
+
+    def test_top_strip_is_derived_from_focus_cards(self):
+        html = self._render("## 1 本轮结论与技术判断\n\n结论。\n\n## 2 今日必看\n\n" + self.CARD)
+        a = html.index('<nav class="top-strip"')
+        strip = html[a:html.index("</nav>", a)]
+        self.assertIn('href="#EV-01"', strip)
+        self.assertIn("Decision Models", strip)
+        self.assertLess(a, html.index("<section", a), "条带要在第一章之前")
+        self.assertIn('<article class="event-card" id="EV-01"', html)
+
+    def test_no_strip_without_focus_cards(self):
+        html = self._render("## 3 模型技术热点\n\n### 3.2 推理\n\n" + self.CARD)
+        self.assertNotIn('<nav class="top-strip"', html)
+
+    def test_implication_sits_outside_the_fold_and_before_provenance(self):
+        html = self._render("## 2 今日必看\n\n" + self.CARD)
+        deep_end = html.index("</div></details>", html.index('<details class="card-deep"'))
+        impl = html.index('<div class="card-impl">')
+        meta = html.index('<details class="card-meta">')
+        self.assertLess(deep_end, impl, "含义不能被包进深拆折叠里")
+        self.assertLess(impl, meta, "出处表在卡片最后")
+        self.assertNotIn("card-impl", html[html.index('<details class="card-deep"'):deep_end])
+
+    def test_mechanism_table_is_not_mistaken_for_provenance(self):
+        """出处表按表头「元信息」识别，卡内其它表格（机制图表）不折。"""
+        md = ("## 2 今日必看\n\n#### X｜y\n\n**A · Frontier Signal · EV-01 · Model**\n\n"
+              "| 阶段 | 动作 |\n|---|---|\n| a | b |\n\n")
+        html = self._render(md)
+        self.assertNotIn('<details class="card-meta">', html)
+
+    def test_appendix_section_is_folded(self):
+        html = self._render("## 1 本轮结论与技术判断\n\n文。\n\n## 附录 A 值得关注\n\n线索正文。\n")
+        a = html.index('<details class="appendix">')
+        self.assertIn("线索正文", html[a:html.index("</details>", a)])
+        self.assertNotIn('<details class="appendix">', html[:html.index("附录 A")])
+
+    def test_ref_row_links_to_the_main_card(self):
+        md = ("## 2 今日必看\n\n" + self.CARD + "## 3 模型技术热点\n\n### 3.2 推理\n\n"
+              "#### Decision Models｜类型化决策具备接口契约\n\n**A · 摘要 · EV-01 · Model**\n\n主卡见今日必看。\n")
+        html = self._render(md)
+        self.assertIn('<a class="event-ref__go" href="#EV-01">', html)
+        self.assertEqual(html.count('id="EV-01"'), 1, "锚点只能落在主卡上")
+
+    def test_window_appears_in_header_meta(self):
+        html = self._render("## 1 本轮结论与技术判断\n\n文。\n")
+        self.assertIn("<dt>window</dt>", html)

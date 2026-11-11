@@ -357,7 +357,7 @@ def collect_one(opener, src: dict, out_dir: Path, window_start: str,
       scan_start  —— 扫描边界，比 window_start 早 6h，用于「发现候选」，缓冲区条目要留下；
       window_start —— 归属边界，用于「判定本轮新事件」。
     items_in_window* 按 window_start 统计；items_in_scan_buffer 单独统计缓冲区命中，
-    让 8.1 能看出有多少条目是靠缓冲区捞回来的。
+    让 C.1 能看出有多少条目是靠缓冲区捞回来的。
     """
     scan_start = scan_start or window_start
     rec = {
@@ -665,7 +665,7 @@ def main() -> int:
             except Exception as e:
                 # 代码缺陷不能伪装成"网站不可达"。2026-10-31 实测：collect_paginated
                 # 少写了 pages_fetched 字段，KeyError 被这里吞掉记成 TRANSPORT_FAIL，
-                # HN newest 的 1638 条就此消失，而 8.1 把它读成了外部环境问题。
+                # HN newest 的 1638 条就此消失，而 C.1 把它读成了外部环境问题。
                 tb = traceback.extract_tb(e.__traceback__)
                 where = f"{tb[-1].filename.split('/')[-1]}:{tb[-1].lineno}" if tb else "?"
                 rec = {"id": s["id"], "entity": s["entity"], "surface": s["surface"],

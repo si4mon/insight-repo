@@ -54,7 +54,7 @@
 
 ## 4 逐条留痕
 
-清单上百条不适合全塞进 8.3——那一节是给人读的摘录，范围仍按 task_def 保持
+清单上百条不适合全塞进 C.3——那一节是给人读的摘录，范围仍按 task_def 保持
 "Tier-1 来源条目与共振命中条目"。完整台账落在 `must_review_trace.json`：
 
 ```jsonc
@@ -70,8 +70,8 @@
 |---|---|---|
 | `selected` | 入选为独立事件 | `ev` |
 | `merged` | 并入其他事件 | `ev` |
-| `chapter5` | 写入第 5 章（Active Event / Early Signal / 线索） | `reason` 写明归属 |
-| `discarded` | 丢弃 | `reason` 取 task_def 8.3 的十项封闭集合 |
+| `chapter5` | 写入附录 A（Active Event / Early Signal / 线索） | `reason` 写明归属 |
+| `discarded` | 丢弃 | `reason` 取 task_def C.3 的十项封闭集合 |
 
 ## 5 门禁
 

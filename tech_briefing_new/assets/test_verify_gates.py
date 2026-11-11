@@ -295,8 +295,8 @@ class MdTaxonomyGateTest(unittest.TestCase):
         self.assertEqual(_status(c, "栏目编号均属 11 个栏目"), "FAIL")
 
     def test_audit_subsections_not_treated_as_columns(self):
-        md = _md(_column("3.2", _card("EV-01")), _column("8.1", ""),
-                 _column("8.2", ""), _column("8.3", ""))
+        md = _md(_column("3.2", _card("EV-01")), _column("C.1", ""),
+                 _column("C.2", ""), _column("C.3", ""))
         c = self._run(md, **{"EV-01": {"primary_path": "B1.1"}})
         self.assertEqual(_status(c, "栏目编号均属 11 个栏目"), "PASS")
         self.assertEqual(_status(c, "空栏目不出现在正文"), "PASS")
@@ -483,9 +483,10 @@ class RegistryGateTest(unittest.TestCase):
 
     # ---- 第 7 章 ----
     def _md_with_ch7(self, line):
-        chapters = "".join(f"## 第{i}章\n\n正文。\n\n" for i in range(1, 7))
+        # 2026-11-11 起技术判断并入第 1 章，作为「### 技术判断」小节
         p = self.tmp / f"r-{self.RUN}.md"
-        p.write_text(f"---\ntitle: t\n---\n\n{chapters}## 本轮技术判断\n\n{line}\n\n## 信息源\n\n", encoding="utf-8")
+        p.write_text(f"---\ntitle: t\n---\n\n## 本轮结论与技术判断\n\n正文。\n\n"
+                     f"### 技术判断\n\n{line}\n\n## 今日必看\n\n正文。\n\n", encoding="utf-8")
         return p
 
     def _ch7(self, line):
@@ -502,13 +503,13 @@ class RegistryGateTest(unittest.TestCase):
     def test_ch7_wrong_confidence_fails(self):
         self._write("EV-01", thesis_decision=self._new())
         self._ingest()
-        self.assertEqual(_status(self._ch7("- TH-0001（置信度 High）"), "第 7 章置信度与 registry 一致"), "FAIL")
+        self.assertEqual(_status(self._ch7("- TH-0001（置信度 High）"), "技术判断置信度与 registry 一致"), "FAIL")
 
     def test_ch7_low_thesis_fails(self):
         self._write("EV-01", rating="A", thesis_decision=self._new())   # 单条 A → Low
         self._ingest()
         c = self._ch7("- TH-0001（置信度 Low）")
-        self.assertEqual(_status(c, "第 7 章只引用 active/contested 且非 Low 的命题"), "FAIL")
+        self.assertEqual(_status(c, "技术判断只引用 active/contested 且非 Low 的命题"), "FAIL")
 
     def test_ch7_contested_needs_counter_evidence(self):
         from events import normalize_event
@@ -538,24 +539,24 @@ class RegistryGateTest(unittest.TestCase):
         self._write("EV-01", thesis_decision=self._new())
         self._ingest()
         c = self._ch7("- TH-0001（置信度 Medium）\n- 推理成本还会继续下降")
-        self.assertEqual(_status(c, "第 7 章每条判断都标了 TH 编号"), "FAIL")
+        self.assertEqual(_status(c, "技术判断每条判断都标了 TH 编号"), "FAIL")
 
     def test_ch7_must_cover_all_core_judgments(self):
         self._write("EV-01", thesis_decision=self._new())          # TH-0001 为核心判断
         self._ingest()
         c = self._ch7("本轮无核心技术判断。")
-        self.assertEqual(_status(c, "第 7 章为空时写明本轮无核心判断"), "FAIL")
+        self.assertEqual(_status(c, "技术判断为空时写明本轮无核心判断"), "FAIL")
 
     def test_ch7_empty_statement_ok_when_no_core(self):
         self._write("EV-01", rating="B", thesis_decision=self._new())   # 单条 B → proposed
         self._ingest()
         c = self._ch7("本轮无核心技术判断。")
-        self.assertEqual(_status(c, "第 7 章为空时写明本轮无核心判断"), "PASS")
+        self.assertEqual(_status(c, "技术判断为空时写明本轮无核心判断"), "PASS")
 
     def test_ch7_unknown_thesis_fails(self):
         self._write("EV-01", thesis_decision=self._new())
         self._ingest()
-        self.assertEqual(_status(self._ch7("- TH-0042（Medium）"), "第 7 章引用的命题存在"), "FAIL")
+        self.assertEqual(_status(self._ch7("- TH-0042（Medium）"), "技术判断引用的命题存在"), "FAIL")
 
 
 class JsonDrivenDutyTest(unittest.TestCase):
@@ -614,7 +615,7 @@ class JsonDrivenDutyTest(unittest.TestCase):
         self.assertEqual(_status(c, "图片均为本地文件（渲染时内嵌）"), "PASS")
 
     def test_event_index_rating_is_exact(self):
-        md = ("---\ntitle: t\n---\n\n### 8.2 事件索引\n\n| EV | 事件 | 首发 |\n|---|---|---|\n"
+        md = ("---\ntitle: t\n---\n\n### C.2 事件索引\n\n| EV | 事件 | 首发 |\n|---|---|---|\n"
               "| EV-01 | Decisions 接口 Active 迁移 API | 2026-10-30 10:00 |\n")
         p = self.tmp / "r-2026-10-30.md"
         p.write_text(md, encoding="utf-8")
@@ -812,15 +813,16 @@ class CtLabelTest(unittest.TestCase):
 
 
 def _eight_chapters(ch1_7: str, audit: str = "") -> str:
-    """固定八章骨架。第 8 章标题写的是「信息源采集统计」而不是以 8 开头——
-    第一版 _md_body_before_audit 按标题文字找 "8"，没命中就退回全文，
-    于是 8.2 索引表自己把检查喂成了恒绿。这里按真实标题写，守住那个回归。"""
-    heads = ["本轮结论与技术趋势", "今日必看", "模型技术热点", "Agent 系统技术热点",
-             "值得关注", "业界专家观点与趋势信号", "本轮技术判断"]
+    """现行骨架：四章正文 + 附录 A/B/C（函数名沿用旧称）。
+
+    审计在附录 C，C.2 索引表里本来就会列出每个编号；判断「这个事件被写过」
+    必须把附录切掉，否则索引表自己就能让检查恒绿。"""
+    heads = ["本轮结论与技术判断", "今日必看", "模型技术热点", "Agent 系统技术热点"]
     out = []
     for i, h in enumerate(heads):
         out.append(f"## {h}\n\n" + (ch1_7 if i == 2 else "正文。\n") + "\n")
-    out.append("## 信息源采集统计\n\n### 8.2 事件索引\n\n" + audit + "\n")
+    out.append("## 附录 A 值得关注\n\n正文。\n\n## 附录 B 业界专家观点与趋势信号\n\n正文。\n\n")
+    out.append("## 附录 C 信息源采集统计\n\n### C.2 事件索引\n\n" + audit + "\n")
     return "".join(out)
 
 
@@ -847,7 +849,7 @@ class EventBodyPresenceTest(unittest.TestCase):
         (self.ev / f"{eid}.json").write_text(
             json.dumps(ev, ensure_ascii=False), encoding="utf-8")
 
-    def _run(self, body: str, audit: str = "", name: str = "每个事件在第 1–7 章有落点"):
+    def _run(self, body: str, audit: str = "", name: str = "每个事件在正文章节有落点"):
         self.md.write_text(_eight_chapters(body, audit), encoding="utf-8")
         c = Check()
         check_event_body_presence(c, self.md, self.ev)
@@ -858,15 +860,18 @@ class EventBodyPresenceTest(unittest.TestCase):
         self.assertEqual(self._run("### 3.1 模型架构、训练与适应\n\n"
                                    + _card("EV-09", decl="3.1")), "PASS")
 
-    def test_mentioned_only_in_chapter5_passes(self):
-        """B / C 级只在章 5 露面是规定写法，不该被这条检查打红。"""
+    def test_mentioned_only_in_appendix_fails(self):
+        """2026-11-11 起编号事件一律写在正文章节；附录 A 只放不计事件的线索。
+
+        旧口径允许 B/C 级事件只在「值得关注」露面，结果 11-10 那稿里同是 B 级产品发布，
+        两条在线索章、三条在栏目里，没有成文规则。"""
         self._event("EV-09")
         self.md.write_text(_eight_chapters("正文。\n").replace(
-            "## 值得关注\n\n正文。", "## 值得关注\n\n- **EV-09** 持续信号。"),
+            "## 附录 A 值得关注\n\n正文。", "## 附录 A 值得关注\n\n- **EV-09** 持续信号。"),
             encoding="utf-8")
         c = Check()
         check_event_body_presence(c, self.md, self.ev)
-        self.assertEqual(_status(c, "每个事件在第 1–7 章有落点"), "PASS")
+        self.assertEqual(_status(c, "每个事件在正文章节有落点"), "FAIL")
 
     def test_only_in_audit_index_fails(self):
         self._event("EV-09")
@@ -876,12 +881,10 @@ class EventBodyPresenceTest(unittest.TestCase):
         """回归：审计章必须被切掉。切不掉的话上一条会误判为 PASS。"""
         self._event("EV-09")
         md = _eight_chapters("正文。\n", audit="| EV-09 | C | 标题 |")
-        self.assertFalse([h for h in re.findall(r'^## +(.*)$', md, re.M)
-                          if h.startswith("8")])     # 二级章标题确实不以 8 开头
         self.md.write_text(md, encoding="utf-8")
         c = Check()
         check_event_body_presence(c, self.md, self.ev)
-        self.assertEqual(_status(c, "每个事件在第 1–7 章有落点"), "FAIL")
+        self.assertEqual(_status(c, "每个事件在正文章节有落点"), "FAIL")
 
     def test_card_without_event_json_fails(self):
         self._event("EV-01")
@@ -1281,3 +1284,125 @@ class ScoringDiscriminationTest(unittest.TestCase):
         self.assertEqual(tuple(verify_gates.SCORING_DIMENSIONS),
                          tuple(scoring.DIMENSIONS))
         self.assertNotIn("source_authority", verify_gates.SCORING_DIMENSIONS)
+
+
+class NewLayoutContractTest(unittest.TestCase):
+    """2026-11-11 文档契约：四章正文 + 附录，今日必看放完整主卡，A/A+ 必写含义。
+
+    起因是对 11-10 那稿的篇幅实测：首屏信息量为零；结论与技术判断合计占 2.3% 却
+    分处 1% 和 80%；线索与审计占 62%；最重要的内容要从今日必看跳到栏目才能读到。
+    """
+
+    WIN = JsonDrivenDutyTest.WIN
+    DEEP = JsonDrivenDutyTest.DEEP
+    setUp = JsonDrivenDutyTest.setUp
+    _run = JsonDrivenDutyTest._run
+    _ev = JsonDrivenDutyTest._ev
+
+    IMPL = ("##### 对我们的含义\n\n该机制把候选集与升级阈值留在 Harness，决策读出内化到模型；"
+            "若端侧高频路由采用同类接口，需要先在目标芯片上实测 100–200ms 预算是否成立，"
+            "论文未覆盖手机场景，此处不能直接外推。\n\n")
+
+    def _focus(self, eid, rating="A", decl="3.2", body=None):
+        return _card(eid, (self.DEEP + self.IMPL) if body is None else body, decl=decl, rating=rating)
+
+    def _ref(self, eid):
+        return f"#### 事件标题\n\n**A · 摘要 · {eid} · Model**\n\n主卡见今日必看。\n\n"
+
+    # ---- 含义 ----
+    def test_a_card_without_implication_fails(self):
+        md = _md(_column("3.2", self._ref("EV-01")), focus=self._focus("EV-01", body=self.DEEP))
+        c = self._run(md, **{"EV-01": self._ev("A")})
+        self.assertEqual(_status(c, "A/A+ 主卡写了「对我们的含义」且客观"), "FAIL")
+
+    def test_implication_must_follow_the_technical_sections(self):
+        """含义要建立在前面交代过的技术价值上，不能排在机制之前。"""
+        md = _md(_column("3.2", self._ref("EV-01")),
+                 focus=self._focus("EV-01", body=self.IMPL + self.DEEP))
+        c = self._run(md, **{"EV-01": self._ev("A")})
+        self.assertEqual(_status(c, "A/A+ 主卡写了「对我们的含义」且客观"), "FAIL")
+
+    def test_hype_words_fail(self):
+        hype = "##### 对我们的含义\n\n" + "这将彻底改变端侧助手的技术路线，我们需要尽快跟进并完成全部能力的对标与落地验证工作，否则会落后。" + "\n\n"
+        md = _md(_column("3.2", self._ref("EV-01")), focus=self._focus("EV-01", body=self.DEEP + hype))
+        c = self._run(md, **{"EV-01": self._ev("A")})
+        self.assertEqual(_status(c, "A/A+ 主卡写了「对我们的含义」且客观"), "FAIL")
+
+    def test_well_formed_implication_passes(self):
+        md = _md(_column("3.2", self._ref("EV-01")), focus=self._focus("EV-01"))
+        c = self._run(md, **{"EV-01": self._ev("A")})
+        self.assertEqual(_status(c, "A/A+ 主卡写了「对我们的含义」且客观"), "PASS")
+
+    def test_b_card_is_not_required_to_write_implication(self):
+        md = _md(_column("3.2", _card("EV-01")))
+        c = self._run(md, **{"EV-01": self._ev("B")})
+        self.assertEqual(_status(c, "A/A+ 主卡写了「对我们的含义」且客观"), "PASS")
+
+    # ---- 今日必看 ----
+    def test_focus_capped_at_five(self):
+        ids = [f"EV-{i:02d}" for i in range(1, 7)]
+        md = _md(_column("3.2", "".join(self._ref(e) for e in ids)),
+                 focus="".join(self._focus(e) for e in ids))
+        c = self._run(md, **{e: self._ev("A") for e in ids})
+        self.assertEqual(_status(c, "今日必看不超过 5 张"), "FAIL")
+
+    def test_sixth_a_event_lives_in_its_column(self):
+        ids = [f"EV-{i:02d}" for i in range(1, 7)]
+        md = _md(_column("3.2", "".join(self._ref(e) for e in ids[:5])
+                         + _card("EV-06", self.DEEP + self.IMPL, rating="A")),
+                 focus="".join(self._focus(e) for e in ids[:5]))
+        c = self._run(md, **{e: self._ev("A") for e in ids})
+        self.assertEqual(_status(c, "今日必看不超过 5 张"), "PASS")
+        self.assertEqual(_status(c, "今日必看的张数与 A/A+ 数量相符"), "PASS")
+
+    def test_stub_in_focus_fails(self):
+        """11-10 的写法：今日必看放指引、完整卡在栏目——最重要的内容要跳走才能读到。"""
+        md = _md(_column("3.2", _card("EV-01", self.DEEP + self.IMPL, rating="A")),
+                 focus=self._ref("EV-01"))
+        c = self._run(md, **{"EV-01": self._ev("A")})
+        self.assertEqual(_status(c, "今日必看里没有摘要指引"), "FAIL")
+
+    def test_focus_card_needs_a_ref_in_its_column(self):
+        md = _md(_column("3.2", _card("EV-02")), focus=self._focus("EV-01"))
+        c = self._run(md, **{"EV-01": self._ev("A"), "EV-02": self._ev("B")})
+        self.assertEqual(_status(c, "今日必看的主卡在归属栏目留了摘要指引"), "FAIL")
+
+    def test_ref_is_not_counted_as_a_second_main_card(self):
+        md = _md(_column("3.2", self._ref("EV-01")), focus=self._focus("EV-01"))
+        c = self._run(md, **{"EV-01": self._ev("A")})
+        self.assertEqual(_status(c, "唯一主卡：事件不在多个栏目重复写全卡"), "PASS")
+        self.assertEqual(_status(c, "栏目里的摘要指引都指向今日必看的主卡"), "PASS")
+
+    def test_higher_rated_event_left_outside_focus_fails(self):
+        md = _md(_column("3.2", self._ref("EV-01") + _card("EV-02", self.DEEP + self.IMPL, rating="A+")),
+                 focus=self._focus("EV-01"))
+        c = self._run(md, **{"EV-01": self._ev("A"), "EV-02": self._ev("A+")})
+        self.assertEqual(_status(c, "今日必看之外没有评级更高的事件"), "FAIL")
+
+    # ---- 附录与首屏 ----
+    def test_event_card_in_appendix_fails(self):
+        md = _md(_column("3.2", _card("EV-01"))) + "\n## 附录 A 值得关注\n\n" + _card("EV-02")
+        c = self._run(md, **{"EV-01": self._ev("B"), "EV-02": self._ev("B")})
+        self.assertEqual(_status(c, "附录里没有事件卡"), "FAIL")
+
+    def test_body_h1_fails(self):
+        md = _md(_column("3.2", _card("EV-01"))).replace("## 本轮结论", "# 技术热点简报｜窗口\n\n## 本轮结论", 1)
+        c = self._run(md, **{"EV-01": self._ev("B")})
+        self.assertEqual(_status(c, "正文没有一级标题"), "FAIL")
+
+    def test_window_belongs_in_frontmatter(self):
+        md = _md(_column("3.2", _card("EV-01")))
+        c = self._run(md, **{"EV-01": self._ev("B")})
+        self.assertEqual(_status(c, "frontmatter 含 window"), "FAIL")
+        c = self._run(md.replace("date: 2026-10-30\n", "date: 2026-10-30\nwindow: 10-30 00:00 → 10-31 09:00\n"),
+                      **{"EV-01": self._ev("B")})
+        self.assertEqual(_status(c, "frontmatter 含 window"), "PASS")
+
+    def test_chapter_order_is_checked_by_name(self):
+        good = ("---\ntitle: t\ndate: 2026-10-30\n---\n\n## 本轮结论与技术判断\n\n文。\n\n## 今日必看\n\n文。\n\n"
+                "## 模型技术热点\n\n文。\n\n## Agent 系统技术热点\n\n文。\n\n## 附录 A 值得关注\n\n文。\n\n"
+                "## 附录 B 业界专家观点与趋势信号\n\n文。\n\n## 附录 C 信息源采集统计\n\n### C.1 a\n\n### C.2 b\n\n### C.3 c\n\n")
+        self.assertEqual(_status(self._run(good), "章节齐全且顺序正确（四章 + 附录 A/B/C）"), "PASS")
+        swapped = good.replace("## 今日必看\n\n文。\n\n## 模型技术热点\n\n文。\n\n",
+                               "## 模型技术热点\n\n文。\n\n## 今日必看\n\n文。\n\n")
+        self.assertEqual(_status(self._run(swapped), "章节齐全且顺序正确（四章 + 附录 A/B/C）"), "FAIL")

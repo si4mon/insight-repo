@@ -4,7 +4,7 @@
 
 为什么要有这个脚本：手写的统计一定会和事实源漂移。2026-10-31 的一次运行里，
 正文自报 15 个事件、索引只列了 14 行，自报 A+/A 为 1/5、实际是 1/6。
-Dashboard、8.2 索引、第 2 章 Top N 现在都从同一份事件目录派生，
+Dashboard、C.2 索引、第 2 章 Top N 现在都从同一份事件目录派生，
 门禁再用同一个函数复算一遍，对不上就 FAIL。
 
   python report_stats.py --events events_run_2026-10-30 --report raw_.../collect_report.json
@@ -132,7 +132,7 @@ def main() -> int:
         print(f"→ {args.out}")
     if args.markdown:
         print("\n### Dashboard\n");  print(dashboard_markdown(st))
-        print("\n### 8.2 事件索引\n"); print(index_markdown(st))
+        print("\n### C.2 事件索引\n"); print(index_markdown(st))
     else:
         print(json.dumps({k: v for k, v in st.items() if k != "index_rows"},
                          ensure_ascii=False, indent=2))

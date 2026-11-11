@@ -78,16 +78,16 @@
       {
         "chapter": 1,
         "section_id": "s1",
-        "name": "本轮结论与技术趋势",
+        "name": "本轮结论与技术判断",
         "part": "I 焦点",
-        "role": "跨栏目主线，最多 3 条"
+        "role": "一句总判断 + 跨栏目主线（最多 3 条）+ 「技术判断」小节（Frontier / Convergence Thesis）"
       },
       {
         "chapter": 2,
         "section_id": "s2",
         "name": "今日必看",
         "part": "I 焦点",
-        "role": "按技术价值取 Top N，不设固定数量，不按栏目配额；Top1 深拆，N>5 时其余压缩为摘要卡"
+        "role": "A/A+ 完整主卡，上限 5 张；主卡写在这里，分类章只留摘要指引"
       },
       {
         "chapter": 3,
@@ -105,31 +105,24 @@
       },
       {
         "chapter": 5,
-        "section_id": "s5",
-        "name": "值得关注",
-        "part": "III 信号与判断",
-        "role": "Early Signal / Counter-signal / Active Event / 未归类"
+        "section_id": "sA",
+        "name": "附录 A 值得关注",
+        "part": "III 附录",
+        "role": "线索表：Early Signal / Counter-signal / Active Event / 未归类；不放编号事件"
       },
       {
         "chapter": 6,
-        "section_id": "s6",
-        "name": "业界专家观点与趋势信号",
-        "part": "III 信号与判断",
+        "section_id": "sB",
+        "name": "附录 B 业界专家观点与趋势信号",
+        "part": "III 附录",
         "role": "人与其判断"
       },
       {
         "chapter": 7,
-        "section_id": "s7",
-        "name": "本轮技术判断",
-        "part": "III 信号与判断",
-        "role": "Frontier Thesis / Convergence Thesis"
-      },
-      {
-        "chapter": 8,
-        "section_id": "s8",
-        "name": "信息源采集统计",
-        "part": "IV 证据",
-        "role": "8.1 源与覆盖审计 / 8.2 事件索引 / 8.3 丢弃与漏检回溯"
+        "section_id": "sC",
+        "name": "附录 C 信息源采集统计",
+        "part": "III 附录",
+        "role": "C.1 源与覆盖审计 / C.2 事件索引 / C.3 丢弃与漏检回溯"
       }
     ],
     "domains": [

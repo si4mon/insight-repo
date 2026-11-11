@@ -6,7 +6,7 @@
 Claude Code 2.1.314，另一份漏掉 Masked Erosion，都不是判断分歧，而是根本
 没看到）。折中方案是分层：
 
-  清单内  —— 强制逐条留痕，必须在 8.2（入选）或 8.3（丢弃 + 封闭集合理由）出现；
+  清单内  —— 强制逐条留痕，必须在 C.2（入选）或 C.3（丢弃 + 封闭集合理由）出现；
   清单外  —— 按池筛规则统计留痕，不要求逐条。
 
 清单只决定"要不要留痕"，不决定评级，也不做任何价值判断。
@@ -228,11 +228,11 @@ def build(in_pool: list[dict], terms: dict,
     }
 
 
-# 留痕处置的封闭集合。discarded 的理由与 task_def 8.3 一致。
+# 留痕处置的封闭集合。discarded 的理由与 task_def C.3 一致。
 DISPOSITIONS = {
     "selected": "入选为独立事件（必须给出 ev）",
     "merged": "并入其他事件（必须给出 ev）",
-    "chapter5": "写入第 5 章（Active Event / Early Signal / 线索）",
+    "chapter5": "写入附录 A（Active Event / Early Signal / 线索）",
     "discarded": "丢弃（必须给出封闭集合 reason）",
 }
 DISCARD_REASONS = (
@@ -245,14 +245,14 @@ DISCARD_REASONS = (
 def trace_template(mr: dict) -> dict:
     """生成待填的逐条处置台账骨架。
 
-    清单上百条不适合全部塞进 8.3（那一节是给人读的摘录），所以完整台账落在
-    这份 JSON 里，8.3 仍按 task_def 的范围写 Tier-1 与共振条目。门禁核对的是
+    清单上百条不适合全部塞进 C.3（那一节是给人读的摘录），所以完整台账落在
+    这份 JSON 里，C.3 仍按 task_def 的范围写 Tier-1 与共振条目。门禁核对的是
     这份台账的完整性——清单内一条没填，门禁就不过。
     """
     return {
         "_doc": "必审清单逐条处置台账。disposition ∈ "
                 + "/".join(DISPOSITIONS)
-                + "；discarded 的 reason 必须取 task_def 8.3 的封闭集合。",
+                + "；discarded 的 reason 必须取 task_def C.3 的封闭集合。",
         "must_review_total": mr["total"],
         "dispositions": {
             r["uid"]: {"disposition": "", "ev": "", "reason": "",

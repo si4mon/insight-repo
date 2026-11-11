@@ -3,7 +3,7 @@
 """
 把覆盖缺口转换成可执行补检任务。
 
-修机制缺陷 M4：零覆盖此前只要求"在 8.1 写原因"，不产生任何动作。
+修机制缺陷 M4：零覆盖此前只要求"在 C.1 写原因"，不产生任何动作。
 结果是补检永远是 event-driven（围绕已发现的事件深挖），而漏检恰恰发生在
 "没有发现任何事件"的那些面上 —— 补检永远打不到那里。
 
@@ -12,7 +12,7 @@
   - 目标面（surface）：证明"该面被检查过"
   - 验收条件（acceptance）：什么算这条任务完成
 
-产出 gap_tasks.json，供 P1 阶段执行；未完成的任务在 8.3 必须逐条交代。
+产出 gap_tasks.json，供 P1 阶段执行；未完成的任务在 C.3 必须逐条交代。
 
 用法：
   python gap_tasks.py --report raw_2026-10-23/collect_report.json --out gap_tasks.json
@@ -104,7 +104,7 @@ def build_tasks(report: dict, run_date: str) -> dict:
     # action_required → 不阻断，但必须有人对"这段时间有没有东西"给出结论
     # window_partial 属于后者：源读到了内容，只是窗口前半段从未被检索。
     # 只按 blocking 过滤会让它静默消失（历史缺陷：arXiv 按天批量发布，
-    # 每个分类只覆盖窗口后半段，report 里记了 note，8.3 却完全没有这一行）。
+    # 每个分类只覆盖窗口后半段，report 里记了 note，C.3 却完全没有这一行）。
     # 兼容旧版 collect_report（其 gaps 里没有 action_required 字段）。
     candidates = [g for g in report.get("gaps", [])
                   if g.get("blocking") or g.get("action_required")

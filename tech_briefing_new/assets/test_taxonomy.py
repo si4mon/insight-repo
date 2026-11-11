@@ -68,8 +68,9 @@ class TaxonomyStructureTest(unittest.TestCase):
         self.assertEqual(total, 54)
 
     def test_chapters_and_anchors(self):
-        self.assertEqual([TAXONOMY.section_id(n) for n in range(1, 9)],
-                         [f"s{n}" for n in range(1, 9)])
+        # 2026-11-11 起：四章正文 + 附录 A/B/C
+        self.assertEqual([TAXONOMY.section_id(n) for n in range(1, 8)],
+                         ["s1", "s2", "s3", "s4", "sA", "sB", "sC"])
         self.assertEqual(TAXONOMY.anchor("3.2"), "s3-2")
         self.assertEqual(TAXONOMY.anchor("4.7"), "s4-7")
 

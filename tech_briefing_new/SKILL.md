@@ -52,7 +52,7 @@ $SKILL_DIR/
 │   ├── events.py / thesis_registry.py / taxonomy.py   事件规范化、命题库、分类
 │   ├── scoring.py / root_tech.py   五维评分与评级派生、根技术计分（战略相关度）
 │   ├── claim_evidence.py         claim 绑定快照原文片段（sha256 + quote 精确匹配）
-│   ├── report_stats.py           统计派生（Dashboard / 8.2 / Top N 的唯一来源）
+│   ├── report_stats.py           统计派生（Dashboard / C.2 / Top N 的唯一来源）
 │   ├── verify_gates.py           门禁（校验 .md 工作源，并写 .gate_summary.json）
 │   ├── render_report.py + report_engine/   MD → 自包含 HTML（纯 Node，拒绝未过门禁的稿子）
 │   ├── testlib.py                测试共用装置
@@ -70,7 +70,7 @@ $SKILL_DIR/
 | 路径 | 内容 | 日期含义 |
 |---|---|---|
 | `raw_<date>/` | 原始字节（即 claim 级证据的快照）、`items_<source>.json`、`collect_report.json`、`gap_tasks.json`、`candidate_pool.json`、`must_review.json`、`must_review_trace.json` | 脚本运行的**今天** |
-| `events_run_<date>/` | `EV-xx.json`、`thesis_report.json`（第 7 章输入）、`pairwise.json`（成对排序裁定） | **WINDOW_START_DATE** |
+| `events_run_<date>/` | `EV-xx.json`、`thesis_report.json`（第 1 章「技术判断」小节输入）、`pairwise.json`（成对排序裁定） | **WINDOW_START_DATE** |
 | `reports/` | `<标题 slug>-<date>.md`（唯一手写产物）、同名 `.html`、`figures/`、报告库 `index.json` / `index.html` | **WINDOW_START_DATE** |
 | `snapshots/` | 跨 run 的官方面快照，用于差分 | — |
 | `state/` | registry 状态 `thesis_registry.json` 与审计日志；可用 `TECH_BRIEFING_STATE` 指向共享目录 | — |
@@ -97,10 +97,10 @@ $SKILL_DIR/
 
 在 `$WORKDIR/reports/` 下生成 `<标题 slug>-<WINDOW_START_DATE>.md` 及其渲染出的自包含 `.html`，满足：
 1. TARGET_WINDOW 正确冻结（task_def §0）
-2. 八章结构完整（task_def §16）
+2. 章节结构完整（task_def §16）
 3. `verify_gates.py` 退出码 0，人工复核表逐项有结论
 4. 先运行采集脚本，采集报告落盘到 `raw_<date>/collect_report.json`
-5. registry 完整走过 normalize → candidates → 裁决 → ingest → report，第 7 章取自 report
+5. registry 完整走过 normalize → candidates → 裁决 → ingest → report，第 1 章「技术判断」小节取自 report
 6. 漏跑的窗口已识别并补跑或登记
 
 ## Steps
@@ -129,8 +129,8 @@ python "$ASSETS/thesis_registry.py" gaps --until <WINDOW_START_DATE>
 ```
 `missing` 非空时，对每个漏掉的日期 D 按完整流程补跑一份简报：`collect_sources.py --date <D+1>`
 （`--date` 是那一轮的"今天"）→ `events_run_<D>/` → 正常裁决 → `ingest --backfill --run-date D` →
-`reports/<slug>-<D>.md`。源只保留近期条目，越晚补漏得越多，超出保留期的部分由补检检索覆盖并在 8.3
-记根因"源面未覆盖"。来不及补跑的日期在本轮 8.1 登记。
+`reports/<slug>-<D>.md`。源只保留近期条目，越晚补漏得越多，超出保留期的部分由补检检索覆盖并在 C.3
+记根因"源面未覆盖"。来不及补跑的日期在本轮 C.1 登记。
 
 **渲染引擎自检**：`python "$ASSETS/render_report.py" --check`，等到步骤 5 才发现缺 node 等于白写。
 
@@ -210,7 +210,7 @@ python "$ASSETS/must_review.py" --raw-dir raw_<date> \
 python "$ASSETS/arxiv_abstracts.py" --raw-dir raw_<date>        # 加 --dry-run 先看规模
 ```
 `must_review.py` 的输出里 `thresholds.arxiv_scoring_text.no_abstract` 是补抓后仍无摘要的
-残量，不为 0 就说明那部分条目的排序偏低，要在 8.3 写明。
+残量，不为 0 就说明那部分条目的排序偏低，要在 C.3 写明。
 
 **选题前先问判重**：registry 的 `seen_before` 只在 ingest 时命中，那已经是卡片写完之后。
 把判重提前到选题阶段：
@@ -219,7 +219,7 @@ python "$ASSETS/thesis_registry.py" seen --must-review raw_<date>/must_review.js
   --pool raw_<date>/candidate_pool.json --out raw_<date>/seen.json
 ```
 命中的条目要么按「重复」处置，要么作为已有事件的增量（见第 4 步 `increment_of`），
-不要新建事件。本轮收尾时把进第 5 章与被并入的条目登记进 registry，下一轮才认得它们：
+不要新建事件。本轮收尾时把进附录 A与被并入的条目登记进 registry，下一轮才认得它们：
 ```bash
 python "$ASSETS/thesis_registry.py" record-mentions --must-review raw_<date>/must_review.json \
   --trace raw_<date>/must_review_trace.json --run-date <WINDOW_START_DATE>
@@ -238,16 +238,16 @@ python "$ASSETS/thesis_registry.py" record-mentions --must-review raw_<date>/mus
 | 无标题（sitemap 纯 URL） | 移到 `pool_out_of_window.json` | 只用于 surface diff |
 
 `no_date` 条目的 `freshness`：`new_since_last_run` 可作本轮新事件；`carried_over`（上轮已在场）只能进
-第 5 章持续信号；`baseline_unknown`（首次运行）不得声称"本轮新增"。快照基线只在跨日时前进，同日
+附录 A持续信号；`baseline_unknown`（首次运行）不得声称"本轮新增"。快照基线只在跨日时前进，同日
 重跑不覆盖基线。
 
 **每次运行交付 TARGET_WINDOW 的全量简报，不是增量**：同一窗口跑两遍，两遍同样完整；`carried_over`
 只用于无日期源去重；首发早于 WINDOW_START 的事件仍是窗口外。窗口外条目留在
-`pool_out_of_window.json`，供 8.3 丢弃日志引证。`collect_report.json` 的 `diff.new_uids` 是官方面
+`pool_out_of_window.json`，供 C.3 丢弃日志引证。`collect_report.json` 的 `diff.new_uids` 是官方面
 "本轮新增了什么"的直接证据。
 
 **五路召回机制（task_def §2）与执行方式**。机制是"怎么召回"，源通道是代码里每个源的 `channel`，
-两套名字不要混用。8.3 的"召回通道"列：来自候选池的条目填源通道，来自检索的填"Technology Watch
+两套名字不要混用。C.3 的"召回通道"列：来自候选池的条目填源通道，来自检索的填"Technology Watch
 补检"或对应的 `GAP-xx`。
 
 | 召回机制 | 执行方式 | 对应源通道 |
@@ -295,7 +295,7 @@ tier-3 AgentOS 与 agent 安全。取事件命中的根技术里最靠前的 tie
 - 证据强度与机制可核对性**仍优先于 tier**：一手原文可逐行核对的事件，即使 tier 靠后也该在前。
 - tier **不参与五维评分、不改评级、不影响召回面**，也不得把事件跨评级或跨分档（分差 ≥2）搬动。
   tier 解决的是呈现次序，不是价值高低。
-- **A / A+ 无论属哪个 tier 都进今日必看。** 高价值的 infra 与安全类事件必须照样优先呈现。
+- **A / A+ 无论属哪个 tier 都按评级与总分竞争今日必看的 5 个名额。** 高价值的 infra 与安全类事件必须照样优先呈现；tier 只在同评级且分差 ≤1 时决定先后。超出 5 张的 A/A+ 在栏目里写完整主卡。
 
 门禁反向校验每条裁定：赢家的评级不得更低、总分不得低对手 2 分及以上，否则打红。
 
@@ -349,8 +349,8 @@ python "$ASSETS/scaffold_build.py" --raw-dir raw_<date> --picks picks.txt \
 ```bash
 python "$ASSETS/events.py" normalize --events-dir events_run_<WINDOW_START_DATE>
 ```
-**编号一致性**：`EV-01.json` 就是 8.2 里 `EV-01` 那一行，8.2 的每个编号都有同名 JSON；早于
-WINDOW_START 的背景事件 JSON 保留真实时刻，8.2 那一行标 `Active Event` / `Historical`。
+**编号一致性**：`EV-01.json` 就是 C.2 里 `EV-01` 那一行，C.2 的每个编号都有同名 JSON；早于
+WINDOW_START 的背景事件 JSON 保留真实时刻，C.2 那一行标 `Active Event` / `Historical`。
 
 **P3 聚类收敛：召回 → 裁决**（机器负责不漏，LLM 负责是不是同一命题）：
 
@@ -397,10 +397,10 @@ python "$ASSETS/thesis_registry.py" report --run-date <WINDOW_START_DATE> \
     --out events_run_<WINDOW_START_DATE>/thesis_report.json
 ```
 - 校验失败整批不写、逐条报错；修正后重跑即可，同一 run 整批替换，不会重复计数。
-- 输出的 `seen_before` 是相邻窗口重叠出现的事件，8.2 可标"上期已报"；`warnings`（疑似重复事件 /
+- 输出的 `seen_before` 是相邻窗口重叠出现的事件，C.2 可标"上期已报"；`warnings`（疑似重复事件 /
   命题）逐条处理：改为 `attach`，或事后 `merge --source TH-a --target TH-b --reason ...`。
 - 只能入库最新 run、重跑最近一次 run，或用 `--backfill` 补一个尚未入库的较早日期。
-- `report` 是第 7 章的唯一输入：命题前后的状态与置信度、得分明细、本轮收敛 / 跨时间收敛、
+- `report` 是第 1 章「技术判断」小节的唯一输入：命题前后的状态与置信度、得分明细、本轮收敛 / 跨时间收敛、
   `core_judgment`（active/contested 且非 Low）。
 - 其他决策：被否证 `retire`；表述收窄 `revise`；方向实质变化先新建再 `supersede`。statement 不直接改。
 
@@ -412,23 +412,23 @@ python "$ASSETS/thesis_registry.py" report --run-date <WINDOW_START_DATE> \
 ### 5. P5 成稿：写 Markdown，渲染成 HTML
 
 写之前读 `references/design-constraints.md` 的写作侧条款（§6–§8）与 `references/event-writing.md` 的
-"第 1 章写法""视觉约束"。八章与各章内容要求见 task_def §16；栏目编号与名称查
+"第 1 章写法""视觉约束"。章节与各章内容要求见 task_def §16；栏目编号与名称查
 `taxonomy.py chapter 3|4`。所有简报落在 `reports/`（报告库根目录，理由见 `references/design-rationale.md`）。
 
-**统计全部由脚本生成，不手写。** 事件总数、A+/A 计数、Dashboard 各项、8.2 索引表、
+**统计全部由脚本生成，不手写。** 事件总数、A+/A 计数、Dashboard 各项、C.2 索引表、
 第 2 章 Top N 必须由同一份 `events_run_<date>/` 派生：
 ```bash
 python "$ASSETS/report_stats.py" --events events_run_<WINDOW_START_DATE> \
   --report raw_<date>/collect_report.json --markdown
 ```
-把输出抄进正文。门禁会用同一个脚本复算一遍比对（手写统计必然漂移：有一次自报 15 个
+把输出抄进附录 C（Dashboard 统计表不再放第 1 章）。门禁会用同一个脚本复算一遍比对（手写统计必然漂移：有一次自报 15 个
 事件、索引只列 14 行，自报 A+/A 为 1/5、实际 1/6）。
 
-**第 1 章主线每条至少引用 2 个 8.2 里的 EV**，且引用的 EV 评级不低于 B。一个事件撑不起
+**第 1 章主线每条至少引用 2 个 C.2 里的 EV**，且引用的 EV 评级不低于 B。一个事件撑不起
 "主线"这个词——那是单个事件，写在卡片里就够了。
 
 ```bash
-# 1) 写 reports/<标题 slug>-<WINDOW_START_DATE>.md；frontmatter 必须含 title / date / status / summary
+# 1) 写 reports/<标题 slug>-<WINDOW_START_DATE>.md；frontmatter 必须含 title / date / window / status / summary
 # 2) 先过门禁（见第 6 步）；渲染器拒绝渲染没有门禁摘要的 .md
 # 3) 渲染：输出同名 .html 并更新报告库索引
 python "$ASSETS/render_report.py" --md "reports/<标题 slug>-<WINDOW_START_DATE>.md"
@@ -439,14 +439,48 @@ python "$ASSETS/render_report.py" --md "reports/<标题 slug>-<WINDOW_START_DATE
 只改 `.md`，永远不手改 `.html`：它是渲染产物，会被覆盖，且门禁只校验 `.md`，手改等于绕过门禁。
 </HARD-GATE>
 
+**文档骨架**（2026-11-11 起；读者先读到的必须是技术事件与技术本身，呈现简报质量的信息一律后置）：
+
+```markdown
+---
+title: 技术热点简报｜2026-11-10
+date: 2026-11-10
+window: 2026-11-10 00:00 → 2026-11-11 03:03（Asia/Shanghai）
+status: draft
+summary: 一句话总判断
+---
+
+## 1 本轮结论与技术判断        ← 正文不写一级标题，从这里开始
+一句总判断。然后最多 3 条主线（每条引用 ≥2 个 EV）。
+（覆盖有缺口时只写一行：「覆盖有缺口，事件数是下限，详见附录 C」——不放统计表）
+### 技术判断                  ← 原第 7 章并入这里
+- TH-xxxx｜类型｜置信度：……
+
+## 2 今日必看                 ← A/A+ 的完整主卡，最多 5 张，每张标记行写「归属 N.M」
+## 3 模型技术热点              ← 栏目；主卡已在今日必看的事件，这里只留一行摘要指引
+## 4 Agent 系统技术热点
+## 附录 A 值得关注             ← 只放线索表，不放编号事件
+## 附录 B 业界专家观点与趋势信号
+## 附录 C 信息源采集统计        ← Dashboard 统计表、Window Audit、C.1 / C.2 / C.3 全在这里
+```
+
+| 规则 | 做法 |
+|---|---|
+| 首屏不放过程信息 | 正文不写 `# ` 一级标题（标题来自 frontmatter）；窗口写进 frontmatter 的 `window`，渲染器把它缩在页眉角落；技能 commit、Dashboard 表、Window Audit 放附录 C |
+| 今日必看放完整内容 | 张数 = min(5, A/A+ 数量)，一个 A/A+ 都没有时放评级最高的 1 张；按评级 → 总分 → 成对裁定取前 5。这里**不许写摘要指引**——最重要的内容不能让读者跳走才读到 |
+| 栏目里的摘要指引 | 主卡在今日必看的事件，在归属栏目写一条 `#### 关键词｜总结` + 标记行 `**A · 摘要 · EV-xx · Model**` + 一句「主卡见今日必看」。渲染成一行轻量条目，不是卡 |
+| 第 6 个及以后的 A/A+ | 在自己的栏目里写完整主卡（含深拆与含义） |
+| 编号事件都在正文 | B/C 级事件写在栏目里（卡片默认折叠，只露结论）；附录 A 只收不计事件的线索，出现事件卡门禁会拦 |
+
 **Markdown 结构契约**（门禁按此切分）：
 
 | 层级 | 承载 |
 |---|---|
-| `## <章标题>` | 八章之一，按顺序匹配（第 N 个 `##` = 第 N 章） |
-| `### <N.M> <栏目标题>` | 11 个栏目之一（3.1–3.4 / 4.1–4.7）；8.1 / 8.2 / 8.3 是审计子节 |
+| `## <章标题>` | 四章正文 + 附录 A/B/C，按章名与顺序逐一匹配 |
+| `### <N.M> <栏目标题>` | 11 个栏目之一（3.1–3.4 / 4.1–4.7）；C.1 / C.2 / C.3 是审计子节 |
 | `#### <关键词>｜<一句总结>` | 一张事件卡；标题必须双层式，全角竖线分隔（见下） |
 | `##### 挑战与问题` / `机制与架构` / `效果与定量` / `对比其他方案的价值` | A/A+ 主卡的四节深拆 |
+| `##### 对我们的含义` | A/A+ 主卡必填，排在四节深拆之后；写法见 `references/event-writing.md` |
 
 **卡片标题双层式**：`#### 关键词｜一句总结`，用全角竖线 `｜`（U+FF5C）分隔。前半取自原始标题里的
 实体或关键词（产品名、模型名、论文核心术语），照抄不转述；后半是这条事件的技术判断。渲染器按竖线
@@ -467,12 +501,12 @@ EV 编号视为交叉引用。卡片不在自己的主栏目下时（折叠卡�
 
 | 分类呈现规则 | 做法 |
 |---|---|
-| 唯一主卡 | 每个事件只写一张全卡；章 2 的 Top 卡写了 `归属 N.M` 就是主卡，分类章只留"亦见"引用；章 2 未写归属的卡是摘要卡 |
-| 主卡归位 | 全卡落在 `primary_path` 解析出的栏目；A/A+ 必须有主卡，B 级可只在章 5 出现 |
+| 唯一主卡 | 每个事件只写一张全卡；今日必看的卡必须写 `归属 N.M`，它就是主卡，归属栏目只留摘要指引（标记行信号位写「摘要」） |
+| 主卡归位 | 全卡落在 `primary_path` 解析出的栏目（或在今日必看并声明归属它）；所有编号事件都要在第 2–4 章有卡，附录不放事件卡 |
 | 空栏目 | 0 条不出现 `###`；1 条折叠进相邻栏目并写 `归属 N.M`，每栏最多折 1 条；主卡在章 2、只留引用的栏目不算空 |
 | 4.6 标注 | 卡片写具体技术域（评测环境 / 结果核验 / 可靠性归因 / 运行证据 / 调试回放 / 生产质量 / 身份授权 / 执行隔离 / 内容防护 / 审计治理），与事件 JSON 的 `annotation` 一致 |
 
-**第 7 章**：只写 `thesis_report.json` 中 `core_judgment = true` 的命题，**一个不漏**；每条一个列表项，
+**第 1 章「技术判断」小节**：只写 `thesis_report.json` 中 `core_judgment = true` 的命题，**一个不漏**；每条一个列表项，
 写 `TH-xxxx`、类型、置信度（与 report 一致）、本轮收敛 / 跨时间收敛与前后变化；contested 的命题同一行
 写出反证。没有核心判断时写明"本轮无核心技术判断"。
 
@@ -481,7 +515,7 @@ EV 编号视为交叉引用。卡片不在自己的主栏目下时（折叠卡�
 本地图片缺失会让渲染失败，远程图片会被门禁拒绝。渲染器不支持 mermaid，比较类数字用表格。
 
 **Success criteria**：`.md` 与 `.html` 都在 `reports/`；`render_report.py` 输出 `OK` 与报告库计数；
-frontmatter 齐全；窗口在标题、首页、文件名上一致（task_def §0）；视觉复核通过后才进入步骤 6。
+frontmatter 齐全；窗口在 frontmatter 的 `window`、文件名上一致（task_def §0）；视觉复核通过后才进入步骤 6。
 
 ### 6. P6 验收 + 漏检回溯 + Registry
 
@@ -513,7 +547,7 @@ python "$ASSETS/render_report.py" --md "reports/<标题 slug>-<WINDOW_START_DATE
 - 前 2 轮失败：修正后重跑，与此前一致。
 - 第 3 轮仍失败：**按降级交付，不要静默不交付**。门禁会在 `.md` 旁边写
   `.gate_degraded_section.md`（内容由失败项派生，不要手写；每项都带「对本稿的影响」一列）。
-  把它整段**追加到正文最末尾**，作为第 8 章之后的最后一节「门禁未通过项与影响」，
+  把它整段**追加到正文最末尾**，作为附录 C之后的最后一节「门禁未通过项与影响」，
   重跑一次门禁让 sha256 对上（这次带降级节的运行记为「交付前复核」，不占轮次），
   然后 `render_report.py --md <稿> --allow-gate-fail` 渲染。
 - **不要放在开头。**降级项绝大多数是采集与覆盖缺口，读者当场无法处置，
@@ -534,21 +568,21 @@ python "$ASSETS/render_report.py" --md "reports/<标题 slug>-<WINDOW_START_DATE
 | 章 1 主线 | 是否真的跨栏目；引用的 2 个以上 EV 是否真的支撑这条主线 |
 | 窗口文字 | title / H1 / Dashboard / 正文 / 文件名的时间范围一致；无残留"TARGET_DATE = 单一天"（task_def §18） |
 
-**6c. 8.1 与 8.3**（数据直接来自 `candidate_pool.json`、`pool_out_of_window.json`、`gap_tasks.json`、
+**6c. C.1 与 C.3**（数据直接来自 `candidate_pool.json`、`pool_out_of_window.json`、`gap_tasks.json`、
 `collect_report.json`，不凭印象）：
 
-- **8.3 丢弃日志与漏检回溯**：两张表；字段、"丢弃理由"与"漏检根因"两个封闭集合见 task_def §16.1；
+- **C.3 丢弃日志与漏检回溯**：两张表；字段、"丢弃理由"与"漏检根因"两个封闭集合见 task_def §16.1；
   处置方式取 下一轮补采 / 申请权限 / 换通道 / 用二次源确认 / 已并入 TH-xxxx。
-- **8.1 源与覆盖审计**（task_def §13 的 Zero-result 证据也记在这里）：判定分布；`items_in_window_exact`
+- **C.1 源与覆盖审计**（task_def §13 的 Zero-result 证据也记在这里）：判定分布；`items_in_window_exact`
   与 `items_in_window_fuzzy` 分别报；每个失明源的原因；实体×面覆盖情况；不可达面的登记理由与补偿方式；
   `entity_blind` 任务的结论；每个"0 命中 / 无新增"结论的检查面、时间范围、查询方式、无法访问的页面、
   快照不可用原因；漏跑窗口及补跑情况。
 
 **6d. Registry**：命题状态（proposed / active / contested / dormant / retired）由证据与 run 计数派生，
-没有单独的生命周期命令。8.3 发现命题被证伪用 `retire`，两个命题实为同一个用 `merge`。
+没有单独的生命周期命令。C.3 发现命题被证伪用 `retire`，两个命题实为同一个用 `merge`。
 
 **Success criteria**：`verify_gates.py` 与 `render_report.py` 退出码为 0；人工复核表逐项有结论；
-8.1 / 8.3 已按上面填写。验收不通过必须修正后重新验收，不能跳过。
+C.1 / C.3 已按上面填写。验收不通过必须修正后重新验收，不能跳过。
 
 ## 变更记录
 
