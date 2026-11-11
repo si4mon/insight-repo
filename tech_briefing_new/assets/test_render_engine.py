@@ -442,3 +442,71 @@ class CardContrastTest(unittest.TestCase):
                     if "data-rating" in part:
                         self.assertIn("::before", part,
                                       f"这个选择器会把宽度加在卡片上: {part.strip()}")
+
+
+@unittest.skipIf(NODE is None, "node 不可用")
+class CardHierarchyTest(unittest.TestCase):
+    """卡片的三档轻重与折叠（2026-11-11）。
+
+    11-10 那稿实测：单张卡出处元信息占 52%、分析正文 32%，读到第一句话前要越过
+    16 行；今日必看的 12 个指引条被包成与主卡等大的盒子；线索表与审计占全文 62%
+    却摆成阅读流。原则：占多少屏应与值多少注意力成正比。
+    """
+
+    def _render(self, md, date="2026-11-10"):
+        with tempfile.TemporaryDirectory() as d:
+            src, out = Path(d) / "t.md", Path(d) / "t.html"
+            src.write_text(f"---\ntitle: T\ndate: {date}\nstatus: draft\n"
+                           "summary: s\n---\n\n" + md, encoding="utf-8")
+            r = subprocess.run([NODE, str(RENDER_JS), str(src), str(out), "--no-open"],
+                               capture_output=True, text=True)
+            self.assertEqual(r.returncode, 0, r.stderr)
+            return out.read_text(encoding="utf-8")
+
+    CARD = ("#### X｜一条\n\n**{r} · Frontier Signal · EV-01 · Model**\n\n"
+            "| 元信息 | 内容 |\n|---|---|\n| 首发（Asia/Shanghai） | {d}T08:00:00+08:00 |\n\n"
+            "##### 机制与架构\n\n正文。\n")
+
+    def test_ref_row_is_not_boxed_as_a_card(self):
+        html = self._render("#### X｜一条\n\n**A · 摘要 · EV-01 · Model**\n\n第2位：一条。\n")
+        self.assertIn('<article class="event-ref"', html)
+        self.assertNotIn('<article class="event-card"', html)
+
+    def test_meta_table_is_folded_and_closed(self):
+        html = self._render(self.CARD.format(r="A", d="2026-11-10"))
+        self.assertIn('<details class="card-meta"><summary>', html)
+
+    def test_deep_dive_open_for_a_closed_for_b(self):
+        self.assertIn('<details class="card-deep" open>',
+                      self._render(self.CARD.format(r="A", d="2026-11-10")))
+        b = self._render(self.CARD.format(r="B", d="2026-11-10"))
+        self.assertIn('<details class="card-deep">', b)
+
+    def test_fresh_tag_from_first_release_date(self):
+        self.assertIn('data-fresh="new"', re.search(
+            r'<article class="event-card"[^>]*>', self._render(self.CARD.format(r="A", d="2026-11-10"))).group(0))
+        self.assertIn('data-fresh="cont"', re.search(
+            r'<article class="event-card"[^>]*>', self._render(self.CARD.format(r="A", d="2026-11-07"))).group(0))
+
+    def test_active_event_marker_means_continuing(self):
+        html = self._render("#### X｜一条\n\n**B · Active Event · EV-01 · Model**\n\n正文。\n")
+        self.assertIn('data-fresh="cont"', re.search(r'<article class="event-card"[^>]*>', html).group(0))
+
+    def test_long_table_after_a_card_ends_the_card_and_folds(self):
+        """线索表紧跟在卡后面、中间没写标题时，不能被包进那张卡里。"""
+        rows = "".join(f"| 条目{i} | 结论 |\n" for i in range(20))
+        html = self._render(self.CARD.format(r="B", d="2026-11-10")
+                            + "\n| 线索 | 结论 |\n|---|---|\n" + rows)
+        card = html.index('<article class="event-card"')
+        close = html.index("</article>", card)
+        self.assertNotIn("条目19", html[card:close])
+        self.assertIn('<details class="long-table">', html)
+
+    def test_short_table_stays_inline(self):
+        html = self._render("## 1 结论\n\n| 指标 | 值 |\n|---|---|\n| a | 1 |\n| b | 2 |\n")
+        self.assertNotIn('<details class="long-table">', html)
+
+    def test_details_nesting_is_balanced(self):
+        html = self._render(self.CARD.format(r="A", d="2026-11-10") * 2 + "\n## 3 下一章\n\n文。\n")
+        body = html[html.index('<article class="event-card"'):]
+        self.assertEqual(body.count("<details"), body.count("</details>"))

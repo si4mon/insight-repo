@@ -1128,6 +1128,64 @@ h4 {
   background: color-mix(in oklch, var(--bg) 75%, transparent);
 }
 
+/* —— 折叠与轻重 ——
+   出处表永远折起；深拆 A/A+ 展开、B/C 折起；卡外长表折起。
+   目的不是藏内容，是让"占多少屏"与"值多少注意力"成正比。 */
+.event-card details, details.long-table { margin: var(--s-3) 0 0; }
+.event-card summary, details.long-table > summary {
+  cursor: pointer; list-style: none; user-select: none;
+  font-family: var(--font-ui); font-size: 0.8125rem; font-weight: 500;
+  color: var(--text-muted); padding: var(--s-1) 0;
+}
+.event-card summary::-webkit-details-marker,
+details.long-table > summary::-webkit-details-marker { display: none; }
+.event-card summary::before, details.long-table > summary::before {
+  content: "▸"; display: inline-block; width: 1em; margin-right: 0.2em; text-align: center;
+  transform-origin: 50% 55%; transition: transform .15s;
+}
+.event-card details[open] > summary::before,
+details.long-table[open] > summary::before { transform: rotate(90deg); }
+.event-card summary:hover, details.long-table > summary:hover { color: var(--text); }
+.card-deep__body > h5:first-child { margin-top: var(--s-3); }
+details.long-table {
+  border: 1px solid var(--rule); border-radius: 8px; padding: var(--s-2) var(--s-4);
+  background: var(--bg-elevated);
+}
+
+/* 本轮首发 / 延续：右上角小标。用实心与空心区分，不占色相（色相已给了层）。 */
+.card-fresh {
+  position: absolute; top: var(--s-4); right: var(--s-4);
+  font-family: var(--font-ui); font-size: 0.6875rem; font-weight: 600;
+  letter-spacing: 0.04em; padding: 2px 8px; border-radius: 999px;
+  border: 1px solid var(--card-hue, var(--accent));
+}
+.event-card[data-fresh="new"]  .card-fresh { background: var(--card-hue, var(--accent)); color: var(--bg); }
+.event-card[data-fresh="cont"] .card-fresh { background: transparent; color: var(--card-hue, var(--accent)); }
+.event-card[data-fresh="cont"] { border-style: dashed; }
+.event-card > h4 { padding-right: 5.5rem; }
+
+/* 指引条：今日必看里指向主卡的一行。它不是卡——没有框、没有底色，
+   只留一道细色杠标层，和真卡在视觉权重上拉开两档。 */
+.event-ref {
+  position: relative; margin: var(--s-2) 0;
+  padding: var(--s-2) 0 var(--s-2) var(--s-4);
+  border-left: 2px solid var(--card-hue, var(--rule-strong));
+}
+.event-ref[data-layer="model"]       { --card-hue: oklch(0.48 0.145  35); }
+.event-ref[data-layer="harness"]     { --card-hue: oklch(0.48 0.145 250); }
+.event-ref[data-layer="platform"]    { --card-hue: oklch(0.46 0.130 155); }
+.event-ref[data-layer="interaction"] { --card-hue: oklch(0.48 0.145 310); }
+[data-theme="dark"] .event-ref[data-layer="model"]       { --card-hue: oklch(0.78 0.130  35); }
+[data-theme="dark"] .event-ref[data-layer="harness"]     { --card-hue: oklch(0.78 0.130 250); }
+[data-theme="dark"] .event-ref[data-layer="platform"]    { --card-hue: oklch(0.78 0.130 155); }
+[data-theme="dark"] .event-ref[data-layer="interaction"] { --card-hue: oklch(0.78 0.130 310); }
+.event-ref > h4 { margin: 0; font-size: 1rem; line-height: 1.4; }
+.event-ref .event-card__kw { display: inline; font-size: 0.8125rem; margin-right: 0.6em; }
+.event-ref .event-card__sum { display: inline; font-size: 1rem; font-weight: 500; }
+.event-ref > p { margin: 2px 0 0; font-size: 0.8125rem; color: var(--text-muted); }
+
+@media print { .event-card details > *, details.long-table > * { display: revert; } }
+
 /* 双层标题：第一层是实体/关键词，第二层是这条事件的判断 */
 .event-card__kw {
   display: block;

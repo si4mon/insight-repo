@@ -248,6 +248,7 @@ function renderCallout(tag, body, blockId = '') {
 // 事件卡的视觉维度。色相编码 change_object（变化发生在架构的哪一层），
 // 轻重编码 rating。只让一个维度管色相：两个维度都上色会糊成一团。
 // 「尚未披露」刻意不给色相——它不是一个类别，是信息缺失。
+const LONG_TABLE_ROWS = 12;   // 超过这个行数的卡外表格默认折起
 const CARD_LAYERS = [
   ['Model', 'model'],
   ['Harness', 'harness'],
@@ -258,20 +259,35 @@ const CARD_LAYERS = [
 
 // 从卡片标记行 `**A · Frontier Signal · EV-01 · Model · 归属 4.5**` 取层与评级。
 // 取不到就返回空：老稿子没有这个字段，按中性样式渲染，不报错。
-function cardFacets(tokens, from) {
+function cardFacets(tokens, from, reportDate = '') {
+  // kind：标记行信号位写「摘要」的是今日必看里的指引条，不是主卡——它只有一句话，
+  //       包成和主卡等大的盒子会和真正的内容抢同样的视觉权重。
+  // fresh：标记行写 Active Event，或元信息表里的首发日早于简报日期 → 延续事件。
+  //        「这条是今天新出的还是上一轮的延续」是日更简报读者最常问的，
+  //        不该要求他展开出处表才知道。
+  const out = { layer: '', rating: '', kind: 'card', fresh: '' };
+  let seenMarker = false;
   for (let k = from; k < tokens.length; k++) {
     const t = tokens[k];
-    if (t.type === 'heading') break;              // 没到标记行就进了下一节
-    if (t.type !== 'p') continue;
-    const m = String(t.text).match(/\*\*([^*]+)\*\*/);
-    if (!m) continue;
-    const seg = m[1];
-    if (!/EV-\d/.test(seg)) continue;             // 只认带 EV 编号的那一行
-    const layer = (CARD_LAYERS.find(([zh]) => seg.includes(zh)) || [])[1] || '';
-    const rating = (seg.match(/(?:^|\s|·)\s*(A\+|A|B|C)\s*(?:·|$)/) || [])[1] || '';
-    return { layer, rating };
+    if (t.type === 'heading' && t.level <= 4) break;
+    if (t.type === 'p' && !seenMarker) {
+      const m = String(t.text).match(/\*\*([^*]+)\*\*/);
+      if (!m || !/EV-\d/.test(m[1])) continue;
+      const seg = m[1];
+      seenMarker = true;
+      out.layer = (CARD_LAYERS.find(([zh]) => seg.includes(zh)) || [])[1] || '';
+      out.rating = (seg.match(/(?:^|\s|·)\s*(A\+|A|B|C)\s*(?:·|$)/) || [])[1] || '';
+      if (/·\s*摘要\s*·/.test(seg)) out.kind = 'ref';
+      if (/Active Event/.test(seg)) out.fresh = 'cont';
+      continue;
+    }
+    if (t.type === 'table' && seenMarker && !out.fresh) {
+      const row = t.rows.find(r => /首发/.test(String(r[0] || '')));
+      const d = row && String(row[1] || '').match(/(\d{4}-\d{2}-\d{2})/);
+      if (d && reportDate) out.fresh = d[1] < reportDate ? 'cont' : 'new';
+    }
   }
-  return { layer: '', rating: '' };
+  return out;
 }
 
 function renderHeading(level, text, blockId = '') {
@@ -498,6 +514,13 @@ function render(tokens) {
   let pendingSectionLede = false;
   let inSection = false;
   let inCard = false;
+  let card = null;          // 当前卡的 {kind, rating, metaDone, deepOpen}
+  const closeCard = () => {
+    if (!inCard) return '';
+    const tail = (card && card.deepOpen ? '\n</div></details>' : '') + '\n</article>\n';
+    inCard = false; card = null;
+    return tail;
+  };
   let reportBlockCounter = 0;
   let pendingReportComments = [];
 
@@ -527,7 +550,7 @@ function render(tokens) {
       const comments = takeReportComments();
       // 事件卡边界：任何 h4 或更高层级的标题都结束上一张卡。
       // article 嵌在 section 内，所以必须先关卡再关 section。
-      if (t.level <= 4 && inCard) { html += '\n</article>\n'; inCard = false; }
+      if (t.level <= 4 && inCard) html += closeCard();
       const h = renderHeading(t.level, t.text, blockId);
       if (t.level === 2) {
         if (inSection) html += '</section>';
@@ -541,11 +564,24 @@ function render(tokens) {
         headings.push({ level: 3, id, text: t.text, parent: headings.findLast(x => x.level === 2)?.id });
       }
       if (t.level === 4) {
-        const f = cardFacets(tokens, i + 1);
+        const f = cardFacets(tokens, i + 1, String(meta.date || ''));
         const attrs = (f.layer ? ` data-layer="${f.layer}"` : '')
-                    + (f.rating ? ` data-rating="${escapeHtml(f.rating)}"` : '');
-        html += `\n<article class="event-card"${attrs}>\n`;
+                    + (f.rating ? ` data-rating="${escapeHtml(f.rating)}"` : '')
+                    + (f.fresh ? ` data-fresh="${f.fresh}"` : '');
+        const cls = f.kind === 'ref' ? 'event-ref' : 'event-card';
+        html += `\n<article class="${cls}"${attrs}>\n`;
+        if (f.kind === 'card' && f.fresh) {
+          html += `<span class="card-fresh">${f.fresh === 'cont' ? '延续' : '本轮首发'}</span>`;
+        }
         inCard = true;
+        card = { kind: f.kind, rating: f.rating, metaDone: false, deepOpen: false };
+      }
+      // 卡内第一个 h5 起是深拆（机制/定量/对比）。A/A+ 默认展开，B/C 默认折起：
+      // 评级的轻重由此体现在"占多少屏"上，而不只是底色深浅。
+      if (t.level === 5 && inCard && card && card.kind === 'card' && !card.deepOpen) {
+        const open = (card.rating === 'A' || card.rating === 'A+') ? ' open' : '';
+        html += `\n<details class="card-deep"${open}><summary>机制、定量与对比</summary><div class="card-deep__body">\n`;
+        card.deepOpen = true;
       }
       html += withReportComments(h.html, comments, blockId);
       lastHeadingLevel = t.level;
@@ -633,7 +669,22 @@ function render(tokens) {
         return '<tr' + reportBlockAttr(blockId) + '>' + r.map((c, k) => `<td${t.aligns[k] === 'right' ? ' class="num"' : ''}>${inline(c)}</td>`).join('') + '</tr>';
       }).join('') + '</tbody>';
       const tableWrapAttr = trailingAsides.length ? ' data-report-has-comment="true"' : '';
-      html += `<div class="table-wrap"${tableWrapAttr}><table>${thead}${tbody}</table></div>${trailingAsides.join('')}`;
+      const tableHtml = `<div class="table-wrap"${tableWrapAttr}><table>${thead}${tbody}</table></div>${trailingAsides.join('')}`;
+      // 卡内出现长表：那不是卡片内容（卡的出处表只有几行），是紧跟在卡后面、
+      // 中间没写标题的查阅表。先结束卡片，否则整张线索表会被包进最后一张卡里。
+      if (inCard && card && (card.metaDone || card.kind === 'ref') && t.rows.length > LONG_TABLE_ROWS) {
+        html += closeCard();
+      }
+      if (inCard && card && card.kind === 'card' && !card.metaDone) {
+        // 出处与评分：读者先要知道发生了什么，核对时才需要它。永远默认折起。
+        card.metaDone = true;
+        html += `<details class="card-meta"><summary>出处与评分</summary>${tableHtml}</details>`;
+      } else if (!inCard && t.rows.length > LONG_TABLE_ROWS) {
+        // 查阅型长表（线索表、源清单、丢弃日志）不该摆成阅读流。
+        html += `<details class="long-table"><summary>${escapeHtml(String(t.header[0] || '表格'))} 等 ${t.header.length} 列 · 共 ${t.rows.length} 行</summary>${tableHtml}</details>`;
+      } else {
+        html += tableHtml;
+      }
       continue;
     }
     if (t.type === 'figure') {
@@ -663,7 +714,7 @@ function render(tokens) {
     // fnDef handled separately at end
   }
 
-  if (inCard) html += '\n</article>\n';
+  html += closeCard();
   if (inSection) html += '</section>';
   return { html, headings };
 }
